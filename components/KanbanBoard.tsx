@@ -103,19 +103,19 @@ const TaskTimer = ({ task, hasCover }: { task: Task; hasCover: boolean }) => {
     );
   }
 
-  // ВАРИАНТ 2: Время истекло -> 🔥 Expired
+  // ВАРИАНТ 2: Время истекло -> 🔥 ВРЕМЯ ВЫШЛО
   if (isExpired) {
     return (
-      <div className="flex items-center gap-1.5 bg-red-500/10 px-2 py-1 rounded-md animate-pulse border border-red-500/20">
+      <div className="w-fit flex items-center gap-1.5 bg-red-500/10 px-2 py-1 rounded-md animate-pulse border border-red-500/20">
          <span className="text-[10px]">💀</span>
-         <span className="text-[10px] font-black text-red-500 uppercase tracking-wider">Expired</span>
+         <span className="text-[9px] font-black text-red-500 uppercase tracking-wider">Время вышло</span>
       </div>
     );
   }
 
   // ВАРИАНТ 3: Таймер тикает
   return (
-    <div className={`flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/20 backdrop-blur-md border border-white/5 transition-all duration-500 ${isUrgent ? 'animate-pulse bg-red-500/10 border-red-500/30' : ''}`}>
+    <div className={`w-fit flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/20 backdrop-blur-md border border-white/5 transition-all duration-500 ${isUrgent ? 'animate-pulse bg-red-500/10 border-red-500/30' : ''}`}>
       <span className="text-[10px]">🔥</span>
       <span className={`text-[10px] font-black tabular-nums tracking-wide ${statusColor}`}>
         {timeLeft}
@@ -373,9 +373,13 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                         
                         <div className="flex items-center justify-between mt-auto">
                             <div className="flex flex-col gap-2 flex-1">
+                                
+                                {/* ТАЙМЕР ТЕПЕРЬ СТОИТ ТУТ И ОН КОМПАКТНЫЙ */}
                                 {task.date && (
                                    <TaskTimer task={task} hasCover={hasCover} />
                                 )}
+                                {/* --------------------------------------- */}
+
                                 {totalCount > 0 && (
                                   <div className={`w-16 h-1 rounded-full overflow-hidden ${hasCover ? 'bg-white/10' : 'bg-black/5'}`}>
                                     <div className="h-full bg-green-500" style={{ width: `${progress}%` }} />
