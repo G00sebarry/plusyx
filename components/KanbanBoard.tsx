@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Task, TaskStatus, Column } from '../types';
 
 interface KanbanBoardProps {
@@ -12,12 +12,118 @@ interface KanbanBoardProps {
   onDragEnd: (draggedId: string, targetColId: string, targetId?: string) => void;
 }
 
+// --- ХЕЛПЕРЫ ДЛЯ ДАТЫ ---
 const toLocalDateString = (date: Date) => {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
   const d = String(date.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
 };
+
+const formatDateLabel = (dateStr: string) => {
+  const today = toLocalDateString(new Date());
+  const tomorrowDate = new Date();
+  tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+  const tomorrow = toLocalDateString(tomorrowDate);
+
+  if (dateStr === today) return 'Сегодня';
+  if (dateStr === tomorrow) return 'Завтра';
+  
+  const d = new Date(dateStr);
+  return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+};
+
+// --- КОМПОНЕНТ ТАЙМЕРА (TaskTimer) ---
+const TaskTimer = ({ task, hasCover }: { task: Task; hasCover: boolean }) => {
+  const [timeLeft, setTimeLeft] = useState<string>('');
+  const [statusColor, setStatusColor] = useState<string>('text-gray-400');
+  const [isExpired, setIsExpired] = useState(false);
+  const [isUrgent, setIsUrgent] = useState(false);
+
+  useEffect(() => {
+    // Если таймер выключен или нет времени — ничего не считаем
+    if (!task.isTimer || !task.time || !task.date) return;
+
+    const calculateTime = () => {
+      const now = new Date();
+      // Создаем дату дедлайна
+      const deadline = new Date(`${task.date}T${task.time}`);
+      const diff = deadline.getTime() - now.getTime();
+
+      if (diff <= 0) {
+        setIsExpired(true);
+        return;
+      }
+
+      setIsExpired(false);
+
+      const totalMinutes = Math.floor(diff / 60000);
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      const seconds = Math.floor((diff % 60000) / 1000);
+
+      // Логика цветов (Светофор)
+      if (hours < 8) {
+        setStatusColor('text-red-500'); // < 8ч: Красный
+        setIsUrgent(true); // Пульсация
+      } else if (hours < 16) {
+        setStatusColor('text-orange-500'); // < 16ч: Оранжевый
+        setIsUrgent(false);
+      } else if (hours < 24) {
+        setStatusColor('text-green-500'); // < 24ч: Зеленый
+        setIsUrgent(false);
+      } else {
+        setStatusColor(hasCover ? 'text-white' : 'text-gray-400'); // > 24ч: Серый (или белый на обложке)
+        setIsUrgent(false);
+      }
+
+      // Форматирование текста
+      if (hours >= 24) {
+        const days = Math.floor(hours / 24);
+        setTimeLeft(`${days} дн.`);
+      } else if (hours > 0) {
+        setTimeLeft(`${hours}ч ${minutes.toString().padStart(2, '0')}м`);
+      } else {
+        // Если меньше часа - показываем минуты и секунды
+        setTimeLeft(`${minutes}:${seconds.toString().padStart(2, '0')}`);
+      }
+    };
+
+    calculateTime();
+    const timer = setInterval(calculateTime, 1000);
+    return () => clearInterval(timer);
+  }, [task.date, task.time, task.isTimer, hasCover]);
+
+  // ВАРИАНТ 1: Таймер выключен или нет времени -> Показываем обычную дату
+  if (!task.isTimer || !task.time) {
+    return (
+      <div className={`flex items-center gap-1 text-[10px] font-bold ${hasCover ? 'text-white/70' : 'tg-hint'}`}>
+         <span>{formatDateLabel(task.date)}</span>
+      </div>
+    );
+  }
+
+  // ВАРИАНТ 2: Время истекло -> 🔥 Expired
+  if (isExpired) {
+    return (
+      <div className="flex items-center gap-1.5 bg-red-500/10 px-2 py-1 rounded-md animate-pulse border border-red-500/20">
+         <span className="text-[10px]">💀</span>
+         <span className="text-[10px] font-black text-red-500 uppercase tracking-wider">Expired</span>
+      </div>
+    );
+  }
+
+  // ВАРИАНТ 3: Таймер тикает
+  return (
+    <div className={`flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/20 backdrop-blur-md border border-white/5 transition-all duration-500 ${isUrgent ? 'animate-pulse bg-red-500/10 border-red-500/30' : ''}`}>
+      <span className="text-[10px]">🔥</span>
+      <span className={`text-[10px] font-black tabular-nums tracking-wide ${statusColor}`}>
+        {timeLeft}
+      </span>
+    </div>
+  );
+};
+// ---------------------------------------------
 
 const TYPE_COLORS: Record<TaskStatus, string> = {
   'todo': 'border-blue-500',
@@ -48,19 +154,6 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   
   const [activeMenuColId, setActiveMenuColId] = useState<string | null>(null);
   const [editingColId, setEditingColId] = useState<string | null>(null);
-
-  const formatDateLabel = (dateStr: string) => {
-    const today = toLocalDateString(new Date());
-    const tomorrowDate = new Date();
-    tomorrowDate.setDate(tomorrowDate.getDate() + 1);
-    const tomorrow = toLocalDateString(tomorrowDate);
-
-    if (dateStr === today) return 'Сегодня';
-    if (dateStr === tomorrow) return 'Завтра';
-    
-    const d = new Date(dateStr);
-    return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
-  };
 
   const handleAddColumn = () => {
     if (!newColTitle.trim()) { setIsAddingColumn(false); return; }
@@ -99,13 +192,12 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
     }
   };
 
-  // --- НОВАЯ ФУНКЦИЯ: ПЕРЕМЕЩЕНИЕ КОЛОНОК ---
   const moveColumn = (colId: string, direction: 'left' | 'right' | 'start' | 'end') => {
     const index = columns.findIndex(c => c.id === colId);
     if (index === -1) return;
 
     const newColumns = [...columns];
-    const [col] = newColumns.splice(index, 1); // Вырезаем колонку
+    const [col] = newColumns.splice(index, 1);
 
     if (direction === 'start') {
         newColumns.unshift(col);
@@ -118,12 +210,10 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
     }
 
     onUpdateColumns(newColumns);
-    setActiveMenuColId(null); // Закрываем меню после действия
+    setActiveMenuColId(null);
     window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('medium');
   };
-  // ------------------------------------------
 
-  // --- ЛОГИКА ПЕРЕТАСКИВАНИЯ ---
   const handleDragStart = (e: React.DragEvent, taskId: string) => {
     setDraggedTaskId(taskId);
     e.dataTransfer.setData('taskId', taskId);
@@ -143,12 +233,10 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
     target.style.opacity = '1';
     target.style.transform = 'scale(1)';
   };
-  // -----------------------------
 
   return (
     <div className="flex overflow-x-auto h-full p-4 gap-5 snap-x snap-mandatory no-scrollbar">
       {columns.map((column, index) => {
-        // Проверяем, первая или последняя колонка (для стрелочек)
         const isFirst = index === 0;
         const isLast = index === columns.length - 1;
 
@@ -193,32 +281,26 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                   
                   {activeMenuColId === column.id && (
                     <div className="absolute right-0 top-10 w-48 tg-secondary-bg rounded-2xl shadow-2xl border border-gray-400/10 p-2 z-[70] animate-in fade-in zoom-in-95 duration-200">
-                        {/* 1. Блок переименования */}
                         <button onClick={() => setEditingColId(column.id)} className="w-full text-left p-2.5 hover:bg-black/5 rounded-xl text-[9px] font-black uppercase tracking-widest tg-text">✏️ Переименовать</button>
                         
-                        {/* 2. Блок позиции (НОВЫЙ) */}
                         <div className="my-1 border-t border-gray-400/5" />
                         <div className="px-2.5 py-1.5 text-[8px] font-black tg-hint uppercase">Позиция:</div>
                         <div className="flex gap-1 px-1.5 pb-1">
-                             {/* Кнопка "В начало" */}
                              {!isFirst && (
                                 <button onClick={() => moveColumn(column.id, 'start')} className="h-8 flex-1 bg-black/5 rounded-lg flex items-center justify-center hover:bg-black/10 transition-colors" title="В начало">
                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="11 17 6 12 11 7"/><polyline points="18 17 13 12 18 7"/></svg>
                                 </button>
                              )}
-                             {/* Кнопка "Влево" */}
                              {!isFirst && (
                                 <button onClick={() => moveColumn(column.id, 'left')} className="h-8 flex-1 bg-black/5 rounded-lg flex items-center justify-center hover:bg-black/10 transition-colors" title="Влево">
                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
                                 </button>
                              )}
-                             {/* Кнопка "Вправо" */}
                              {!isLast && (
                                 <button onClick={() => moveColumn(column.id, 'right')} className="h-8 flex-1 bg-black/5 rounded-lg flex items-center justify-center hover:bg-black/10 transition-colors" title="Вправо">
                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
                                 </button>
                              )}
-                             {/* Кнопка "В конец" */}
                              {!isLast && (
                                 <button onClick={() => moveColumn(column.id, 'end')} className="h-8 flex-1 bg-black/5 rounded-lg flex items-center justify-center hover:bg-black/10 transition-colors" title="В конец">
                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/></svg>
@@ -226,7 +308,6 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                              )}
                         </div>
 
-                        {/* 3. Блок типа */}
                         <div className="my-1 border-t border-gray-400/5" />
                         <div className="px-2.5 py-1.5 text-[8px] font-black tg-hint uppercase">Тип поведения:</div>
                         {(['todo', 'in-progress', 'done'] as TaskStatus[]).map(t => (
@@ -235,7 +316,6 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                           </button>
                         ))}
                         
-                        {/* 4. Блок удаления */}
                         <div className="my-1 border-t border-gray-400/5" />
                         <button onClick={() => handleDeleteColumn(column.id)} className="w-full text-left p-2.5 hover:bg-red-500/10 rounded-xl text-[9px] font-black uppercase tracking-widest text-red-500">🗑️ Удалить</button>
                     </div>
@@ -294,9 +374,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                         <div className="flex items-center justify-between mt-auto">
                             <div className="flex flex-col gap-2 flex-1">
                                 {task.date && (
-                                  <div className={`flex items-center gap-1 text-[10px] font-bold ${hasCover ? 'text-white/70' : 'tg-hint'}`}>
-                                      <span>{formatDateLabel(task.date)}</span>
-                                  </div>
+                                   <TaskTimer task={task} hasCover={hasCover} />
                                 )}
                                 {totalCount > 0 && (
                                   <div className={`w-16 h-1 rounded-full overflow-hidden ${hasCover ? 'bg-white/10' : 'bg-black/5'}`}>
@@ -340,9 +418,8 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
             </button>
           </div>
         </div>
-        ); // Конец map и return внутри map
+        ); 
       })} 
-      {/* --- Тут закрывается map, дальше кнопка добавления колонки --- */}
 
       <div className={`flex flex-col h-full snap-center transition-all duration-500 ease-out ${isAddingColumn ? 'min-w-[85vw] md:min-w-[320px]' : 'min-w-[48px]'}`}>
           {!isAddingColumn ? (
