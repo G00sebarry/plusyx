@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Task, TaskStatus, ChecklistItem, TaskComment, Checklist } from '../types';
 
@@ -29,6 +28,11 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
   const [description, setDescription] = useState('');
   const [date, setDate] = useState(toLocalDateString(new Date()));
   const [time, setTime] = useState('');
+  
+  // --- НОВОЕ: Состояние таймера ---
+  const [isTimer, setIsTimer] = useState(false);
+  // -------------------------------
+
   const [status, setStatus] = useState<TaskStatus>('todo');
   const [columnId, setColumnId] = useState<string | undefined>(undefined);
   const [color, setColor] = useState('blue');
@@ -57,6 +61,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
       setDescription(initialTask.description || '');
       setDate(initialTask.date || toLocalDateString(new Date()));
       setTime(initialTask.time || '');
+      setIsTimer(initialTask.isTimer || false); // Загружаем состояние таймера
       setStatus(initialTask.status || 'todo');
       setColumnId(initialTask.columnId);
       setColor(initialTask.color || 'blue');
@@ -68,7 +73,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
       setChecklists(initialTask.checklists || [{ id: 'default', title: 'Чек-лист', items: [], hideCompleted: false }]);
       setComments(initialTask.comments || []);
     } else {
-      setTitle(''); setDescription(''); setDate(toLocalDateString(new Date())); setTime('');
+      setTitle(''); setDescription(''); setDate(toLocalDateString(new Date())); setTime(''); setIsTimer(false);
       setStatus('todo'); setColumnId(undefined); setColor('blue'); setFileName(''); setFileData(''); 
       setCoverData(''); setCoverPosition(50); setCoverIntensity(60);
       setChecklists([{ id: 'default', title: 'Чек-лист', items: [], hideCompleted: false }]); setComments([]);
@@ -78,7 +83,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
   const handleSave = () => {
     onSave({ 
       ...(initialTask?.id && { id: initialTask.id }), 
-      title, description, date, time, status, columnId, color, fileName, fileData, coverData, coverPosition, coverIntensity,
+      title, description, date, time, isTimer, status, columnId, color, fileName, fileData, coverData, coverPosition, coverIntensity,
       checklists, comments 
     });
   };
@@ -168,10 +173,35 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
                       <label className="text-[10px] font-black tg-hint uppercase ml-1">Дата</label>
                       <input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full tg-secondary-bg h-12 px-3 rounded-2xl tg-text text-[11px] font-black outline-none text-center appearance-none" />
                     </div>
+                    
+                    {/* --- ИЗМЕНЕННЫЙ БЛОК ВРЕМЕНИ С ТАЙМЕРОМ --- */}
                     <div className="flex flex-col gap-1">
-                      <label className="text-[10px] font-black tg-hint uppercase ml-1">Время</label>
-                      <input type="time" value={time} onChange={e => setTime(e.target.value)} className="w-full tg-secondary-bg h-12 px-3 rounded-2xl tg-text text-[11px] font-black outline-none text-center appearance-none" />
+                      <div className="flex justify-between items-center px-1">
+                          <label className="text-[10px] font-black tg-hint uppercase">Время</label>
+                          <button 
+                            onClick={() => setIsTimer(!isTimer)} 
+                            className={`flex items-center gap-1 transition-all active:scale-95 ${isTimer ? 'text-orange-500 opacity-100' : 'text-gray-400 opacity-40 hover:opacity-100'}`}
+                            title="Включить таймер обратного отсчета"
+                          >
+                             <span className="text-[10px] font-black uppercase">{isTimer ? 'ON' : 'OFF'}</span>
+                             <span className="text-xs">🔥</span>
+                          </button>
+                      </div>
+                      <input 
+                        type="time" 
+                        value={time} 
+                        onChange={e => setTime(e.target.value)} 
+                        className={`
+                          w-full h-12 px-3 rounded-2xl tg-text text-[11px] font-black outline-none text-center appearance-none transition-all border-2
+                          ${isTimer 
+                             ? 'bg-orange-500/10 border-orange-500/20 text-orange-500' 
+                             : 'tg-secondary-bg border-transparent'
+                          }
+                        `} 
+                      />
                     </div>
+                    {/* ------------------------------------------- */}
+
                 </div>
              </div>
              <div className="flex p-1 bg-black/10 rounded-2xl">

@@ -1,4 +1,3 @@
-
 export type TaskStatus = 'todo' | 'in-progress' | 'done';
 
 export interface Column {
@@ -32,6 +31,11 @@ export interface Task {
   description: string;
   date: string;
   time?: string;
+  
+  // --- НОВОЕ ПОЛЕ ---
+  isTimer?: boolean; // Включен ли режим таймера (обратный отсчет)
+  // ------------------
+
   status: TaskStatus;
   columnId?: string; // Привязка к конкретной колонке
   color?: string;
