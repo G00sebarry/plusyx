@@ -1,0 +1,5 @@
+{
+  "name": "Plusyx app",
+  "description": "A native-feeling Telegram Mini App for managing tasks with Kanban and Calendar views.",
+  "requestFramePermissions": []
+}

@@ -1,0 +1,86 @@
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Plusyx Task Manager</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --tg-theme-bg-color: #ffffff;
+            --tg-theme-secondary-bg-color: #efeff4;
+            --tg-theme-text-color: #000000;
+            --tg-theme-hint-color: #999999;
+            --tg-theme-link-color: #2481cc;
+            --tg-theme-button-color: #2481cc;
+            --tg-theme-button-text-color: #ffffff;
+            
+            /* Plusyx Colors */
+            --plusyx-purple: #9d73d2;
+            --plusyx-green: #4cc3a1;
+            --plusyx-shadow: #000000;
+        }
+
+        body {
+            background-color: var(--tg-theme-bg-color);
+            color: var(--tg-theme-text-color);
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            -webkit-tap-highlight-color: transparent;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+
+        .dark {
+            --tg-theme-bg-color: #121212;
+            --tg-theme-secondary-bg-color: #1e1e1e;
+            --tg-theme-text-color: #ffffff;
+            --tg-theme-hint-color: #777777;
+        }
+
+        .font-logo { font-family: 'Space Grotesk', sans-serif; }
+
+        .tg-bg { background-color: var(--tg-theme-bg-color); }
+        .tg-secondary-bg { background-color: var(--tg-theme-secondary-bg-color); }
+        .tg-text { color: var(--tg-theme-text-color); }
+        .tg-hint { color: var(--tg-theme-hint-color); }
+        .tg-button { background-color: var(--tg-theme-button-color); color: var(--tg-theme-button-text-color); }
+
+        @keyframes breathe-plus {
+            0%, 100% { transform: scale(1); filter: brightness(1); }
+            50% { transform: scale(1.1); filter: brightness(1.1); }
+        }
+        .animate-plus-new { animation: breathe-plus 2s infinite ease-in-out; }
+
+        .logo-shadow {
+            filter: drop-shadow(4px 4px 0px var(--plusyx-shadow));
+        }
+
+        ::-webkit-scrollbar { display: none; }
+        * { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            filter: invert(0.5);
+        }
+    </style>
+<script type="importmap">
+{
+  "imports": {
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react": "https://esm.sh/react@^19.2.3",
+    "@google/genai": "https://esm.sh/@google/genai@^1.35.0",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body class="tg-bg">
+    <div id="root"></div>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>
