@@ -252,6 +252,11 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
     target.style.transform = 'scale(1)';
   };
 
+  // Этот метод мы используем, чтобы остановить всплытие на кнопках
+  const stopProp = (e: React.BaseSyntheticEvent) => {
+      e.stopPropagation();
+  };
+
   return (
     <div className="flex overflow-x-auto h-full p-4 gap-5 snap-x snap-mandatory no-scrollbar">
       {columns.map((column, index) => {
@@ -353,6 +358,13 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
               const prevCol = index > 0 ? columns[index - 1] : null;
               const nextCol = index < columns.length - 1 ? columns[index + 1] : null;
 
+              // --- ЛОГИКА БЛОКИРОВКИ DRAG ---
+              // Если открыто меню или идет редактирование копии -> отключаем перетаскивание карточки
+              const isMenuOpen = activeTaskMenuId === task.id;
+              const isCopying = copyingTaskId === task.id;
+              const isDraggable = !isMenuOpen && !isCopying;
+              // ------------------------------
+
               return (
                 <div key={task.id} className="flex flex-col gap-2"> 
                 <div 
@@ -364,14 +376,22 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                     if (draggedId) onMoveTask(draggedId, column.id, task.id);
                     setDropTargetId(null);
                   }}
-                  className={`relative transition-all duration-200 ${dropTargetId === task.id ? 'scale-105' : ''}`}
+                  className={`relative transition-all duration-200 ${dropTargetId === task.id ? 'scale-105' : ''} ${isMenuOpen ? 'z-[100]' : 'z-0'}`}
                 >
                   <div 
-                    draggable 
+                    draggable={isDraggable} // <-- ВОТ ГЛАВНОЕ ИСПРАВЛЕНИЕ
                     onDragStart={e => handleDragStart(e, task.id)}
                     onDragEnd={handleDragEnd}
-                    className="relative tg-secondary-bg p-5 rounded-[28px] shadow-sm border border-gray-100/10 flex flex-col gap-3 active:scale-[0.98] transition-all overflow-hidden cursor-grab active:cursor-grabbing min-h-[140px]" 
-                    onClick={() => onEditTask(task)}
+                    className={`
+                       relative tg-secondary-bg p-5 rounded-[28px] shadow-sm border border-gray-100/10 flex flex-col gap-3 
+                       transition-all overflow-hidden min-h-[140px]
+                       ${isDraggable ? 'active:scale-[0.98] cursor-grab active:cursor-grabbing' : 'cursor-default'}
+                    `}
+                    onClick={() => {
+                        // Если меню открыто, клик по карточке закрывает его
+                        if (isMenuOpen) setActiveTaskMenuId(null);
+                        else onEditTask(task);
+                    }}
                   >
                     {/* МЕТКА */}
                     {task.color && task.color !== 'default' && (
@@ -394,10 +414,10 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                             <button 
                                 onClick={e => { 
                                     e.stopPropagation(); 
+                                    // Переключаем меню и сразу запрещаем драг через перерисовку родителя
                                     setActiveTaskMenuId(activeTaskMenuId === task.id ? null : task.id); 
                                 }}
-                                onMouseDown={(e) => e.stopPropagation()} 
-                                onPointerDown={(e) => e.stopPropagation()} 
+                                onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); }} // Чтобы кнопка не триггерила драг до стейта
                                 className={`
                                     p-1 rounded-lg transition-all duration-200 cursor-pointer relative z-50
                                     ${hasCover 
@@ -413,8 +433,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                                 <div 
                                     className="absolute right-0 top-8 w-44 bg-[#1e1e1e] rounded-xl shadow-2xl border border-gray-600/20 p-1.5 z-[100] animate-in fade-in zoom-in-95 duration-200 cursor-default" 
                                     onClick={(e) => e.stopPropagation()} 
-                                    onMouseDown={(e) => e.stopPropagation()}
-                                    onPointerDown={(e) => e.stopPropagation()}
+                                    onMouseDown={(e) => e.stopPropagation()} // Блокируем всплытие, чтобы не закрылось
                                 >
                                     <button 
                                         onClick={(e) => { 
@@ -460,9 +479,9 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                             <div className="flex gap-1.5 ml-2">
                                 {prevCol && (
                                   <button 
-                                    onClick={e => { e.stopPropagation(); handleQuickMove(task.id, 'left', column.id); }}
-                                    onMouseDown={(e) => e.stopPropagation()} 
-                                    onPointerDown={(e) => e.stopPropagation()}
+                                    onClick={e => { stopProp(e); handleQuickMove(task.id, 'left', column.id); }}
+                                    onMouseDown={stopProp} 
+                                    onPointerDown={stopProp}
                                     className={`w-9 h-9 flex items-center justify-center rounded-xl transition-all active:scale-90 shadow-sm ${hasCover ? NAV_COLORS_COVER[prevCol.type] : NAV_COLORS[prevCol.type]}`}
                                     title={`В колонку: ${prevCol.title}`}
                                   >
@@ -471,9 +490,9 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                                 )}
                                 {nextCol && (
                                   <button 
-                                    onClick={e => { e.stopPropagation(); handleQuickMove(task.id, 'right', column.id); }}
-                                    onMouseDown={(e) => e.stopPropagation()} 
-                                    onPointerDown={(e) => e.stopPropagation()} 
+                                    onClick={e => { stopProp(e); handleQuickMove(task.id, 'right', column.id); }}
+                                    onMouseDown={stopProp} 
+                                    onPointerDown={stopProp} 
                                     className={`w-9 h-9 flex items-center justify-center rounded-xl transition-all active:scale-90 shadow-sm ${hasCover ? NAV_COLORS_COVER[nextCol.type] : NAV_COLORS[nextCol.type]}`}
                                     title={`В колонку: ${nextCol.title}`}
                                   >
