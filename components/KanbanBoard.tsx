@@ -9,9 +9,7 @@ interface KanbanBoardProps {
   onEditTask: (task: Task) => void;
   onDeleteTask: (id: string) => void;
   onQuickAdd: (status: TaskStatus, columnId: string) => void;
-  // --- НОВЫЙ ПРОПС ДЛЯ КОПИРОВАНИЯ ---
-  onCopyTask: (originalTaskId: string, newTitle: string) => void; 
-  // ------------------------------------
+  onCopyTask: (originalTaskId: string, newTitle: string) => void;
   onDragEnd: (draggedId: string, targetColId: string, targetId?: string) => void;
 }
 
@@ -157,9 +155,9 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   const [editingColId, setEditingColId] = useState<string | null>(null);
 
   // --- СОСТОЯНИЕ ДЛЯ МЕНЮ ЗАДАЧИ И КОПИРОВАНИЯ ---
-  const [activeTaskMenuId, setActiveTaskMenuId] = useState<string | null>(null); // Какое меню открыто (ID задачи)
-  const [copyingTaskId, setCopyingTaskId] = useState<string | null>(null); // Какую задачу копируем
-  const [copyTitle, setCopyTitle] = useState(''); // Текст новой задачи
+  const [activeTaskMenuId, setActiveTaskMenuId] = useState<string | null>(null);
+  const [copyingTaskId, setCopyingTaskId] = useState<string | null>(null);
+  const [copyTitle, setCopyTitle] = useState('');
   // -----------------------------------------------
 
   const handleAddColumn = () => {
@@ -224,8 +222,8 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   // --- ЛОГИКА КОПИРОВАНИЯ ---
   const handleStartCopy = (task: Task) => {
       setCopyingTaskId(task.id);
-      setCopyTitle(task.title); // Предзаполняем старым названием
-      setActiveTaskMenuId(null); // Закрываем меню
+      setCopyTitle(task.title);
+      setActiveTaskMenuId(null);
   };
 
   const handleConfirmCopy = () => {
@@ -360,7 +358,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
               const nextCol = index < columns.length - 1 ? columns[index + 1] : null;
 
               return (
-                <div key={task.id} className="flex flex-col gap-2"> {/* Обертка для карточки и черновика копии */}
+                <div key={task.id} className="flex flex-col gap-2"> 
                 <div 
                   onDragOver={e => { e.preventDefault(); e.stopPropagation(); setDropTargetId(task.id); }}
                   onDragLeave={() => setDropTargetId(null)}
@@ -399,6 +397,8 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                           <div className="relative">
                             <button 
                                 onClick={e => { e.stopPropagation(); setActiveTaskMenuId(activeTaskMenuId === task.id ? null : task.id); }}
+                                onMouseDown={e => e.stopPropagation()} // <-- БЛОКИРУЕМ DRAG
+                                onPointerDown={e => e.stopPropagation()} // <-- БЛОКИРУЕМ DRAG
                                 className={`
                                     p-1 rounded-lg transition-all duration-200
                                     ${hasCover 
@@ -411,7 +411,12 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
 
                             {/* Выпадающее меню */}
                             {activeTaskMenuId === task.id && (
-                                <div className="absolute right-0 top-8 w-44 bg-[#1e1e1e] rounded-xl shadow-2xl border border-gray-600/20 p-1.5 z-[100] animate-in fade-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+                                <div 
+                                    className="absolute right-0 top-8 w-44 bg-[#1e1e1e] rounded-xl shadow-2xl border border-gray-600/20 p-1.5 z-[100] animate-in fade-in zoom-in-95 duration-200" 
+                                    onClick={e => e.stopPropagation()}
+                                    onMouseDown={e => e.stopPropagation()} // <-- БЛОКИРУЕМ DRAG В МЕНЮ
+                                    onPointerDown={e => e.stopPropagation()} // <-- БЛОКИРУЕМ DRAG В МЕНЮ
+                                >
                                     <button 
                                         onClick={() => handleStartCopy(task)}
                                         className="w-full text-left p-2.5 hover:bg-white/5 rounded-lg text-[10px] font-black uppercase tracking-widest text-white flex items-center gap-2"
@@ -453,6 +458,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                                     onClick={e => { e.stopPropagation(); handleQuickMove(task.id, 'left', column.id); }} 
                                     className={`w-9 h-9 flex items-center justify-center rounded-xl transition-all active:scale-90 shadow-sm ${hasCover ? NAV_COLORS_COVER[prevCol.type] : NAV_COLORS[prevCol.type]}`}
                                     title={`В колонку: ${prevCol.title}`}
+                                    onMouseDown={e => e.stopPropagation()} // <-- БЛОКИРУЕМ DRAG
                                   >
                                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4"><polyline points="15 18 9 12 15 6"/></svg>
                                   </button>
@@ -462,6 +468,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                                     onClick={e => { e.stopPropagation(); handleQuickMove(task.id, 'right', column.id); }} 
                                     className={`w-9 h-9 flex items-center justify-center rounded-xl transition-all active:scale-90 shadow-sm ${hasCover ? NAV_COLORS_COVER[nextCol.type] : NAV_COLORS[nextCol.type]}`}
                                     title={`В колонку: ${nextCol.title}`}
+                                    onMouseDown={e => e.stopPropagation()} // <-- БЛОКИРУЕМ DRAG
                                   >
                                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4"><polyline points="9 18 15 12 9 6"/></svg>
                                   </button>
@@ -472,7 +479,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                   </div>
                 </div>
 
-                {/* --- ФОРМА СОЗДАНИЯ КОПИИ (ЧЕРНОВИК) --- */}
+                {/* --- ФОРМА СОЗДАНИЯ КОПИИ --- */}
                 {copyingTaskId === task.id && (
                     <div className="bg-[#1e1e1e] p-4 rounded-[24px] border border-l-4 border-l-[var(--tg-theme-button-color)] border-gray-600/30 animate-in slide-in-from-top-2 duration-300 shadow-2xl mt-1">
                         <div className="text-[10px] font-black uppercase tracking-widest text-[var(--tg-theme-button-color)] mb-2">
@@ -507,7 +514,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                         </div>
                     </div>
                 )}
-                {/* --------------------------------------- */}
+                {/* --------------------------- */}
 
                 </div>
               );
@@ -558,7 +565,6 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
           )}
       </div>
 
-      {/* Закрываем все менюшки при клике на фон */}
       {(activeMenuColId || activeTaskMenuId) && <div className="fixed inset-0 z-[55]" onClick={() => { setActiveMenuColId(null); setActiveTaskMenuId(null); }} />}
     </div>
   );
