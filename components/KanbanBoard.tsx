@@ -1,5 +1,4 @@
-
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Task, TaskStatus, Column } from '../types';
 
 interface KanbanBoardProps {
@@ -100,13 +99,36 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
     }
   };
 
+  // --- ЛОГИКА ПЕРЕТАСКИВАНИЯ (ОБНОВЛЕННАЯ) ---
+
   const handleDragStart = (e: React.DragEvent, taskId: string) => {
     setDraggedTaskId(taskId);
     e.dataTransfer.setData('taskId', taskId);
     e.dataTransfer.effectAllowed = 'move';
+    
+    // Делаем элемент полупрозрачным при начале перетаскивания
     const target = e.currentTarget as HTMLElement;
-    setTimeout(() => target.style.opacity = '0.3', 0);
+    // Используем setTimeout, чтобы прозрачность применилась к элементу на доске,
+    // но "призрак" (копия под пальцем) остался видимым (браузер делает снимок до таймера)
+    setTimeout(() => {
+        target.style.opacity = '0.4'; 
+        target.style.transform = 'scale(0.95)'; // Чуть уменьшаем, чтобы было красиво
+    }, 0);
   };
+
+  // ВОТ ЭТОЙ ФУНКЦИИ НЕ ХВАТАЛО!
+  // Она возвращает всё как было, когда отпускаешь палец
+  const handleDragEnd = (e: React.DragEvent) => {
+    setDraggedTaskId(null);
+    setDropTargetId(null);
+    const target = e.currentTarget as HTMLElement;
+    
+    // Возвращаем полную видимость и размер
+    target.style.opacity = '1';
+    target.style.transform = 'scale(1)';
+  };
+
+  // -------------------------------------------
 
   return (
     <div className="flex overflow-x-auto h-full p-4 gap-5 snap-x snap-mandatory no-scrollbar">
@@ -194,6 +216,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                   <div 
                     draggable 
                     onDragStart={e => handleDragStart(e, task.id)}
+                    onDragEnd={handleDragEnd} // <--- ДОБАВИЛ СЮДА: Сброс прозрачности
                     className="relative tg-secondary-bg p-5 rounded-[28px] shadow-sm border border-gray-100/10 flex flex-col gap-3 active:scale-[0.98] transition-all overflow-hidden cursor-grab active:cursor-grabbing min-h-[140px]" 
                     onClick={() => onEditTask(task)}
                   >
