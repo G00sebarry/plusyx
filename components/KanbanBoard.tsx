@@ -12,7 +12,7 @@ interface KanbanBoardProps {
   onDragEnd: (draggedId: string, targetColId: string, targetId?: string) => void;
 }
 
-// --- ХЕЛПЕРЫ ДЛЯ ЦВЕТОВ (нужны тут для полоски) ---
+// --- ХЕЛПЕРЫ ДЛЯ ЦВЕТОВ ---
 const COLOR_MAP: Record<string, string> = {
   'slate': 'bg-slate-500', 'red': 'bg-red-500', 'orange': 'bg-orange-500', 
   'green': 'bg-green-500', 'blue': 'bg-blue-500', 'purple': 'bg-purple-500', 'pink': 'bg-pink-500',
@@ -353,11 +353,10 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                     className="relative tg-secondary-bg p-5 rounded-[28px] shadow-sm border border-gray-100/10 flex flex-col gap-3 active:scale-[0.98] transition-all overflow-hidden cursor-grab active:cursor-grabbing min-h-[140px]" 
                     onClick={() => onEditTask(task)}
                   >
-                    {/* --- ПОЛОСКА ЦВЕТА (МЕТКА) --- */}
+                    {/* МЕТКА */}
                     {task.color && task.color !== 'default' && (
                        <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${COLOR_MAP[task.color] || 'bg-blue-500'} z-20`} />
                     )}
-                    {/* ----------------------------- */}
 
                     {hasCover && (
                       <>
@@ -369,9 +368,22 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                     <div className="relative z-10 flex flex-col gap-3 h-full">
                         <div className="flex justify-between items-start gap-2">
                           <h3 className={`font-bold text-[15px] leading-tight flex-1 tracking-tight ${hasCover ? 'text-white' : 'tg-text'}`}>{task.title}</h3>
-                          <button onClick={e => { e.stopPropagation(); onDeleteTask(task.id); }} className={`${hasCover ? 'text-white/30 hover:text-white' : 'text-red-500/20 hover:text-red-500'} p-1`}>
+                          
+                          {/* --- КНОПКА УДАЛЕНИЯ (ОБНОВЛЕННАЯ) --- */}
+                          <button 
+                             onClick={e => { e.stopPropagation(); onDeleteTask(task.id); }} 
+                             title="Удалить"
+                             className={`
+                               p-1.5 rounded-lg transition-all duration-200
+                               ${hasCover 
+                                  ? 'text-white/40 hover:text-red-500 hover:bg-white/10' 
+                                  : 'text-gray-400/50 hover:text-red-500 hover:bg-red-500/10'}
+                             `}
+                          >
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
                           </button>
+                          {/* -------------------------------------- */}
+
                         </div>
                         {task.description && <p className={`text-[11px] line-clamp-2 italic ${hasCover ? 'text-white/60' : 'tg-hint opacity-70'}`}>{task.description}</p>}
                         
