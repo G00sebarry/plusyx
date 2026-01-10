@@ -156,7 +156,7 @@ const App: React.FC = () => {
   const handleWallpaperChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 3 * 1024 * 1024) { alert("Лимит 3МБ"); return; }
+      if (file.size > 3 * 1024 * 1024) { alert("Файл слишком большой! Выберите фото поменьше (до 3МБ), иначе приложение лопнет 🎈"); return; }
       const reader = new FileReader();
       reader.onload = (ev) => setWallpaper(ev.target?.result as string);
       reader.readAsDataURL(file);
@@ -358,7 +358,7 @@ const App: React.FC = () => {
                             onClick={() => wallpaperInputRef.current?.click()} 
                             className="w-full py-3 rounded-xl border border-dashed border-gray-400/30 tg-text text-[9px] font-black uppercase tracking-widest hover:bg-black/5 transition-all"
                           >
-                             📁 Загрузить JPG
+                             📁 Загрузить фон
                           </button>
                         ) : (
                           <div className="flex flex-col gap-4">
