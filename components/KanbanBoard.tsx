@@ -99,40 +99,60 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
     }
   };
 
-  // --- ЛОГИКА ПЕРЕТАСКИВАНИЯ (ОБНОВЛЕННАЯ) ---
+  // --- НОВАЯ ФУНКЦИЯ: ПЕРЕМЕЩЕНИЕ КОЛОНОК ---
+  const moveColumn = (colId: string, direction: 'left' | 'right' | 'start' | 'end') => {
+    const index = columns.findIndex(c => c.id === colId);
+    if (index === -1) return;
 
+    const newColumns = [...columns];
+    const [col] = newColumns.splice(index, 1); // Вырезаем колонку
+
+    if (direction === 'start') {
+        newColumns.unshift(col);
+    } else if (direction === 'end') {
+        newColumns.push(col);
+    } else if (direction === 'left') {
+        newColumns.splice(index - 1, 0, col);
+    } else if (direction === 'right') {
+        newColumns.splice(index + 1, 0, col);
+    }
+
+    onUpdateColumns(newColumns);
+    setActiveMenuColId(null); // Закрываем меню после действия
+    window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('medium');
+  };
+  // ------------------------------------------
+
+  // --- ЛОГИКА ПЕРЕТАСКИВАНИЯ ---
   const handleDragStart = (e: React.DragEvent, taskId: string) => {
     setDraggedTaskId(taskId);
     e.dataTransfer.setData('taskId', taskId);
     e.dataTransfer.effectAllowed = 'move';
     
-    // Делаем элемент полупрозрачным при начале перетаскивания
     const target = e.currentTarget as HTMLElement;
-    // Используем setTimeout, чтобы прозрачность применилась к элементу на доске,
-    // но "призрак" (копия под пальцем) остался видимым (браузер делает снимок до таймера)
     setTimeout(() => {
         target.style.opacity = '0.4'; 
-        target.style.transform = 'scale(0.95)'; // Чуть уменьшаем, чтобы было красиво
+        target.style.transform = 'scale(0.95)';
     }, 0);
   };
 
-  // ВОТ ЭТОЙ ФУНКЦИИ НЕ ХВАТАЛО!
-  // Она возвращает всё как было, когда отпускаешь палец
   const handleDragEnd = (e: React.DragEvent) => {
     setDraggedTaskId(null);
     setDropTargetId(null);
     const target = e.currentTarget as HTMLElement;
-    
-    // Возвращаем полную видимость и размер
     target.style.opacity = '1';
     target.style.transform = 'scale(1)';
   };
-
-  // -------------------------------------------
+  // -----------------------------
 
   return (
     <div className="flex overflow-x-auto h-full p-4 gap-5 snap-x snap-mandatory no-scrollbar">
-      {columns.map((column, index) => (
+      {columns.map((column, index) => {
+        // Проверяем, первая или последняя колонка (для стрелочек)
+        const isFirst = index === 0;
+        const isLast = index === columns.length - 1;
+
+        return (
         <div 
           key={column.id} 
           className="min-w-[85vw] md:min-w-[320px] flex flex-col snap-center h-full"
@@ -172,8 +192,41 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                   </button>
                   
                   {activeMenuColId === column.id && (
-                    <div className="absolute right-0 top-10 w-44 tg-secondary-bg rounded-2xl shadow-2xl border border-gray-400/10 p-2 z-[70] animate-in fade-in zoom-in-95 duration-200">
+                    <div className="absolute right-0 top-10 w-48 tg-secondary-bg rounded-2xl shadow-2xl border border-gray-400/10 p-2 z-[70] animate-in fade-in zoom-in-95 duration-200">
+                        {/* 1. Блок переименования */}
                         <button onClick={() => setEditingColId(column.id)} className="w-full text-left p-2.5 hover:bg-black/5 rounded-xl text-[9px] font-black uppercase tracking-widest tg-text">✏️ Переименовать</button>
+                        
+                        {/* 2. Блок позиции (НОВЫЙ) */}
+                        <div className="my-1 border-t border-gray-400/5" />
+                        <div className="px-2.5 py-1.5 text-[8px] font-black tg-hint uppercase">Позиция:</div>
+                        <div className="flex gap-1 px-1.5 pb-1">
+                             {/* Кнопка "В начало" */}
+                             {!isFirst && (
+                                <button onClick={() => moveColumn(column.id, 'start')} className="h-8 flex-1 bg-black/5 rounded-lg flex items-center justify-center hover:bg-black/10 transition-colors" title="В начало">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="11 17 6 12 11 7"/><polyline points="18 17 13 12 18 7"/></svg>
+                                </button>
+                             )}
+                             {/* Кнопка "Влево" */}
+                             {!isFirst && (
+                                <button onClick={() => moveColumn(column.id, 'left')} className="h-8 flex-1 bg-black/5 rounded-lg flex items-center justify-center hover:bg-black/10 transition-colors" title="Влево">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                                </button>
+                             )}
+                             {/* Кнопка "Вправо" */}
+                             {!isLast && (
+                                <button onClick={() => moveColumn(column.id, 'right')} className="h-8 flex-1 bg-black/5 rounded-lg flex items-center justify-center hover:bg-black/10 transition-colors" title="Вправо">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                                </button>
+                             )}
+                             {/* Кнопка "В конец" */}
+                             {!isLast && (
+                                <button onClick={() => moveColumn(column.id, 'end')} className="h-8 flex-1 bg-black/5 rounded-lg flex items-center justify-center hover:bg-black/10 transition-colors" title="В конец">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/></svg>
+                                </button>
+                             )}
+                        </div>
+
+                        {/* 3. Блок типа */}
                         <div className="my-1 border-t border-gray-400/5" />
                         <div className="px-2.5 py-1.5 text-[8px] font-black tg-hint uppercase">Тип поведения:</div>
                         {(['todo', 'in-progress', 'done'] as TaskStatus[]).map(t => (
@@ -181,6 +234,8 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                             {t === 'todo' ? '⭕ Очередь' : t === 'in-progress' ? '🟠 В работе' : '✅ Готово'}
                           </button>
                         ))}
+                        
+                        {/* 4. Блок удаления */}
                         <div className="my-1 border-t border-gray-400/5" />
                         <button onClick={() => handleDeleteColumn(column.id)} className="w-full text-left p-2.5 hover:bg-red-500/10 rounded-xl text-[9px] font-black uppercase tracking-widest text-red-500">🗑️ Удалить</button>
                     </div>
@@ -216,7 +271,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                   <div 
                     draggable 
                     onDragStart={e => handleDragStart(e, task.id)}
-                    onDragEnd={handleDragEnd} // <--- ДОБАВИЛ СЮДА: Сброс прозрачности
+                    onDragEnd={handleDragEnd}
                     className="relative tg-secondary-bg p-5 rounded-[28px] shadow-sm border border-gray-100/10 flex flex-col gap-3 active:scale-[0.98] transition-all overflow-hidden cursor-grab active:cursor-grabbing min-h-[140px]" 
                     onClick={() => onEditTask(task)}
                   >
@@ -285,7 +340,9 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
             </button>
           </div>
         </div>
-      ))}
+        ); // Конец map и return внутри map
+      })} 
+      {/* --- Тут закрывается map, дальше кнопка добавления колонки --- */}
 
       <div className={`flex flex-col h-full snap-center transition-all duration-500 ease-out ${isAddingColumn ? 'min-w-[85vw] md:min-w-[320px]' : 'min-w-[48px]'}`}>
           {!isAddingColumn ? (
