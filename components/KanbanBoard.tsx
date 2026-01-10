@@ -252,14 +252,6 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
     target.style.transform = 'scale(1)';
   };
 
-  // ХЕЛПЕР ДЛЯ ПРЕДОТВРАЩЕНИЯ ДРАГА НА КНОПКАХ
-  // Это "ядерное оружие" против залипания кнопок в DnD
-  const preventDrag = (e: React.BaseSyntheticEvent) => {
-      e.stopPropagation(); 
-      // Для Native DnD важно запретить dragstart, если клик был по кнопке
-      if (e.type === 'dragstart') e.preventDefault();
-  };
-
   return (
     <div className="flex overflow-x-auto h-full p-4 gap-5 snap-x snap-mandatory no-scrollbar">
       {columns.map((column, index) => {
@@ -400,12 +392,14 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                           {/* --- КНОПКА МЕНЮ ЗАДАЧИ (ТРИ ТОЧКИ) --- */}
                           <div className="relative">
                             <button 
-                                onClick={e => { preventDrag(e); setActiveTaskMenuId(activeTaskMenuId === task.id ? null : task.id); }}
-                                onMouseDown={preventDrag} 
-                                onPointerDown={preventDrag} 
-                                onDragStart={preventDrag}
+                                onClick={e => { 
+                                    e.stopPropagation(); 
+                                    setActiveTaskMenuId(activeTaskMenuId === task.id ? null : task.id); 
+                                }}
+                                onMouseDown={(e) => e.stopPropagation()} 
+                                onPointerDown={(e) => e.stopPropagation()} 
                                 className={`
-                                    p-1 rounded-lg transition-all duration-200
+                                    p-1 rounded-lg transition-all duration-200 cursor-pointer relative z-50
                                     ${hasCover 
                                         ? 'text-white/60 hover:text-white hover:bg-white/20' 
                                         : 'text-gray-400 hover:text-white hover:bg-black/10'}
@@ -418,15 +412,15 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                             {activeTaskMenuId === task.id && (
                                 <div 
                                     className="absolute right-0 top-8 w-44 bg-[#1e1e1e] rounded-xl shadow-2xl border border-gray-600/20 p-1.5 z-[100] animate-in fade-in zoom-in-95 duration-200 cursor-default" 
-                                    onClick={preventDrag}
-                                    onMouseDown={preventDrag}
-                                    onPointerDown={preventDrag}
-                                    onDragStart={preventDrag}
+                                    onClick={(e) => e.stopPropagation()} 
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                    onPointerDown={(e) => e.stopPropagation()}
                                 >
                                     <button 
-                                        onClick={(e) => { preventDrag(e); handleStartCopy(task); }}
-                                        onMouseDown={preventDrag}
-                                        onDragStart={preventDrag}
+                                        onClick={(e) => { 
+                                            e.stopPropagation(); 
+                                            handleStartCopy(task); 
+                                        }}
                                         className="w-full text-left p-2.5 hover:bg-white/5 rounded-lg text-[10px] font-black uppercase tracking-widest text-white flex items-center gap-2 cursor-pointer"
                                     >
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
@@ -434,9 +428,10 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                                     </button>
                                     <div className="h-px bg-white/5 my-1" />
                                     <button 
-                                        onClick={(e) => { preventDrag(e); onDeleteTask(task.id); }}
-                                        onMouseDown={preventDrag}
-                                        onDragStart={preventDrag}
+                                        onClick={(e) => { 
+                                            e.stopPropagation(); 
+                                            onDeleteTask(task.id); 
+                                        }}
                                         className="w-full text-left p-2.5 hover:bg-red-500/10 rounded-lg text-[10px] font-black uppercase tracking-widest text-red-500 flex items-center gap-2 cursor-pointer"
                                     >
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
@@ -465,10 +460,9 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                             <div className="flex gap-1.5 ml-2">
                                 {prevCol && (
                                   <button 
-                                    onClick={e => { preventDrag(e); handleQuickMove(task.id, 'left', column.id); }} 
-                                    onMouseDown={preventDrag}
-                                    onPointerDown={preventDrag}
-                                    onDragStart={preventDrag}
+                                    onClick={e => { e.stopPropagation(); handleQuickMove(task.id, 'left', column.id); }}
+                                    onMouseDown={(e) => e.stopPropagation()} 
+                                    onPointerDown={(e) => e.stopPropagation()}
                                     className={`w-9 h-9 flex items-center justify-center rounded-xl transition-all active:scale-90 shadow-sm ${hasCover ? NAV_COLORS_COVER[prevCol.type] : NAV_COLORS[prevCol.type]}`}
                                     title={`В колонку: ${prevCol.title}`}
                                   >
@@ -477,10 +471,9 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                                 )}
                                 {nextCol && (
                                   <button 
-                                    onClick={e => { preventDrag(e); handleQuickMove(task.id, 'right', column.id); }} 
-                                    onMouseDown={preventDrag}
-                                    onPointerDown={preventDrag}
-                                    onDragStart={preventDrag}
+                                    onClick={e => { e.stopPropagation(); handleQuickMove(task.id, 'right', column.id); }}
+                                    onMouseDown={(e) => e.stopPropagation()} 
+                                    onPointerDown={(e) => e.stopPropagation()} 
                                     className={`w-9 h-9 flex items-center justify-center rounded-xl transition-all active:scale-90 shadow-sm ${hasCover ? NAV_COLORS_COVER[nextCol.type] : NAV_COLORS[nextCol.type]}`}
                                     title={`В колонку: ${nextCol.title}`}
                                   >
@@ -495,7 +488,11 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
 
                 {/* --- ФОРМА СОЗДАНИЯ КОПИИ --- */}
                 {copyingTaskId === task.id && (
-                    <div className="bg-[#1e1e1e] p-4 rounded-[24px] border border-l-4 border-l-[var(--tg-theme-button-color)] border-gray-600/30 animate-in slide-in-from-top-2 duration-300 shadow-2xl mt-1">
+                    <div 
+                        className="bg-[#1e1e1e] p-4 rounded-[24px] border border-l-4 border-l-[var(--tg-theme-button-color)] border-gray-600/30 animate-in slide-in-from-top-2 duration-300 shadow-2xl mt-1 cursor-default"
+                        onClick={(e) => e.stopPropagation()}
+                        onMouseDown={(e) => e.stopPropagation()}
+                    >
                         <div className="text-[10px] font-black uppercase tracking-widest text-[var(--tg-theme-button-color)] mb-2">
                              Создание копии...
                         </div>
