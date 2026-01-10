@@ -12,6 +12,12 @@ interface KanbanBoardProps {
   onDragEnd: (draggedId: string, targetColId: string, targetId?: string) => void;
 }
 
+// --- ХЕЛПЕРЫ ДЛЯ ЦВЕТОВ (нужны тут для полоски) ---
+const COLOR_MAP: Record<string, string> = {
+  'slate': 'bg-slate-500', 'red': 'bg-red-500', 'orange': 'bg-orange-500', 
+  'green': 'bg-green-500', 'blue': 'bg-blue-500', 'purple': 'bg-purple-500', 'pink': 'bg-pink-500',
+};
+
 // --- ХЕЛПЕРЫ ДЛЯ ДАТЫ ---
 const toLocalDateString = (date: Date) => {
   const y = date.getFullYear();
@@ -41,12 +47,10 @@ const TaskTimer = ({ task, hasCover }: { task: Task; hasCover: boolean }) => {
   const [isUrgent, setIsUrgent] = useState(false);
 
   useEffect(() => {
-    // Если таймер выключен или нет времени — ничего не считаем
     if (!task.isTimer || !task.time || !task.date) return;
 
     const calculateTime = () => {
       const now = new Date();
-      // Создаем дату дедлайна
       const deadline = new Date(`${task.date}T${task.time}`);
       const diff = deadline.getTime() - now.getTime();
 
@@ -62,29 +66,26 @@ const TaskTimer = ({ task, hasCover }: { task: Task; hasCover: boolean }) => {
       const minutes = totalMinutes % 60;
       const seconds = Math.floor((diff % 60000) / 1000);
 
-      // Логика цветов (Светофор)
       if (hours < 8) {
-        setStatusColor('text-red-500'); // < 8ч: Красный
-        setIsUrgent(true); // Пульсация
+        setStatusColor('text-red-500');
+        setIsUrgent(true);
       } else if (hours < 16) {
-        setStatusColor('text-orange-500'); // < 16ч: Оранжевый
+        setStatusColor('text-orange-500');
         setIsUrgent(false);
       } else if (hours < 24) {
-        setStatusColor('text-green-500'); // < 24ч: Зеленый
+        setStatusColor('text-green-500');
         setIsUrgent(false);
       } else {
-        setStatusColor(hasCover ? 'text-white' : 'text-gray-400'); // > 24ч: Серый (или белый на обложке)
+        setStatusColor(hasCover ? 'text-white' : 'text-gray-400');
         setIsUrgent(false);
       }
 
-      // Форматирование текста
       if (hours >= 24) {
         const days = Math.floor(hours / 24);
         setTimeLeft(`${days} дн.`);
       } else if (hours > 0) {
         setTimeLeft(`${hours}ч ${minutes.toString().padStart(2, '0')}м`);
       } else {
-        // Если меньше часа - показываем минуты и секунды
         setTimeLeft(`${minutes}:${seconds.toString().padStart(2, '0')}`);
       }
     };
@@ -94,7 +95,6 @@ const TaskTimer = ({ task, hasCover }: { task: Task; hasCover: boolean }) => {
     return () => clearInterval(timer);
   }, [task.date, task.time, task.isTimer, hasCover]);
 
-  // ВАРИАНТ 1: Таймер выключен или нет времени -> Показываем обычную дату
   if (!task.isTimer || !task.time) {
     return (
       <div className={`flex items-center gap-1 text-[10px] font-bold ${hasCover ? 'text-white/70' : 'tg-hint'}`}>
@@ -103,7 +103,6 @@ const TaskTimer = ({ task, hasCover }: { task: Task; hasCover: boolean }) => {
     );
   }
 
-  // ВАРИАНТ 2: Время истекло -> 🔥 ВРЕМЯ ВЫШЛО
   if (isExpired) {
     return (
       <div className="w-fit flex items-center gap-1.5 bg-red-500/10 px-2 py-1 rounded-md animate-pulse border border-red-500/20">
@@ -113,7 +112,6 @@ const TaskTimer = ({ task, hasCover }: { task: Task; hasCover: boolean }) => {
     );
   }
 
-  // ВАРИАНТ 3: Таймер тикает
   return (
     <div className={`w-fit flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/20 backdrop-blur-md border border-white/5 transition-all duration-500 ${isUrgent ? 'animate-pulse bg-red-500/10 border-red-500/30' : ''}`}>
       <span className="text-[10px]">🔥</span>
@@ -355,6 +353,12 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                     className="relative tg-secondary-bg p-5 rounded-[28px] shadow-sm border border-gray-100/10 flex flex-col gap-3 active:scale-[0.98] transition-all overflow-hidden cursor-grab active:cursor-grabbing min-h-[140px]" 
                     onClick={() => onEditTask(task)}
                   >
+                    {/* --- ПОЛОСКА ЦВЕТА (МЕТКА) --- */}
+                    {task.color && task.color !== 'default' && (
+                       <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${COLOR_MAP[task.color] || 'bg-blue-500'} z-20`} />
+                    )}
+                    {/* ----------------------------- */}
+
                     {hasCover && (
                       <>
                         <img src={task.coverData} className="absolute inset-0 w-full h-full object-cover z-0" style={{ objectPosition: `50% ${task.coverPosition ?? 50}%` }} />
@@ -373,13 +377,9 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                         
                         <div className="flex items-center justify-between mt-auto">
                             <div className="flex flex-col gap-2 flex-1">
-                                
-                                {/* ТАЙМЕР ТЕПЕРЬ СТОИТ ТУТ И ОН КОМПАКТНЫЙ */}
                                 {task.date && (
                                    <TaskTimer task={task} hasCover={hasCover} />
                                 )}
-                                {/* --------------------------------------- */}
-
                                 {totalCount > 0 && (
                                   <div className={`w-16 h-1 rounded-full overflow-hidden ${hasCover ? 'bg-white/10' : 'bg-black/5'}`}>
                                     <div className="h-full bg-green-500" style={{ width: `${progress}%` }} />

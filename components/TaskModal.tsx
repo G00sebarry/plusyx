@@ -28,14 +28,14 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
   const [description, setDescription] = useState('');
   const [date, setDate] = useState(toLocalDateString(new Date()));
   const [time, setTime] = useState('');
-  
-  // --- НОВОЕ: Состояние таймера ---
   const [isTimer, setIsTimer] = useState(false);
-  // -------------------------------
-
   const [status, setStatus] = useState<TaskStatus>('todo');
   const [columnId, setColumnId] = useState<string | undefined>(undefined);
-  const [color, setColor] = useState('blue');
+  
+  // --- ЦВЕТ (теперь может быть 'default') ---
+  const [color, setColor] = useState('default'); 
+  // -----------------------------------------
+
   const [fileName, setFileName] = useState('');
   const [fileData, setFileData] = useState('');
   const [coverData, setCoverData] = useState('');
@@ -61,10 +61,10 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
       setDescription(initialTask.description || '');
       setDate(initialTask.date || toLocalDateString(new Date()));
       setTime(initialTask.time || '');
-      setIsTimer(initialTask.isTimer || false); // Загружаем состояние таймера
+      setIsTimer(initialTask.isTimer || false);
       setStatus(initialTask.status || 'todo');
       setColumnId(initialTask.columnId);
-      setColor(initialTask.color || 'blue');
+      setColor(initialTask.color || 'default'); // Загружаем цвет или дефолт
       setFileName(initialTask.fileName || '');
       setFileData(initialTask.fileData || '');
       setCoverData(initialTask.coverData || '');
@@ -74,7 +74,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
       setComments(initialTask.comments || []);
     } else {
       setTitle(''); setDescription(''); setDate(toLocalDateString(new Date())); setTime(''); setIsTimer(false);
-      setStatus('todo'); setColumnId(undefined); setColor('blue'); setFileName(''); setFileData(''); 
+      setStatus('todo'); setColumnId(undefined); setColor('default'); setFileName(''); setFileData(''); 
       setCoverData(''); setCoverPosition(50); setCoverIntensity(60);
       setChecklists([{ id: 'default', title: 'Чек-лист', items: [], hideCompleted: false }]); setComments([]);
     }
@@ -151,30 +151,51 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
         return (
           <div className="flex flex-col gap-3">
              <div className="flex items-end gap-2">
+                
+                {/* --- БЛОК ВЫБОРА МЕТКИ --- */}
                 <div className="flex flex-col gap-1 relative">
-                    <label className="text-[10px] font-black tg-hint uppercase ml-1">Цвет</label>
+                    <label className="text-[10px] font-black tg-hint uppercase ml-1">Метка</label>
                     <button 
                       onClick={() => setIsColorPickerOpen(!isColorPickerOpen)}
-                      className="tg-secondary-bg h-12 px-4 rounded-2xl flex items-center gap-2 border border-gray-400/10 active:scale-95 transition-all"
+                      className="tg-secondary-bg h-12 w-16 px-2 rounded-2xl flex items-center justify-center border border-gray-400/10 active:scale-95 transition-all"
                     >
-                      <div className={`w-4 h-4 rounded-full ${COLOR_MAP[color]} shadow-sm`} />
-                      <span className="text-[10px] font-black uppercase text-gray-500">Цвет</span>
+                      {/* Если цвет выбран - показываем его, если нет - показываем перечеркнутый круг */}
+                      {color !== 'default' ? (
+                         <div className={`w-6 h-6 rounded-full ${COLOR_MAP[color]} shadow-sm ring-2 ring-white/10`} />
+                      ) : (
+                         <div className="w-6 h-6 rounded-full border-2 border-gray-500/30 flex items-center justify-center relative">
+                            <div className="w-full h-0.5 bg-gray-500/30 rotate-45 absolute" />
+                         </div>
+                      )}
                     </button>
+                    
                     {isColorPickerOpen && (
-                      <div className="absolute top-16 left-0 bg-[#1c1c1e] p-2 rounded-2xl shadow-2xl flex gap-1.5 z-[210] border border-gray-400/20">
+                      <div className="absolute top-16 left-0 bg-[#1c1c1e] p-2 rounded-2xl shadow-2xl flex gap-1.5 z-[210] border border-gray-400/20 overflow-x-auto max-w-[250px] no-scrollbar">
+                        {/* Кнопка "Нет цвета" */}
+                        <button 
+                            onClick={() => { setColor('default'); setIsColorPickerOpen(false); }} 
+                            className={`w-8 h-8 rounded-xl flex items-center justify-center border border-gray-500/30 shrink-0 ${color === 'default' ? 'bg-white/10' : ''}`}
+                        >
+                            <div className="w-4 h-4 rounded-full border border-gray-400 relative">
+                                <div className="w-full h-px bg-gray-400 rotate-45 absolute top-1/2 left-0" />
+                            </div>
+                        </button>
+                        
+                        {/* Цвета */}
                         {COLORS.map(c => (
-                          <button key={c} onClick={() => { setColor(c); setIsColorPickerOpen(false); }} className={`w-8 h-8 rounded-xl ${COLOR_MAP[c]} ${color === c ? 'ring-2 ring-white scale-110' : ''}`} />
+                          <button key={c} onClick={() => { setColor(c); setIsColorPickerOpen(false); }} className={`w-8 h-8 rounded-xl shrink-0 ${COLOR_MAP[c]} ${color === c ? 'ring-2 ring-white scale-110' : ''}`} />
                         ))}
                       </div>
                     )}
                 </div>
+                {/* ------------------------- */}
+
                 <div className="flex-1 grid grid-cols-2 gap-2">
                     <div className="flex flex-col gap-1">
                       <label className="text-[10px] font-black tg-hint uppercase ml-1">Дата</label>
                       <input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full tg-secondary-bg h-12 px-3 rounded-2xl tg-text text-[11px] font-black outline-none text-center appearance-none" />
                     </div>
                     
-                    {/* --- ИЗМЕНЕННЫЙ БЛОК ВРЕМЕНИ С ТАЙМЕРОМ --- */}
                     <div className="flex flex-col gap-1">
                       <div className="flex justify-between items-center px-1">
                           <label className="text-[10px] font-black tg-hint uppercase">Время</label>
@@ -200,8 +221,6 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
                         `} 
                       />
                     </div>
-                    {/* ------------------------------------------- */}
-
                 </div>
              </div>
              <div className="flex p-1 bg-black/10 rounded-2xl">
