@@ -156,7 +156,7 @@ const App: React.FC = () => {
   const handleWallpaperChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 3 * 1024 * 1024) { alert("Файл слишком большой! Выберите фото поменьше (до 3МБ), иначе приложение лопнет 🎈"); return; }
+      if (file.size > 3 * 1024 * 1024) { alert("Файл слишком большой! Выберите фото поменьше (до 3МБ), иначе приложение лопнет"); return; }
       const reader = new FileReader();
       reader.onload = (ev) => setWallpaper(ev.target?.result as string);
       reader.readAsDataURL(file);
