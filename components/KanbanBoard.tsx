@@ -9,6 +9,9 @@ interface KanbanBoardProps {
   onEditTask: (task: Task) => void;
   onDeleteTask: (id: string) => void;
   onQuickAdd: (status: TaskStatus, columnId: string) => void;
+  // --- НОВЫЙ ПРОПС ДЛЯ КОПИРОВАНИЯ ---
+  onCopyTask: (originalTaskId: string, newTitle: string) => void; 
+  // ------------------------------------
   onDragEnd: (draggedId: string, targetColId: string, targetId?: string) => void;
 }
 
@@ -39,7 +42,7 @@ const formatDateLabel = (dateStr: string) => {
   return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
 };
 
-// --- КОМПОНЕНТ ТАЙМЕРА (TaskTimer) ---
+// --- КОМПОНЕНТ ТАЙМЕРА ---
 const TaskTimer = ({ task, hasCover }: { task: Task; hasCover: boolean }) => {
   const [timeLeft, setTimeLeft] = useState<string>('');
   const [statusColor, setStatusColor] = useState<string>('text-gray-400');
@@ -142,7 +145,7 @@ const NAV_COLORS_COVER: Record<TaskStatus, string> = {
 };
 
 export const KanbanBoard: React.FC<KanbanBoardProps> = ({ 
-  tasks, columns, onUpdateColumns, onMoveTask, onEditTask, onDeleteTask, onQuickAdd 
+  tasks, columns, onUpdateColumns, onMoveTask, onEditTask, onDeleteTask, onQuickAdd, onCopyTask 
 }) => {
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
@@ -152,6 +155,12 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   
   const [activeMenuColId, setActiveMenuColId] = useState<string | null>(null);
   const [editingColId, setEditingColId] = useState<string | null>(null);
+
+  // --- СОСТОЯНИЕ ДЛЯ МЕНЮ ЗАДАЧИ И КОПИРОВАНИЯ ---
+  const [activeTaskMenuId, setActiveTaskMenuId] = useState<string | null>(null); // Какое меню открыто (ID задачи)
+  const [copyingTaskId, setCopyingTaskId] = useState<string | null>(null); // Какую задачу копируем
+  const [copyTitle, setCopyTitle] = useState(''); // Текст новой задачи
+  // -----------------------------------------------
 
   const handleAddColumn = () => {
     if (!newColTitle.trim()) { setIsAddingColumn(false); return; }
@@ -211,6 +220,23 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
     setActiveMenuColId(null);
     window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('medium');
   };
+
+  // --- ЛОГИКА КОПИРОВАНИЯ ---
+  const handleStartCopy = (task: Task) => {
+      setCopyingTaskId(task.id);
+      setCopyTitle(task.title); // Предзаполняем старым названием
+      setActiveTaskMenuId(null); // Закрываем меню
+  };
+
+  const handleConfirmCopy = () => {
+      if (copyingTaskId && copyTitle.trim()) {
+          onCopyTask(copyingTaskId, copyTitle);
+          setCopyingTaskId(null);
+          setCopyTitle('');
+          window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
+      }
+  };
+  // ---------------------------
 
   const handleDragStart = (e: React.DragEvent, taskId: string) => {
     setDraggedTaskId(taskId);
@@ -334,8 +360,8 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
               const nextCol = index < columns.length - 1 ? columns[index + 1] : null;
 
               return (
+                <div key={task.id} className="flex flex-col gap-2"> {/* Обертка для карточки и черновика копии */}
                 <div 
-                  key={task.id}
                   onDragOver={e => { e.preventDefault(); e.stopPropagation(); setDropTargetId(task.id); }}
                   onDragLeave={() => setDropTargetId(null)}
                   onDrop={e => {
@@ -369,19 +395,41 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                         <div className="flex justify-between items-start gap-2">
                           <h3 className={`font-bold text-[15px] leading-tight flex-1 tracking-tight ${hasCover ? 'text-white' : 'tg-text'}`}>{task.title}</h3>
                           
-                          {/* --- КНОПКА УДАЛЕНИЯ (ОБНОВЛЕННАЯ) --- */}
-                          <button 
-                             onClick={e => { e.stopPropagation(); onDeleteTask(task.id); }} 
-                             title="Удалить"
-                             className={`
-                               p-1.5 rounded-lg transition-all duration-200
-                               ${hasCover 
-                                  ? 'text-white/40 hover:text-red-500 hover:bg-white/10' 
-                                  : 'text-gray-400/50 hover:text-red-500 hover:bg-red-500/10'}
-                             `}
-                          >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-                          </button>
+                          {/* --- КНОПКА МЕНЮ ЗАДАЧИ (ТРИ ТОЧКИ) --- */}
+                          <div className="relative">
+                            <button 
+                                onClick={e => { e.stopPropagation(); setActiveTaskMenuId(activeTaskMenuId === task.id ? null : task.id); }}
+                                className={`
+                                    p-1 rounded-lg transition-all duration-200
+                                    ${hasCover 
+                                        ? 'text-white/60 hover:text-white hover:bg-white/20' 
+                                        : 'text-gray-400 hover:text-white hover:bg-black/10'}
+                                `}
+                            >
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+                            </button>
+
+                            {/* Выпадающее меню */}
+                            {activeTaskMenuId === task.id && (
+                                <div className="absolute right-0 top-8 w-44 bg-[#1e1e1e] rounded-xl shadow-2xl border border-gray-600/20 p-1.5 z-[100] animate-in fade-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+                                    <button 
+                                        onClick={() => handleStartCopy(task)}
+                                        className="w-full text-left p-2.5 hover:bg-white/5 rounded-lg text-[10px] font-black uppercase tracking-widest text-white flex items-center gap-2"
+                                    >
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                                        Создать копию
+                                    </button>
+                                    <div className="h-px bg-white/5 my-1" />
+                                    <button 
+                                        onClick={() => onDeleteTask(task.id)}
+                                        className="w-full text-left p-2.5 hover:bg-red-500/10 rounded-lg text-[10px] font-black uppercase tracking-widest text-red-500 flex items-center gap-2"
+                                    >
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                                        Удалить
+                                    </button>
+                                </div>
+                            )}
+                          </div>
                           {/* -------------------------------------- */}
 
                         </div>
@@ -422,6 +470,45 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                         </div>
                     </div>
                   </div>
+                </div>
+
+                {/* --- ФОРМА СОЗДАНИЯ КОПИИ (ЧЕРНОВИК) --- */}
+                {copyingTaskId === task.id && (
+                    <div className="bg-[#1e1e1e] p-4 rounded-[24px] border border-l-4 border-l-[var(--tg-theme-button-color)] border-gray-600/30 animate-in slide-in-from-top-2 duration-300 shadow-2xl mt-1">
+                        <div className="text-[10px] font-black uppercase tracking-widest text-[var(--tg-theme-button-color)] mb-2">
+                             Создание копии...
+                        </div>
+                        <textarea 
+                            autoFocus
+                            value={copyTitle}
+                            onChange={e => setCopyTitle(e.target.value)}
+                            onKeyDown={e => {
+                                if (e.key === 'Enter' && !e.shiftKey) {
+                                    e.preventDefault();
+                                    handleConfirmCopy();
+                                }
+                            }}
+                            className="w-full bg-black/20 p-3 rounded-xl text-xs font-bold text-white outline-none resize-none mb-3 border border-white/5 focus:border-[var(--tg-theme-button-color)]/50 transition-colors"
+                            rows={2}
+                        />
+                        <div className="flex justify-end gap-2">
+                            <button 
+                                onClick={() => setCopyingTaskId(null)}
+                                className="px-4 py-2 rounded-xl text-[10px] font-black uppercase text-gray-400 hover:text-white hover:bg-white/10 transition-all"
+                            >
+                                Отмена
+                            </button>
+                            <button 
+                                onClick={handleConfirmCopy}
+                                className="px-4 py-2 rounded-xl text-[10px] font-black uppercase text-white bg-[var(--tg-theme-button-color)] hover:brightness-110 active:scale-95 transition-all shadow-lg"
+                            >
+                                Создать
+                            </button>
+                        </div>
+                    </div>
+                )}
+                {/* --------------------------------------- */}
+
                 </div>
               );
             })}
@@ -471,7 +558,8 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
           )}
       </div>
 
-      {activeMenuColId && <div className="fixed inset-0 z-[55]" onClick={() => setActiveMenuColId(null)} />}
+      {/* Закрываем все менюшки при клике на фон */}
+      {(activeMenuColId || activeTaskMenuId) && <div className="fixed inset-0 z-[55]" onClick={() => { setActiveMenuColId(null); setActiveTaskMenuId(null); }} />}
     </div>
   );
 };

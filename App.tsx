@@ -25,7 +25,6 @@ const App: React.FC = () => {
   const [view, setView] = useState<ViewType>('kanban');
   
   // ИСПРАВЛЕНИЕ: Сразу загружаем данные при старте (Lazy Initialization)
-  // Это гарантирует, что колонки будут всегда
   const [columns, setColumns] = useState<Column[]>(() => {
     const saved = localStorage.getItem('plusyx_columns_v1');
     if (saved) {
@@ -58,7 +57,7 @@ const App: React.FC = () => {
   const [habitToDelete, setHabitToDelete] = useState<string | null>(null);
   
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    return (localStorage.getItem('plusyx_theme') as 'light' | 'dark') || 'light'; // По умолчанию светлая, поменяй на 'dark' если хочешь
+    return (localStorage.getItem('plusyx_theme') as 'light' | 'dark') || 'light'; 
   });
 
   const [wallpaper, setWallpaper] = useState<string>(() => localStorage.getItem('plusyx_wallpaper') || '');
@@ -72,7 +71,7 @@ const App: React.FC = () => {
     localStorage.setItem('plusyx_theme', theme);
   }, [theme]);
 
-  // Save Data - Сохраняем при любом изменении
+  // Save Data
   useEffect(() => {
     localStorage.setItem('plusyx_tasks_v10', JSON.stringify(tasks));
   }, [tasks]);
@@ -113,9 +112,8 @@ const App: React.FC = () => {
   const handleAddTask = (taskData: Omit<Task, 'id'>) => {
     let cId = taskData.columnId;
     if (!cId) {
-      // Ищем колонку по типу статуса, или берем первую попавшуюся
       const col = columns.find(c => c.type === taskData.status) || columns[0];
-      cId = col?.id || 'col-todo'; // Защита от дурака
+      cId = col?.id || 'col-todo'; 
     }
     const newTask: Task = { ...taskData, id: Math.random().toString(36).substr(2, 9), columnId: cId };
     setTasks(prev => [newTask, ...prev]);
@@ -130,6 +128,39 @@ const App: React.FC = () => {
     setEditingTask(undefined);
     window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('medium');
   };
+
+  // --- НОВАЯ ФУНКЦИЯ КОПИРОВАНИЯ ---
+  const handleCopyTask = (originalTaskId: string, newTitle: string) => {
+    const originalTask = tasks.find(t => t.id === originalTaskId);
+    if (!originalTask) return;
+
+    // Глубокое копирование чек-листов, чтобы разорвать связь с оригиналом
+    // и дать элементам новые ID (на всякий случай)
+    const newChecklists = originalTask.checklists.map(list => ({
+        ...list,
+        id: Math.random().toString(36).substr(2, 9),
+        items: list.items.map(item => ({...item, id: Math.random().toString(36).substr(2, 9)}))
+    }));
+
+    const newTask: Task = {
+        ...originalTask,
+        id: Math.random().toString(36).substr(2, 9),
+        title: newTitle,
+        checklists: newChecklists,
+        comments: [] // Комментарии не копируем, начинаем с чистого листа
+    };
+
+    setTasks(prev => {
+        // Находим индекс оригинала, чтобы вставить копию сразу за ним
+        const index = prev.findIndex(t => t.id === originalTaskId);
+        if (index === -1) return [newTask, ...prev];
+
+        const newTasks = [...prev];
+        newTasks.splice(index + 1, 0, newTask);
+        return newTasks;
+    });
+  };
+  // ---------------------------------
 
   const handleAddHabit = (habitData: Habit) => {
     setHabits(prev => [habitData, ...prev]);
@@ -258,6 +289,9 @@ const App: React.FC = () => {
             onMoveTask={handleMoveTask} 
             onEditTask={setEditingTask} 
             onDeleteTask={setTaskToDelete} 
+            // --- ПЕРЕДАЕМ ПРОПС ---
+            onCopyTask={handleCopyTask}
+            // ----------------------
             onQuickAdd={(s, cId) => {
               setEditingTask({
                 id:'', title:'', description:'', 
