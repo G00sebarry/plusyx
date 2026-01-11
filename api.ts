@@ -2,54 +2,64 @@ import { supabase } from './supabaseClient';
 import { Task, Column, Habit, AntiHabit } from './types';
 
 // --- ЗАДАЧИ (TASKS) ---
-
-// 1. Получить все задачи
 export const fetchTasks = async (): Promise<Task[]> => {
-  const { data, error } = await supabase
-    .from('tasks')
-    .select('*')
-    .order('created_at', { ascending: true }); // Сортируем, чтобы старые были сверху
-
-  if (error) {
-    console.error('Ошибка загрузки задач:', error);
-    return [];
-  }
+  const { data, error } = await supabase.from('tasks').select('*').order('created_at', { ascending: true });
+  if (error) { console.error('Ошибка загрузки задач:', error); return []; }
   return data as Task[];
 };
 
-// 2. Добавить или Обновить задачу
 export const saveTaskToDb = async (task: Task) => {
-  // Supabase сам поймет: если ID есть в базе -> обновит, если нет -> создаст
-  const { error } = await supabase
-    .from('tasks')
-    .upsert(task); 
-
+  const { error } = await supabase.from('tasks').upsert(task);
   if (error) console.error('Ошибка сохранения задачи:', error);
 };
 
-// 3. Удалить задачу
 export const deleteTaskFromDb = async (taskId: string) => {
-  const { error } = await supabase
-    .from('tasks')
-    .delete()
-    .eq('id', taskId);
-
+  const { error } = await supabase.from('tasks').delete().eq('id', taskId);
   if (error) console.error('Ошибка удаления задачи:', error);
 };
 
 // --- КОЛОНКИ (COLUMNS) ---
 export const fetchColumns = async (): Promise<Column[]> => {
-  const { data, error } = await supabase
-    .from('columns')
-    .select('*')
-    .order('created_at', { ascending: true });
-
+  const { data, error } = await supabase.from('columns').select('*').order('created_at', { ascending: true });
   if (error) return [];
   return data as Column[];
 };
 
 export const saveColumnsToDb = async (columns: Column[]) => {
-  // Здесь мы просто перезаписываем массив колонок (упрощенно)
   const { error } = await supabase.from('columns').upsert(columns);
   if (error) console.error('Ошибка сохранения колонок:', error);
+};
+
+// --- 🔥 ПРИВЫЧКИ (HABITS) ---
+export const fetchHabits = async (): Promise<Habit[]> => {
+  const { data, error } = await supabase.from('habits').select('*').order('created_at', { ascending: true });
+  if (error) { console.error('Ошибка загрузки привычек:', error); return []; }
+  return data as Habit[];
+};
+
+export const saveHabitToDb = async (habit: Habit) => {
+  const { error } = await supabase.from('habits').upsert(habit);
+  if (error) console.error('Ошибка сохранения привычки:', error);
+};
+
+export const deleteHabitFromDb = async (id: string) => {
+  const { error } = await supabase.from('habits').delete().eq('id', id);
+  if (error) console.error('Ошибка удаления привычки:', error);
+};
+
+// --- 🔥 ВРЕДНЫЕ ПРИВЫЧКИ (ANTI-HABITS) ---
+export const fetchAntiHabits = async (): Promise<AntiHabit[]> => {
+  const { data, error } = await supabase.from('anti_habits').select('*').order('created_at', { ascending: true });
+  if (error) { console.error('Ошибка загрузки AntiHabits:', error); return []; }
+  return data as AntiHabit[];
+};
+
+export const saveAntiHabitToDb = async (habit: AntiHabit) => {
+  const { error } = await supabase.from('anti_habits').upsert(habit);
+  if (error) console.error('Ошибка сохранения AntiHabit:', error);
+};
+
+export const deleteAntiHabitFromDb = async (id: string) => {
+  const { error } = await supabase.from('anti_habits').delete().eq('id', id);
+  if (error) console.error('Ошибка удаления AntiHabit:', error);
 };
