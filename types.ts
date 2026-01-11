@@ -46,33 +46,48 @@ export interface Task {
   comments?: TaskComment[];
 }
 
-// --- ОБНОВЛЕННАЯ СЕКЦИЯ ПРИВЫЧЕК ---
-// Мы убрали старые сложные интерфейсы (HabitFrequency, FrequencyType)
-// и сделали одну простую и понятную структуру
-
+// --- ПРИВЫЧКИ (СОЗДАТЬ) ---
 export interface Habit {
   id: string;
-  title: string;        // Раньше было name. Теперь везде title для единообразия.
-  description?: string; // Раньше было question. Теперь это "Мотивация".
+  title: string;        
+  description?: string; 
   
-  emoji?: string;       // НОВОЕ: Эмодзи-аватарка
-  color: string;        // Цвет фона иконки
+  emoji?: string;       
+  color: string;        
 
   isMeasurable: boolean;
-  targetValue?: number; // Раньше было goalValue
-  unit?: string;        // Ед. измерения (мл, стр, км)
+  targetValue?: number; 
+  unit?: string;        
 
-  // Новая упрощенная частота (дни недели)
   frequency: {
     type: 'daily' | 'specific' | 'flexible';
-    days: number[]; // Массив чисел: 0 - Вс, 1 - Пн ... 6 - Сб
+    days: number[]; // 0 - Вс, 1 - Пн ... 6 - Сб
   };
 
   history: Record<string, boolean | number>;
   
-  // Дополнительные поля (оставил на всякий случай для совместимости или будущего)
   reminderTime?: string;
   fileName?: string;
+  fileData?: string;
+  coverPosition?: number;
+  coverIntensity?: number;
+}
+
+// --- 🔥 ВРЕДНЫЕ ПРИВЫЧКИ (БРОСИТЬ) ---
+// Новая сущность, которую мы добавили
+export interface AntiHabit {
+  id: string;
+  title: string;
+  emoji: string;
+  color: string; // Цвет кольца прогресса
+  
+  startDate: number;     // Дата начала (Timestamp), чтобы тикал таймер
+  longestStreak: number; // Рекорд в миллисекундах
+  goal?: number;         // Цель (если есть)
+  
+  history: { date: number; duration: number }[]; // История срывов
+  
+  // Кастомизация обложки (наша фишка)
   fileData?: string;
   coverPosition?: number;
   coverIntensity?: number;
