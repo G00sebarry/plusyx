@@ -38,8 +38,6 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     return `${day}.${month}`;
   };
 
-  // --- ОБНОВЛЕННАЯ ЛОГИКА ПРОГРЕССА ---
-  // Теперь она работает с простым массивом дней (0-6)
   const calculateProgress = (habit: Habit) => {
     const now = new Date();
     const goal = habit.targetValue || 1;
@@ -48,13 +46,10 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
 
     const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
     
-    // Перебираем все дни в текущем месяце
     for (let d = 1; d <= daysInMonth; d++) {
       const date = new Date(now.getFullYear(), now.getMonth(), d);
-      const dayOfWeek = date.getDay(); // 0 - Вс, 1 - Пн...
+      const dayOfWeek = date.getDay(); 
 
-      // Проверяем, должна ли привычка выполняться в этот день
-      // habit.frequency.days содержит массив дней [1, 3, 5]
       const isScheduled = habit.frequency.days.includes(dayOfWeek);
       
       if (isScheduled) {
@@ -70,7 +65,6 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
              score = val ? goal : 0;
         }
         
-        // Ограничиваем прогресс одной цели, чтобы перевыполнение не ломало шкалу
         currentScore += Math.min(score, goal);
       }
     }
@@ -78,22 +72,23 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     if (maxPossibleScore === 0) return 0;
     return Math.min(100, Math.round((currentScore / maxPossibleScore) * 100));
   };
-  // ------------------------------------
 
-  const getSlotColor = (val: number | boolean, goal: number, isMeasurable: boolean) => {
-    if (!val || val === 0) return 'bg-black/20 text-white/40';
-    if (!isMeasurable) return 'bg-green-500 text-white shadow-lg';
+  const getSlotColor = (val: number | boolean, goal: number, isMeasurable: boolean, hasCover: boolean) => {
+    // Если обложка есть, делаем слоты полупрозрачными белыми
+    const baseEmpty = hasCover ? 'bg-white/10 text-white/40 border border-white/10' : 'bg-black/20 text-white/40 border border-transparent';
+    
+    if (!val || val === 0) return baseEmpty;
+    if (!isMeasurable) return 'bg-green-500 text-white shadow-lg border-transparent';
     
     const num = Number(val);
     const percent = (num / goal) * 100;
     
-    if (percent >= 100) return 'bg-green-500 text-white shadow-lg';
-    if (percent >= 50) return 'bg-orange-500 text-white shadow-md';
-    return 'bg-red-500 text-white shadow-sm';
+    if (percent >= 100) return 'bg-green-500 text-white shadow-lg border-transparent';
+    if (percent >= 50) return 'bg-orange-500 text-white shadow-md border-transparent';
+    return 'bg-red-500 text-white shadow-sm border-transparent';
   };
 
-  // --- ОТРИСОВКА КНОПОК ДНЕЙ ---
-  const renderSlots = (habit: Habit) => {
+  const renderSlots = (habit: Habit, hasCover: boolean) => {
     const now = new Date();
     const goal = habit.targetValue || 1;
     const daysToRender: Date[] = [];
@@ -104,7 +99,6 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
         const date = new Date(now.getFullYear(), now.getMonth(), d);
         const dayOfWeek = date.getDay();
         
-        // Если день недели есть в списке выбранных - рендерим его
         if (habit.frequency.days.includes(dayOfWeek)) {
             daysToRender.push(date);
         }
@@ -115,13 +109,13 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
       const val = habit.history[ds];
       const isDone = !!val;
       const isToday = ds === formatDate(new Date());
-      const bgColor = getSlotColor(val, goal, habit.isMeasurable);
+      const bgColor = getSlotColor(val, goal, habit.isMeasurable, hasCover);
 
       return (
         <button key={ds} onClick={(e) => handleToggle(e, habit, ds)} className={`min-w-[56px] flex flex-col items-center gap-1 py-3 px-1 rounded-2xl transition-all active:scale-95 ${bgColor} ${isToday ? 'ring-2 ring-white/50' : ''}`}>
           <span className="text-[10px] font-black">{formatShortDate(date)}</span>
           <span className={`text-[8px] font-bold ${isDone ? 'opacity-80' : 'opacity-40'}`}>{WEEKDAYS[date.getDay()]}</span>
-          <div className={`w-8 h-8 mt-1 rounded-xl flex items-center justify-center border-2 ${isDone ? 'border-white/30' : 'border-black/10'}`}>
+          <div className={`w-8 h-8 mt-1 rounded-xl flex items-center justify-center border-2 ${isDone ? 'border-white/30' : 'border-white/10'}`}>
             {habit.isMeasurable ? (
                 <span className="text-[10px] font-black">{val || ''}</span>
             ) : (
@@ -151,7 +145,6 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     setEditingValue(null);
   };
 
-  // Drag and Drop
   const handleDragStart = (e: React.DragEvent, id: string) => {
     setDraggedHabitId(id);
     e.dataTransfer.setData('habitId', id);
@@ -195,6 +188,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
           const circ = 2 * Math.PI * radius;
           const offset = circ - (progress / 100) * circ;
           const isTarget = dropTargetId === habit.id;
+          const hasCover = !!habit.fileData && habit.fileData.length > 0;
 
           return (
             <div 
@@ -204,21 +198,29 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
               onDragOver={(e) => handleDragOver(e, habit.id)}
               onDrop={(e) => handleDrop(e, habit.id)}
               onDragEnd={() => { setDraggedHabitId(null); setDropTargetId(null); }}
-              className={`relative overflow-hidden tg-secondary-bg rounded-[32px] border border-gray-400/5 shadow-sm p-5 flex flex-col gap-4 transition-all min-h-[140px] cursor-grab active:cursor-grabbing ${isTarget ? 'scale-[1.02] border-blue-500/50' : ''} ${draggedHabitId === habit.id ? 'opacity-40' : ''}`} 
+              className={`relative overflow-hidden rounded-[32px] shadow-sm p-5 flex flex-col gap-4 transition-all min-h-[140px] cursor-grab active:cursor-grabbing ${isTarget ? 'scale-[1.02] ring-2 ring-blue-500' : ''} ${draggedHabitId === habit.id ? 'opacity-40' : ''} ${!hasCover ? 'tg-secondary-bg border border-gray-400/5' : ''}`}
+              style={hasCover ? {
+                 backgroundImage: `url(${habit.fileData})`,
+                 backgroundSize: 'cover',
+                 backgroundPosition: `50% ${habit.coverPosition ?? 50}%`
+              } : {}}
               onClick={() => onEditHabit(habit)}
             >
+                {/* ЗАТЕМНЕНИЕ (ЕСЛИ ЕСТЬ ОБЛОЖКА) */}
+                {hasCover && (
+                  <div className="absolute inset-0 z-0" style={{ backgroundColor: `rgba(0,0,0,${(habit.coverIntensity ?? 60) / 100})` }} />
+                )}
+
                 <div className="relative z-10 flex justify-between items-start">
                     <div className="flex items-center gap-3">
-                        {/* --- ИКОНКА (ЭМОДЗИ) --- */}
                         <div className={`w-12 h-12 rounded-2xl ${habit.color} flex items-center justify-center text-2xl shrink-0 shadow-sm border border-white/10`}>
                             {habit.emoji || '🔥'}
                         </div>
                         
                         <div className="flex flex-col">
-                            {/* --- НАЗВАНИЕ И МОТИВАЦИЯ --- */}
-                            <span className="text-sm font-black uppercase tracking-tight tg-text">{habit.title}</span>
+                            <span className={`text-sm font-black uppercase tracking-tight ${hasCover ? 'text-white drop-shadow-md' : 'tg-text'}`}>{habit.title}</span>
                             {habit.description && (
-                                <span className="text-[10px] tg-hint line-clamp-1 italic opacity-70">{habit.description}</span>
+                                <span className={`text-[10px] line-clamp-1 italic ${hasCover ? 'text-white/70' : 'tg-hint opacity-70'}`}>{habit.description}</span>
                             )}
                         </div>
                     </div>
@@ -226,16 +228,16 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
                     <div className="flex items-center gap-3">
                         <button 
                           onClick={(e) => { e.stopPropagation(); onDeleteHabit(habit.id); }}
-                          className="w-8 h-8 flex items-center justify-center rounded-xl bg-red-500/5 text-red-500/30 hover:text-red-500 transition-colors"
+                          className={`w-8 h-8 flex items-center justify-center rounded-xl transition-colors ${hasCover ? 'bg-white/10 text-white/60 hover:text-white' : 'bg-red-500/5 text-red-500/30 hover:text-red-500'}`}
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
                         </button>
                         
                         <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-black tg-text opacity-40">{progress}%</span>
-                            <div className="w-8 h-8 rounded-full flex items-center justify-center border border-gray-400/10 bg-black/5">
+                            <span className={`text-[10px] font-black ${hasCover ? 'text-white/80' : 'tg-text opacity-40'}`}>{progress}%</span>
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${hasCover ? 'bg-white/10' : 'border border-gray-400/10 bg-black/5'}`}>
                                 <svg className="w-full h-full -rotate-90" viewBox="0 0 24 24">
-                                    <circle cx="12" cy="12" r={radius} fill="none" stroke="currentColor" strokeWidth="2.5" className="text-gray-400/10" />
+                                    <circle cx="12" cy="12" r={radius} fill="none" stroke="currentColor" strokeWidth="2.5" className={hasCover ? "text-white/10" : "text-gray-400/10"} />
                                     <circle cx="12" cy="12" r={radius} fill="none" stroke="currentColor" strokeWidth="2.5" strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round" className="text-green-500 transition-all duration-700" />
                                 </svg>
                             </div>
@@ -243,9 +245,8 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
                     </div>
                 </div>
                 
-                {/* --- СЛОТЫ ДНЕЙ --- */}
                 <div className="relative z-10 flex gap-2.5 overflow-x-auto no-scrollbar pb-1 px-0.5">
-                    {renderSlots(habit)}
+                    {renderSlots(habit, hasCover)}
                 </div>
             </div>
           );
