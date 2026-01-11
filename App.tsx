@@ -5,7 +5,8 @@ import { BottomNav } from './components/BottomNav';
 import { TaskModal } from './components/TaskModal';
 import { HabitTracker } from './components/HabitTracker';
 import { HabitModal } from './components/HabitModal';
-import { Task, ViewType, TaskStatus, Habit, Column } from './types';
+import { AntiHabitModal } from './components/AntiHabitModal'; // NEW IMPORT
+import { Task, ViewType, TaskStatus, Habit, Column, AntiHabit } from './types'; // NEW IMPORT
 
 // Хелпер для получения даты в формате YYYY-MM-DD без сдвига часовых поясов
 const toLocalDateString = (date: Date) => {
@@ -41,28 +42,21 @@ const App: React.FC = () => {
     return saved ? JSON.parse(saved) : [];
   });
 
-  // 🔥 ЛЕЧЕНИЕ ДАННЫХ ДЛЯ ТЕЛЕФОНА 🔥
-  // Мы проверяем старые привычки и добавляем им недостающие поля (days, emoji)
+  // 🔥 ЛЕЧЕНИЕ ДАННЫХ ДЛЯ ТЕЛЕФОНА (ТВОЙ КОД ОСТАВИЛ БЕЗ ИЗМЕНЕНИЙ) 🔥
   const [habits, setHabits] = useState<Habit[]>(() => {
     try {
       const saved = localStorage.getItem('plusyx_habits_v1');
       let parsed = saved ? JSON.parse(saved) : [];
       
-      // Миграция данных "на лету"
       parsed = parsed.map((h: any) => ({
         ...h,
-        // Если нет title, берем старое name, или дефолт
         title: h.title || h.name || 'Привычка',
-        // Если нет структуры frequency.days (старая версия), создаем дефолт
         frequency: {
           type: h.frequency?.type || 'daily',
           days: Array.isArray(h.frequency?.days) ? h.frequency.days : [0, 1, 2, 3, 4, 5, 6]
         },
-        // Если нет эмодзи
         emoji: h.emoji || '🔥',
-        // Если нет описания
         description: h.description || h.question || '',
-        // Убеждаемся, что история существует
         history: h.history || {}
       }));
 
@@ -72,14 +66,25 @@ const App: React.FC = () => {
       return []; 
     }
   });
+
+  // 🔥 НОВЫЙ STATE: ВРЕДНЫЕ ПРИВЫЧКИ
+  const [antiHabits, setAntiHabits] = useState<AntiHabit[]>(() => {
+    try {
+        const saved = localStorage.getItem('plusyx_antihabits_v1');
+        return saved ? JSON.parse(saved) : [];
+    } catch(e) { return []; }
+  });
   
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [isHabitModalOpen, setIsHabitModalOpen] = useState(false);
+  const [isAntiHabitModalOpen, setIsAntiHabitModalOpen] = useState(false); // NEW
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isCreateMenuOpen, setIsCreateMenuOpen] = useState(false);
   
   const [editingTask, setEditingTask] = useState<Task | undefined>(undefined);
   const [editingHabit, setEditingHabit] = useState<Habit | undefined>(undefined);
+  const [editingAntiHabit, setEditingAntiHabit] = useState<AntiHabit | undefined>(undefined); // NEW
+  
   const [taskToDelete, setTaskToDelete] = useState<string | null>(null);
   const [habitToDelete, setHabitToDelete] = useState<string | null>(null);
   
@@ -99,17 +104,10 @@ const App: React.FC = () => {
   }, [theme]);
 
   // Save Data
-  useEffect(() => {
-    localStorage.setItem('plusyx_tasks_v10', JSON.stringify(tasks));
-  }, [tasks]);
-
-  useEffect(() => {
-    localStorage.setItem('plusyx_habits_v1', JSON.stringify(habits));
-  }, [habits]);
-
-  useEffect(() => {
-    localStorage.setItem('plusyx_columns_v1', JSON.stringify(columns));
-  }, [columns]);
+  useEffect(() => { localStorage.setItem('plusyx_tasks_v10', JSON.stringify(tasks)); }, [tasks]);
+  useEffect(() => { localStorage.setItem('plusyx_habits_v1', JSON.stringify(habits)); }, [habits]);
+  useEffect(() => { localStorage.setItem('plusyx_antihabits_v1', JSON.stringify(antiHabits)); }, [antiHabits]); // NEW
+  useEffect(() => { localStorage.setItem('plusyx_columns_v1', JSON.stringify(columns)); }, [columns]);
 
   useEffect(() => {
     localStorage.setItem('plusyx_wallpaper', wallpaper);
@@ -120,22 +118,23 @@ const App: React.FC = () => {
   useEffect(() => {
     const tg = window.Telegram?.WebApp;
     if (tg) {
-      tg.MainButton.setText(view === 'tracker' ? "Новая привычка" : "Создать задачу");
-      tg.MainButton.show();
+      if (view === 'tracker') {
+        tg.MainButton.hide(); // В трекере свои кнопки
+      } else {
+        tg.MainButton.setText("Создать задачу");
+        tg.MainButton.show();
+      }
+      
       const handleClick = () => {
-        if (view === 'tracker') {
-          setEditingHabit(undefined);
-          setIsHabitModalOpen(true);
-        } else {
-          setEditingTask(undefined);
-          setIsTaskModalOpen(true);
-        }
+         setEditingTask(undefined);
+         setIsTaskModalOpen(true);
       };
       tg.MainButton.onClick(handleClick);
       return () => tg.MainButton.offClick(handleClick);
     }
   }, [view]);
 
+  // --- ЗАДАЧИ ---
   const handleAddTask = (taskData: Omit<Task, 'id'>) => {
     let cId = taskData.columnId;
     if (!cId) {
@@ -156,7 +155,6 @@ const App: React.FC = () => {
     window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('medium');
   };
 
-  // --- НОВАЯ ФУНКЦИЯ КОПИРОВАНИЯ ---
   const handleCopyTask = (originalTaskId: string, newTitle: string) => {
     const originalTask = tasks.find(t => t.id === originalTaskId);
     if (!originalTask) return;
@@ -184,39 +182,6 @@ const App: React.FC = () => {
         return newTasks;
     });
   };
-  // ---------------------------------
-
-  const handleAddHabit = (habitData: Habit) => {
-    setHabits(prev => [habitData, ...prev]);
-    setIsHabitModalOpen(false);
-    window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
-  };
-
-  const handleUpdateHabit = (updatedHabit: Habit) => {
-    setHabits(prev => prev.map(h => h.id === updatedHabit.id ? updatedHabit : h));
-    setIsHabitModalOpen(false);
-    setEditingHabit(undefined);
-  };
-
-  const handleToggleHabit = (id: string, date: string, value: number | boolean) => {
-    setHabits(prev => prev.map(h => {
-      if (h.id === id) {
-        return { ...h, history: { ...h.history, [date]: value } };
-      }
-      return h;
-    }));
-    window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
-  };
-
-  const handleWallpaperChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 3 * 1024 * 1024) { alert("Файл слишком большой! Выберите фото поменьше (до 3МБ), иначе приложение лопнет"); return; }
-      const reader = new FileReader();
-      reader.onload = (ev) => setWallpaper(ev.target?.result as string);
-      reader.readAsDataURL(file);
-    }
-  };
 
   const handleMoveTask = (id: string, targetColId: string, targetId?: string) => {
     const targetCol = columns.find(c => c.id === targetColId);
@@ -239,6 +204,71 @@ const App: React.FC = () => {
       }
       return res;
     });
+  };
+
+  // --- ПРИВЫЧКИ (ПОЛЕЗНЫЕ) ---
+  const handleAddHabit = (habitData: Habit) => {
+    setHabits(prev => [habitData, ...prev]);
+    setIsHabitModalOpen(false);
+    window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
+  };
+
+  const handleUpdateHabit = (updatedHabit: Habit) => {
+    setHabits(prev => prev.map(h => h.id === updatedHabit.id ? updatedHabit : h));
+    setIsHabitModalOpen(false);
+    setEditingHabit(undefined);
+  };
+
+  const handleToggleHabit = (id: string, date: string, value: number | boolean) => {
+    setHabits(prev => prev.map(h => {
+      if (h.id === id) {
+        return { ...h, history: { ...h.history, [date]: value } };
+      }
+      return h;
+    }));
+    window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+  };
+
+  // --- 🔥 ВРЕДНЫЕ ПРИВЫЧКИ (НОВОЕ) ---
+  const handleAddAntiHabit = (habit: AntiHabit) => {
+    setAntiHabits(prev => [habit, ...prev]);
+    setIsAntiHabitModalOpen(false);
+    window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
+  };
+
+  const handleUpdateAntiHabit = (habit: AntiHabit) => {
+    setAntiHabits(prev => prev.map(h => h.id === habit.id ? habit : h));
+    setIsAntiHabitModalOpen(false);
+    setEditingAntiHabit(undefined);
+  };
+
+  const handleRelapse = (id: string) => {
+    setAntiHabits(prev => prev.map(h => {
+        if (h.id === id) {
+            const now = Date.now();
+            const currentDuration = now - h.startDate;
+            const newRecord = Math.max(h.longestStreak, currentDuration);
+            return {
+                ...h,
+                startDate: now, // Сброс таймера
+                longestStreak: newRecord, // Сохраняем рекорд
+                history: [...h.history, { date: now, duration: currentDuration }] // Пишем в историю
+            };
+        }
+        return h;
+    }));
+    window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('warning');
+  };
+
+  // --- ОБОИ ---
+  const handleWallpaperChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 3 * 1024 * 1024) { alert("Файл слишком большой! Выберите фото поменьше (до 3МБ), иначе приложение лопнет"); return; }
+      const reader = new FileReader();
+      reader.onload = (ev) => setWallpaper(ev.target?.result as string);
+      reader.readAsDataURL(file);
+    }
   };
 
   return (
@@ -279,19 +309,15 @@ const App: React.FC = () => {
 
             {isCreateMenuOpen && (
               <div className="absolute right-0 top-12 w-48 tg-secondary-bg rounded-2xl shadow-2xl border border-gray-400/10 p-2 animate-in slide-in-from-top-2 duration-200 z-[200]">
-                <button 
-                  onClick={() => { setIsTaskModalOpen(true); setIsCreateMenuOpen(false); setEditingTask(undefined); }}
-                  className="w-full text-left p-3 hover:bg-black/5 rounded-xl flex items-center gap-3 transition-colors"
-                >
-                  <span className="text-blue-500 text-lg">📝</span>
-                  <span className="text-sm font-bold tg-text">Новая задача</span>
+                <button onClick={() => { setIsTaskModalOpen(true); setIsCreateMenuOpen(false); setEditingTask(undefined); }} className="w-full text-left p-3 hover:bg-black/5 rounded-xl flex items-center gap-3 transition-colors">
+                  <span className="text-blue-500 text-lg">📝</span><span className="text-sm font-bold tg-text">Новая задача</span>
                 </button>
-                <button 
-                  onClick={() => { setIsHabitModalOpen(true); setIsCreateMenuOpen(false); setEditingHabit(undefined); }}
-                  className="w-full text-left p-3 hover:bg-black/5 rounded-xl flex items-center gap-3 transition-colors"
-                >
-                  <span className="text-green-500 text-lg">🌱</span>
-                  <span className="text-sm font-bold tg-text">Новая привычка</span>
+                <button onClick={() => { setIsHabitModalOpen(true); setIsCreateMenuOpen(false); setEditingHabit(undefined); }} className="w-full text-left p-3 hover:bg-black/5 rounded-xl flex items-center gap-3 transition-colors">
+                  <span className="text-green-500 text-lg">🌱</span><span className="text-sm font-bold tg-text">Привычка</span>
+                </button>
+                {/* КНОПКА БРОСИТЬ В БЫСТРОМ МЕНЮ */}
+                <button onClick={() => { setIsAntiHabitModalOpen(true); setIsCreateMenuOpen(false); setEditingAntiHabit(undefined); }} className="w-full text-left p-3 hover:bg-black/5 rounded-xl flex items-center gap-3 transition-colors">
+                  <span className="text-red-500 text-lg">⛔</span><span className="text-sm font-bold tg-text">Бросить</span>
                 </button>
               </div>
             )}
@@ -307,24 +333,8 @@ const App: React.FC = () => {
       <main className="flex-1 overflow-y-auto pb-24 relative z-10">
         {view === 'kanban' && (
           <KanbanBoard 
-            tasks={tasks}
-            columns={columns}
-            onUpdateColumns={setColumns}
-            onMoveTask={handleMoveTask} 
-            onEditTask={setEditingTask} 
-            onDeleteTask={setTaskToDelete} 
-            // --- ПЕРЕДАЕМ ПРОПС ---
-            onCopyTask={handleCopyTask}
-            // ----------------------
-            onQuickAdd={(s, cId) => {
-              setEditingTask({
-                id:'', title:'', description:'', 
-                date:toLocalDateString(new Date()), status:s, columnId: cId,
-                checklists: [], comments: []
-              } as Task); 
-              setIsTaskModalOpen(true);
-            }} 
-            onDragEnd={() => {}} 
+            tasks={tasks} columns={columns} onUpdateColumns={setColumns} onMoveTask={handleMoveTask} onEditTask={setEditingTask} onDeleteTask={setTaskToDelete} onCopyTask={handleCopyTask}
+            onQuickAdd={(s, cId) => { setEditingTask({ id:'', title:'', description:'', date:toLocalDateString(new Date()), status:s, columnId: cId, checklists: [], comments: []} as Task); setIsTaskModalOpen(true); }} onDragEnd={() => {}} 
           />
         )}
         {view === 'calendar' && (
@@ -333,11 +343,17 @@ const App: React.FC = () => {
         {view === 'tracker' && (
           <HabitTracker 
             habits={habits} 
+            antiHabits={antiHabits} // Pass prop
             onToggleHabit={handleToggleHabit} 
             onEditHabit={(h) => { setEditingHabit(h); setIsHabitModalOpen(true); }} 
             onDeleteHabit={(id) => setHabitToDelete(id)} 
             onAddHabit={() => { setEditingHabit(undefined); setIsHabitModalOpen(true); }}
             onReorderHabits={setHabits}
+            // Pass new handlers
+            onAddAntiHabit={() => { setEditingAntiHabit(undefined); setIsAntiHabitModalOpen(true); }}
+            onEditAntiHabit={(h) => { setEditingAntiHabit(h); setIsAntiHabitModalOpen(true); }}
+            onDeleteAntiHabit={(id) => setHabitToDelete(id)}
+            onRelapseAntiHabit={handleRelapse}
           />
         )}
       </main>
@@ -348,8 +364,7 @@ const App: React.FC = () => {
         isOpen={isTaskModalOpen || (!!editingTask && !!editingTask.id)} 
         onClose={() => { setIsTaskModalOpen(false); setEditingTask(undefined); }} 
         onSave={editingTask?.id ? handleUpdateTask : handleAddTask} 
-        initialTask={editingTask} 
-        columns={columns}
+        initialTask={editingTask} columns={columns}
       />
 
       <HabitModal
@@ -357,6 +372,14 @@ const App: React.FC = () => {
         onClose={() => { setIsHabitModalOpen(false); setEditingHabit(undefined); }}
         onSave={editingHabit?.id ? handleUpdateHabit : handleAddHabit}
         initialHabit={editingHabit}
+      />
+      
+      {/* НОВАЯ МОДАЛКА */}
+      <AntiHabitModal 
+        isOpen={isAntiHabitModalOpen || (!!editingAntiHabit && !!editingAntiHabit.id)}
+        onClose={() => { setIsAntiHabitModalOpen(false); setEditingAntiHabit(undefined); }}
+        onSave={editingAntiHabit?.id ? handleUpdateAntiHabit : handleAddAntiHabit}
+        initialHabit={editingAntiHabit}
       />
 
       {(taskToDelete || habitToDelete) && (
@@ -367,7 +390,7 @@ const App: React.FC = () => {
                     <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
                 </div>
                 <h2 className="text-xl font-black tg-text text-center uppercase tracking-widest leading-tight">
-                  {taskToDelete ? 'Удалить задачу?' : 'Удалить привычку?'}
+                  {taskToDelete ? 'Удалить задачу?' : 'Удалить?'}
                 </h2>
                 <div className="flex flex-col gap-3">
                     <button 
@@ -376,7 +399,9 @@ const App: React.FC = () => {
                           setTasks(prev => prev.filter(t => t.id !== taskToDelete)); 
                           setTaskToDelete(null); 
                         } else {
+                          // Пытаемся удалить и оттуда, и оттуда (ID уникален, так что безопасно)
                           setHabits(prev => prev.filter(h => h.id !== habitToDelete));
+                          setAntiHabits(prev => prev.filter(h => h.id !== habitToDelete));
                           setHabitToDelete(null);
                         }
                       }} 
