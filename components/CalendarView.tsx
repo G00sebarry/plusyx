@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { Task, Habit, TaskStatus } from '../types';
 
@@ -52,26 +51,11 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ tasks, habits, onEdi
     setCurrentDate(newDate);
   };
 
+  // --- ОБНОВЛЕННАЯ ЛОГИКА ПРОВЕРКИ ДАТЫ ---
+  // Теперь мы просто смотрим, входит ли день недели в массив frequency.days
   const isHabitScheduledForDate = (habit: Habit, date: Date) => {
-    const dStr = toLocalDateString(date);
-    const f = habit.frequency;
-    const dayOfWeek = date.getDay(); 
-    const adjustedDay = dayOfWeek === 0 ? 6 : dayOfWeek - 1; 
-
-    switch (f.type) {
-      case 'daily': return true;
-      case 'specific-dates': return f.specificDates?.includes(dStr);
-      case 'presets':
-        if (f.preset === 'mon-wed-fri') return [0, 2, 4].includes(adjustedDay);
-        if (f.preset === 'tue-thu-sat') return [1, 3, 5].includes(adjustedDay);
-        return false;
-      case 'quota-week':
-      case 'quota-month':
-        return true; 
-      case 'even-days': return date.getDate() % 2 === 0;
-      case 'odd-days': return date.getDate() % 2 !== 0;
-      default: return false;
-    }
+    const dayOfWeek = date.getDay(); // 0 (Вс) - 6 (Сб)
+    return habit.frequency.days.includes(dayOfWeek);
   };
 
   const getTasksForDate = (dateStr: string) => tasks.filter(t => t.date === dateStr);
@@ -80,8 +64,11 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ tasks, habits, onEdi
     const dStr = toLocalDateString(date);
     const value = habit.history[dStr];
     
+    // Используем targetValue вместо goalValue
+    const goal = habit.targetValue || 1;
+
     const isDone = habit.isMeasurable 
-      ? (habit.targetType === 'at-least' ? Number(value || 0) >= (habit.goalValue || 1) : Number(value || 0) <= (habit.goalValue || 1) && Number(value || 0) > 0)
+      ? Number(value || 0) >= goal
       : !!value;
 
     const isScheduled = isHabitScheduledForDate(habit, date);
@@ -176,9 +163,11 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ tasks, habits, onEdi
                          return (
                            <div 
                              key={habit.id}
-                             className={`text-[7px] px-1 py-0.5 rounded-sm border text-left truncate font-bold uppercase tracking-tighter ${status === 'done' ? HABIT_COLORS.done : HABIT_COLORS.pending}`}
+                             className={`text-[7px] px-1 py-0.5 rounded-sm border text-left truncate font-bold uppercase tracking-tighter flex items-center gap-1 ${status === 'done' ? HABIT_COLORS.done : HABIT_COLORS.pending}`}
                            >
-                             {status === 'done' ? '✓ ' : '○ '}{habit.name}
+                             {/* Отображаем эмодзи если есть */}
+                             <span className="text-[8px]">{habit.emoji || (status === 'done' ? '✓' : '○')}</span>
+                             <span>{habit.title}</span> {/* habit.name -> habit.title */}
                            </div>
                          );
                        }).filter(Boolean).slice(0, 5)}
