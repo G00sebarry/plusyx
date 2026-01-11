@@ -8,6 +8,7 @@ import { HabitModal } from './components/HabitModal';
 import { AntiHabitModal } from './components/AntiHabitModal';
 import { Task, ViewType, Habit, Column, AntiHabit } from './types';
 
+// 🔥 ИМПОРТ ФУНКЦИЙ API
 import { 
   fetchTasks, fetchColumns, saveTaskToDb, deleteTaskFromDb, saveColumnsToDb,
   fetchHabits, saveHabitToDb, deleteHabitFromDb,
@@ -30,6 +31,18 @@ const DEFAULT_COLUMNS: Column[] = [
 const App: React.FC = () => {
   const [view, setView] = useState<ViewType>('kanban');
   const [isLoading, setIsLoading] = useState(true);
+
+  // --- 🆔 АВТОРИЗАЦИЯ ---
+  // Определяем ID пользователя один раз при запуске
+  const [userId] = useState<string>(() => {
+    const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
+    // Если есть ID от Телеграма - используем его
+    if (tgUser && tgUser.id) {
+        return String(tgUser.id);
+    }
+    // Если мы тестируем в браузере - используем тестовый ID
+    return 'test-browser-user';
+  });
 
   // --- ДАННЫЕ ---
   const [columns, setColumns] = useState<Column[]>(DEFAULT_COLUMNS);
@@ -58,13 +71,17 @@ const App: React.FC = () => {
   const [wallpaperPosition, setWallpaperPosition] = useState<number>(() => Number(localStorage.getItem('plusyx_wallpaper_position')) || 50);
   const wallpaperInputRef = useRef<HTMLInputElement>(null);
 
-  // --- 🔥 ЗАГРУЗКА ---
+  // --- 🔥 ЗАГРУЗКА (ТЕПЕРЬ С USER ID) ---
   useEffect(() => {
     const initData = async () => {
       setIsLoading(true);
       try {
+        // Передаем userId во все функции загрузки
         const [dbTasks, dbColumns, dbHabits, dbAntiHabits] = await Promise.all([
-           fetchTasks(), fetchColumns(), fetchHabits(), fetchAntiHabits()
+           fetchTasks(userId), 
+           fetchColumns(userId), 
+           fetchHabits(userId), 
+           fetchAntiHabits(userId)
         ]);
         
         setTasks(dbTasks);
@@ -72,13 +89,13 @@ const App: React.FC = () => {
         setAntiHabits(dbAntiHabits);
         
         if (dbColumns && dbColumns.length > 0) setColumns(dbColumns);
-        else await saveColumnsToDb(DEFAULT_COLUMNS);
+        else await saveColumnsToDb(DEFAULT_COLUMNS, userId); // Сохраняем дефолтные для этого юзера
 
       } catch (e) { console.error("Critical Init Error:", e); } 
       finally { setIsLoading(false); }
     };
     initData();
-  }, []);
+  }, [userId]);
 
   useEffect(() => { document.body.classList.toggle('dark', theme === 'dark'); localStorage.setItem('plusyx_theme', theme); }, [theme]);
   useEffect(() => {
@@ -106,13 +123,13 @@ const App: React.FC = () => {
     setTasks(prev => [newTask, ...prev]);
     setIsTaskModalOpen(false);
     window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
-    await saveTaskToDb(newTask);
+    await saveTaskToDb(newTask, userId); // 🔥 Передаем ID
   };
   const handleUpdateTask = async (updatedTask: Task) => {
     setTasks(prev => prev.map(t => t.id === updatedTask.id ? updatedTask : t));
     setIsTaskModalOpen(false); setEditingTask(undefined);
     window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('medium');
-    await saveTaskToDb(updatedTask);
+    await saveTaskToDb(updatedTask, userId); // 🔥 Передаем ID
   };
   const handleMoveTask = async (id: string, targetColId: string, targetId?: string) => {
     const targetCol = columns.find(c => c.id === targetColId);
@@ -129,7 +146,7 @@ const App: React.FC = () => {
       else { res.push(task); }
       return res;
     });
-    if (taskToSave) await saveTaskToDb(taskToSave);
+    if (taskToSave) await saveTaskToDb(taskToSave, userId); // 🔥 Передаем ID
   };
   const handleCopyTask = async (originalTaskId: string, newTitle: string) => {
     const originalTask = tasks.find(t => t.id === originalTaskId);
@@ -137,37 +154,37 @@ const App: React.FC = () => {
     const newChecklists = originalTask.checklists.map(list => ({...list, id: Math.random().toString(36).substr(2, 9), items: list.items.map(item => ({...item, id: Math.random().toString(36).substr(2, 9)}))}));
     const newTask: Task = { ...originalTask, id: Math.random().toString(36).substr(2, 9), title: newTitle, checklists: newChecklists, comments: [], files: [] };
     setTasks(prev => { const index = prev.findIndex(t => t.id === originalTaskId); if (index === -1) return [newTask, ...prev]; const newTasks = [...prev]; newTasks.splice(index + 1, 0, newTask); return newTasks; });
-    await saveTaskToDb(newTask);
+    await saveTaskToDb(newTask, userId); // 🔥 Передаем ID
   };
 
   // --- HABITS ---
   const handleAddHabit = async (habitData: Habit) => {
     setHabits(prev => [habitData, ...prev]); setIsHabitModalOpen(false);
     window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
-    await saveHabitToDb(habitData);
+    await saveHabitToDb(habitData, userId); // 🔥 Передаем ID
   };
   const handleUpdateHabit = async (updatedHabit: Habit) => {
     setHabits(prev => prev.map(h => h.id === updatedHabit.id ? updatedHabit : h));
     setIsHabitModalOpen(false); setEditingHabit(undefined);
-    await saveHabitToDb(updatedHabit);
+    await saveHabitToDb(updatedHabit, userId); // 🔥 Передаем ID
   };
   const handleToggleHabit = async (id: string, date: string, value: number | boolean) => {
     let updatedHabit: Habit | undefined;
     setHabits(prev => prev.map(h => { if (h.id === id) { updatedHabit = { ...h, history: { ...h.history, [date]: value } }; return updatedHabit; } return h; }));
     window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
-    if (updatedHabit) await saveHabitToDb(updatedHabit);
+    if (updatedHabit) await saveHabitToDb(updatedHabit, userId); // 🔥 Передаем ID
   };
 
   // --- ANTI HABITS ---
   const handleAddAntiHabit = async (habit: AntiHabit) => {
     setAntiHabits(prev => [habit, ...prev]); setIsAntiHabitModalOpen(false);
     window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
-    await saveAntiHabitToDb(habit);
+    await saveAntiHabitToDb(habit, userId); // 🔥 Передаем ID
   };
   const handleUpdateAntiHabit = async (habit: AntiHabit) => {
     setAntiHabits(prev => prev.map(h => h.id === habit.id ? habit : h));
     setIsAntiHabitModalOpen(false); setEditingAntiHabit(undefined);
-    await saveAntiHabitToDb(habit);
+    await saveAntiHabitToDb(habit, userId); // 🔥 Передаем ID
   };
   const handleRelapse = async (id: string) => {
     let updatedHabit: AntiHabit | undefined;
@@ -179,7 +196,7 @@ const App: React.FC = () => {
         } return h;
     }));
     window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('warning');
-    if (updatedHabit) await saveAntiHabitToDb(updatedHabit);
+    if (updatedHabit) await saveAntiHabitToDb(updatedHabit, userId); // 🔥 Передаем ID
   };
 
   // --- DELETE ---
@@ -204,7 +221,7 @@ const App: React.FC = () => {
     const reader = new FileReader(); reader.onload = (ev) => setWallpaper(ev.target?.result as string); reader.readAsDataURL(file);
   };
 
-  if (isLoading) return <div className="h-screen w-screen tg-bg flex items-center justify-center flex-col gap-4"><div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div><div className="text-sm font-bold tg-text opacity-50 animate-pulse">Синхронизация...</div></div>;
+  if (isLoading) return <div className="h-screen w-screen tg-bg flex items-center justify-center flex-col gap-4"><div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div><div className="text-sm font-bold tg-text opacity-50 animate-pulse">Загрузка профиля...</div></div>;
 
   return (
     <div className="flex flex-col h-screen overflow-hidden tg-bg select-none relative">
