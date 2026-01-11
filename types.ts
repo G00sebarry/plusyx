@@ -32,9 +32,7 @@ export interface Task {
   date: string;
   time?: string;
   
-  // --- НОВОЕ ПОЛЕ ---
-  isTimer?: boolean; // Включен ли режим таймера (обратный отсчет)
-  // ------------------
+  isTimer?: boolean; // Включен ли режим таймера
 
   status: TaskStatus;
   columnId?: string; // Привязка к конкретной колонке
@@ -48,36 +46,38 @@ export interface Task {
   comments?: TaskComment[];
 }
 
-export type FrequencyType = 'daily' | 'presets' | 'even-days' | 'odd-days' | 'interval' | 'quota-week' | 'quota-month' | 'quota-custom' | 'specific-dates';
-
-export interface HabitFrequency {
-  type: FrequencyType;
-  preset?: 'mon-wed-fri' | 'tue-thu-sat';
-  intervalDays?: number;
-  quotaCount?: number;
-  quotaPeriod?: number;
-  specificDates?: string[]; // Список дат в формате ГГГГ-ММ-ДД
-}
+// --- ОБНОВЛЕННАЯ СЕКЦИЯ ПРИВЫЧЕК ---
+// Мы убрали старые сложные интерфейсы (HabitFrequency, FrequencyType)
+// и сделали одну простую и понятную структуру
 
 export interface Habit {
   id: string;
-  name: string;
-  color: string;
-  question: string;
+  title: string;        // Раньше было name. Теперь везде title для единообразия.
+  description?: string; // Раньше было question. Теперь это "Мотивация".
+  
+  emoji?: string;       // НОВОЕ: Эмодзи-аватарка
+  color: string;        // Цвет фона иконки
+
   isMeasurable: boolean;
-  unit?: string;
-  goalValue?: number;
-  targetType: 'at-least' | 'at-most';
-  frequency: HabitFrequency;
-  reminderEnabled: boolean;
-  reminderTime?: string;
-  notes?: string;
+  targetValue?: number; // Раньше было goalValue
+  unit?: string;        // Ед. измерения (мл, стр, км)
+
+  // Новая упрощенная частота (дни недели)
+  frequency: {
+    type: 'daily' | 'specific' | 'flexible';
+    days: number[]; // Массив чисел: 0 - Вс, 1 - Пн ... 6 - Сб
+  };
+
   history: Record<string, boolean | number>;
+  
+  // Дополнительные поля (оставил на всякий случай для совместимости или будущего)
+  reminderTime?: string;
   fileName?: string;
   fileData?: string;
   coverPosition?: number;
   coverIntensity?: number;
 }
+// -------------------------------------
 
 export type ViewType = 'kanban' | 'calendar' | 'tracker';
 
