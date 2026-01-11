@@ -16,11 +16,9 @@ export const AntiHabitModal: React.FC<AntiHabitModalProps> = ({ isOpen, onClose,
   const [color, setColor] = useState('bg-red-500');
   const [emoji, setEmoji] = useState('⛔');
   
-  // Даты строками для инпутов
   const [startDateStr, setStartDateStr] = useState('');
   const [startTimeStr, setStartTimeStr] = useState('');
   
-  // Обложка
   const [fileData, setFileData] = useState<string>('');
   const [coverPosition, setCoverPosition] = useState<number>(50);
   const [coverIntensity, setCoverIntensity] = useState<number>(60);
@@ -31,7 +29,6 @@ export const AntiHabitModal: React.FC<AntiHabitModalProps> = ({ isOpen, onClose,
   useEffect(() => {
     if (isOpen) {
         if (initialHabit) {
-            // РЕДАКТИРОВАНИЕ
             setTitle(initialHabit.title);
             setColor(initialHabit.color);
             setEmoji(initialHabit.emoji);
@@ -39,12 +36,10 @@ export const AntiHabitModal: React.FC<AntiHabitModalProps> = ({ isOpen, onClose,
             setCoverPosition(initialHabit.coverPosition ?? 50);
             setCoverIntensity(initialHabit.coverIntensity ?? 60);
             
-            // Превращаем timestamp в строки для инпутов
             const d = new Date(initialHabit.startDate);
             setStartDateStr(toInputDate(d));
             setStartTimeStr(toInputTime(d));
         } else {
-            // СОЗДАНИЕ НОВОЙ
             setTitle(''); 
             setColor('bg-red-500'); 
             setEmoji('⛔');
@@ -52,7 +47,6 @@ export const AntiHabitModal: React.FC<AntiHabitModalProps> = ({ isOpen, onClose,
             setCoverPosition(50); 
             setCoverIntensity(60);
             
-            // По умолчанию ставим "сейчас"
             const now = new Date();
             setStartDateStr(toInputDate(now));
             setStartTimeStr(toInputTime(now));
@@ -60,7 +54,6 @@ export const AntiHabitModal: React.FC<AntiHabitModalProps> = ({ isOpen, onClose,
     }
   }, [isOpen, initialHabit]);
 
-  // Хелперы для дат
   const toInputDate = (d: Date) => {
     const y = d.getFullYear();
     const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -86,19 +79,27 @@ export const AntiHabitModal: React.FC<AntiHabitModalProps> = ({ isOpen, onClose,
 
   const handleSave = () => {
     if (!title.trim()) return;
-
-    // Собираем дату и время обратно в Timestamp
     const start = new Date(`${startDateStr}T${startTimeStr}`);
+    const startTimestamp = start.getTime();
     
+    // 🔥 ФИКС БАГА: Если дата в прошлом, сразу считаем это как текущий рекорд
+    let initialStreak = 0;
+    const now = Date.now();
+    if (!initialHabit && startTimestamp < now) {
+        initialStreak = now - startTimestamp;
+    } else if (initialHabit) {
+        initialStreak = initialHabit.longestStreak;
+    }
+
     const newHabit: AntiHabit = {
-      ...(initialHabit || { id: '', history: [], longestStreak: 0 }),
+      ...(initialHabit || { id: '', history: [] }),
       id: initialHabit?.id || Math.random().toString(36).substr(2, 9),
       title,
       emoji,
       color,
-      startDate: start.getTime(),
-      longestStreak: initialHabit?.longestStreak || 0,
-      history: initialHabit?.history || [], // История сохраняется при редактировании
+      startDate: startTimestamp,
+      longestStreak: initialStreak,
+      history: initialHabit?.history || [],
       fileData,
       coverPosition,
       coverIntensity
@@ -113,7 +114,6 @@ export const AntiHabitModal: React.FC<AntiHabitModalProps> = ({ isOpen, onClose,
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <div className="relative w-full max-w-lg tg-bg rounded-t-[40px] sm:rounded-[32px] shadow-2xl flex flex-col gap-0 animate-in slide-in-from-bottom duration-300 max-h-[92vh] overflow-y-auto no-scrollbar">
         
-        {/* ЗАГОЛОВОК */}
         <div className="p-6 pb-2 flex justify-between items-center">
              <h2 className="text-xl font-black tg-text tracking-tighter uppercase">{initialHabit ? 'Настройка' : 'Бросить привычку'}</h2>
              <button onClick={onClose} className="w-8 h-8 flex items-center justify-center bg-white/5 rounded-full text-gray-400 text-xl hover:text-white transition-colors">×</button>
@@ -121,12 +121,22 @@ export const AntiHabitModal: React.FC<AntiHabitModalProps> = ({ isOpen, onClose,
 
         <div className="p-6 pt-0 flex flex-col gap-6">
             
-            {/* ВВОД НАЗВАНИЯ И ЭМОДЗИ */}
+            {/* INPUT + EMOJI */}
             <div className="flex gap-3">
                 <div className="relative">
                     <button onClick={() => setIsCustomEmoji(!isCustomEmoji)} className={`w-14 h-14 rounded-2xl flex items-center justify-center text-3xl shadow-lg border-2 ${isCustomEmoji ? 'border-white' : 'border-transparent'} ${color} transition-all active:scale-95`}>{emoji}</button>
                     {isCustomEmoji && (
-                         <div className="absolute top-16 left-0 bg-[#2c2c2e] p-3 rounded-2xl shadow-2xl border border-white/10 w-[240px] z-50 flex flex-col gap-3 animate-in fade-in zoom-in-95 origin-top-left">
+                         <div className="absolute top-16 left-0 bg-[#2c2c2e] p-3 rounded-2xl shadow-2xl border border-white/10 w-[260px] z-50 flex flex-col gap-3 animate-in fade-in zoom-in-95 origin-top-left">
+                            
+                            {/* ПОЛЕ ДЛЯ СВОЕГО ЭМОДЗИ */}
+                            <input 
+                                type="text" 
+                                maxLength={2} 
+                                placeholder="Свой смайл..." 
+                                className="w-full bg-black/20 border border-white/10 rounded-xl p-2 text-center text-lg text-white outline-none focus:border-white/30 transition-colors placeholder:text-white/20"
+                                onChange={(e) => { if(e.target.value) setEmoji(e.target.value); }}
+                            />
+
                             <div className="grid grid-cols-5 gap-2">
                                 {EMOJI_PRESETS.map(e => <button key={e} onClick={() => { setEmoji(e); setIsCustomEmoji(false); }} className="w-9 h-9 flex items-center justify-center text-xl bg-white/5 rounded-xl hover:bg-white/10">{e}</button>)}
                             </div>
@@ -141,7 +151,6 @@ export const AntiHabitModal: React.FC<AntiHabitModalProps> = ({ isOpen, onClose,
                 </div>
             </div>
 
-            {/* ВЫБОР ДАТЫ НАЧАЛА (С какого момента не делаю?) */}
             <div className="flex flex-col gap-2">
                 <label className="text-[10px] font-black tg-hint uppercase ml-1">С какого момента не делаю?</label>
                 <div className="flex gap-2">
@@ -150,7 +159,6 @@ export const AntiHabitModal: React.FC<AntiHabitModalProps> = ({ isOpen, onClose,
                 </div>
             </div>
 
-            {/* ЗАГРУЗКА ОБЛОЖКИ */}
             <div className="flex flex-col gap-2">
                 <div className="flex justify-between items-center px-1">
                      <label className="text-[10px] font-black tg-hint uppercase">Обложка</label>
@@ -173,7 +181,6 @@ export const AntiHabitModal: React.FC<AntiHabitModalProps> = ({ isOpen, onClose,
                 <input type="file" ref={fileInputRef} accept="image/*" onChange={handleFileChange} className="hidden" />
             </div>
 
-            {/* КНОПКА СОХРАНИТЬ */}
             <button onClick={handleSave} className="w-full py-5 rounded-[28px] bg-red-500 text-white font-black text-lg shadow-2xl active:scale-95 transition-all mt-2 uppercase tracking-widest hover:brightness-110">
                 {initialHabit ? 'Сохранить' : 'Начать воздержание'}
             </button>
