@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Task, TaskStatus, ChecklistItem, TaskComment, Checklist } from '../types';
+import { Task, TaskStatus, ChecklistItem, TaskComment, Checklist, TaskFile } from '../types';
 
 interface TaskModalProps {
   isOpen: boolean;
@@ -23,7 +23,7 @@ const COLOR_MAP: Record<string, string> = {
   'green': 'bg-green-500', 'blue': 'bg-blue-500', 'purple': 'bg-purple-500', 'pink': 'bg-pink-500',
 };
 
-// --- НОВЫЙ МИНИ-КОМПОНЕНТ ДЛЯ ПУНКТА (ЧТОБЫ РАСТЯГИВАЛСЯ) ---
+// --- МИНИ-КОМПОНЕНТ ДЛЯ ПУНКТА ЧЕК-ЛИСТА ---
 const AutoResizeTextarea: React.FC<{
   value: string;
   onChange: (val: string) => void;
@@ -34,8 +34,8 @@ const AutoResizeTextarea: React.FC<{
 
   useEffect(() => {
     if (ref.current) {
-      ref.current.style.height = 'auto'; // Сброс
-      ref.current.style.height = ref.current.scrollHeight + 'px'; // Рост
+      ref.current.style.height = 'auto';
+      ref.current.style.height = ref.current.scrollHeight + 'px';
     }
   }, [value]);
 
@@ -47,8 +47,8 @@ const AutoResizeTextarea: React.FC<{
       onChange={(e) => onChange(e.target.value)}
       onKeyDown={(e) => {
         if (e.key === 'Enter') {
-          e.preventDefault(); // Не делаем новую строку
-          onEnter(); // Создаем новый пункт
+          e.preventDefault();
+          onEnter();
         }
       }}
       className={`flex-1 text-sm tg-text bg-transparent outline-none resize-none overflow-hidden block ${completed ? 'line-through opacity-30 italic' : ''}`}
@@ -56,7 +56,6 @@ const AutoResizeTextarea: React.FC<{
     />
   );
 };
-// -------------------------------------------------------------
 
 export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, initialTask }) => {
   const [title, setTitle] = useState('');
@@ -69,11 +68,14 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
   
   const [color, setColor] = useState('default'); 
 
-  const [fileName, setFileName] = useState('');
-  const [fileData, setFileData] = useState('');
+  // Обложка
   const [coverData, setCoverData] = useState('');
   const [coverPosition, setCoverPosition] = useState(50);
   const [coverIntensity, setCoverIntensity] = useState(60);
+
+  // Файлы (Массив)
+  const [files, setFiles] = useState<TaskFile[]>([]);
+  
   const [checklists, setChecklists] = useState<Checklist[]>([]);
   const [comments, setComments] = useState<TaskComment[]>([]);
   const [newComment, setNewComment] = useState('');
@@ -98,19 +100,36 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
       setStatus(initialTask.status || 'todo');
       setColumnId(initialTask.columnId);
       setColor(initialTask.color || 'default');
-      setFileName(initialTask.fileName || '');
-      setFileData(initialTask.fileData || '');
+      
       setCoverData(initialTask.coverData || '');
       setCoverPosition(initialTask.coverPosition ?? 50);
       setCoverIntensity(initialTask.coverIntensity ?? 60);
-      // Если чек-листов нет, создаем дефолтный "Чек-лист"
+      
+      // 🔥 ЛОГИКА ФАЙЛОВ (МИГРАЦИЯ)
+      // Если у задачи уже есть массив files - берем его.
+      // Если нет, но есть старые fileName/fileData - превращаем их в первый файл массива.
+      if (initialTask.files && initialTask.files.length > 0) {
+          setFiles(initialTask.files);
+      } else if (initialTask.fileName && initialTask.fileData) {
+          setFiles([{
+              id: 'legacy-file',
+              name: initialTask.fileName,
+              data: initialTask.fileData,
+              type: 'unknown',
+              size: 0
+          }]);
+      } else {
+          setFiles([]);
+      }
+
       setChecklists(initialTask.checklists || [{ id: 'default', title: 'Чек-лист', items: [], hideCompleted: false }]);
       setComments(initialTask.comments || []);
     } else {
+      // Сброс для новой задачи
       setTitle(''); setDescription(''); setDate(toLocalDateString(new Date())); setTime(''); setIsTimer(false);
-      setStatus('todo'); setColumnId(undefined); setColor('default'); setFileName(''); setFileData(''); 
+      setStatus('todo'); setColumnId(undefined); setColor('default'); 
       setCoverData(''); setCoverPosition(50); setCoverIntensity(60);
-      // Новый чек-лист по дефолту
+      setFiles([]); // Пустой список файлов
       setChecklists([{ id: 'default', title: 'Чек-лист', items: [], hideCompleted: false }]); setComments([]);
     }
   }, [initialTask, isOpen]);
@@ -118,7 +137,14 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
   const handleSave = () => {
     onSave({ 
       ...(initialTask?.id && { id: initialTask.id }), 
-      title, description, date, time, isTimer, status, columnId, color, fileName, fileData, coverData, coverPosition, coverIntensity,
+      title, description, date, time, isTimer, status, columnId, color, 
+      // Сохраняем новый массив файлов
+      files,
+      // Старые поля можно отправлять пустыми или не отправлять, 
+      // но для совместимости можно оставить undefined
+      fileName: undefined, 
+      fileData: undefined,
+      coverData, coverPosition, coverIntensity,
       checklists, comments 
     });
   };
@@ -134,15 +160,42 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
     setDraggedBlock(targetIdx);
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // 🔥 ДОБАВЛЕНИЕ НОВОГО ФАЙЛА
+  const handleFileAdd = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (f) {
-        if (f.size > 2 * 1024 * 1024) { alert("Лимит 2МБ"); return; }
-        setFileName(f.name);
-        const r = new FileReader();
-        r.onload = ev => setFileData(ev.target?.result as string);
-        r.readAsDataURL(f);
+        if (f.size > 5 * 1024 * 1024) { alert("Лимит 5МБ"); return; }
+        const reader = new FileReader();
+        reader.onload = ev => {
+            const base64 = ev.target?.result as string;
+            const newFile: TaskFile = {
+                id: Math.random().toString(36).substr(2, 9),
+                name: f.name,
+                type: f.type,
+                size: f.size,
+                data: base64
+            };
+            setFiles([...files, newFile]);
+        };
+        reader.readAsDataURL(f);
     }
+    // Сбрасываем инпут, чтобы можно было выбрать тот же файл повторно
+    e.target.value = '';
+  };
+
+  // 🔥 УДАЛЕНИЕ ФАЙЛА
+  const removeFile = (fileId: string) => {
+      setFiles(files.filter(f => f.id !== fileId));
+  };
+
+  // 🔥 СКАЧИВАНИЕ ФАЙЛА
+  const downloadFile = (file: TaskFile) => {
+      const link = document.createElement('a');
+      link.href = file.data;
+      link.download = file.name;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
   };
 
   const handleCoverChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -158,7 +211,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
   const addNewChecklist = () => {
     const newList: Checklist = {
       id: Math.random().toString(36).substr(2, 9),
-      title: 'Чек-лист', // ИСПРАВЛЕНО: Было 'Новый список'
+      title: 'Чек-лист',
       items: [],
       hideCompleted: false
     };
@@ -313,16 +366,13 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
                    <div className="flex flex-col gap-1.5">
                       {list.items.filter(it => !list.hideCompleted || !it.completed).map((item) => (
                         <div key={item.id} className="flex items-start gap-3 p-3 tg-secondary-bg rounded-2xl group">
-                           {/* Кнопка галочки чуть опущена (mt-0.5), чтобы ровно стоять с текстом */}
                            <button onClick={() => setChecklists(checklists.map(l => l.id === list.id ? { ...l, items: l.items.map(it => it.id === item.id ? { ...it, completed: !it.completed } : it) } : l))} className={`w-5 h-5 mt-0.5 rounded-lg border-2 flex items-center justify-center shrink-0 ${item.completed ? 'bg-green-500 border-green-500' : 'border-gray-400/30'}`}>{item.completed && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4"><polyline points="20 6 9 17 4 12"/></svg>}</button>
                            
-                           {/* 🔥 ЗАМЕНА INPUT НА TEXTAREA 🔥 */}
                            <AutoResizeTextarea 
                                 value={item.text}
                                 completed={item.completed}
                                 onChange={(val) => setChecklists(checklists.map(l => l.id === list.id ? { ...l, items: l.items.map(it => it.id === item.id ? { ...it, text: val } : it) } : l))}
                                 onEnter={() => {
-                                    // Логика Enter: создаем новый пункт в этом же списке
                                     setChecklists(checklists.map(l => l.id === list.id ? { ...l, items: [...l.items, { id: Math.random().toString(36).substr(2, 9), text: '', completed: false }] } : l));
                                 }}
                            />
@@ -330,7 +380,6 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
                            <button onClick={() => setChecklists(checklists.map(l => l.id === list.id ? { ...l, items: l.items.filter(it => it.id !== item.id) } : l))} className="text-red-500/30 hover:text-red-500 px-2">×</button>
                         </div>
                       ))}
-                      {/* Нижний Input "Добавить..." остался Input-ом, как ты и просил */}
                       <input type="text" placeholder="Добавить..." className="flex-1 tg-secondary-bg p-3 px-4 rounded-xl text-xs font-bold tg-text outline-none mt-1" onKeyDown={e => e.key === 'Enter' && e.currentTarget.value.trim() && (setChecklists(checklists.map(l => l.id === list.id ? { ...l, items: [...l.items, { id: Math.random().toString(36).substr(2, 9), text: e.currentTarget.value, completed: false }] } : l)), e.currentTarget.value = '')} />
                    </div>
                 </div>
@@ -338,14 +387,46 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
              <button onClick={addNewChecklist} className="w-full py-3 border border-dashed border-gray-400/30 rounded-2xl text-[10px] font-black uppercase tg-hint">+ Новый чек-лист</button>
           </div>
         );
+      
+      // 🔥 НОВЫЙ БЛОК ФАЙЛОВ
       case 'files':
         return (
-          <div className="flex flex-col gap-2">
-             <button onClick={() => fileInputRef.current?.click()} className="w-full tg-secondary-bg py-4 rounded-2xl text-[11px] font-black uppercase tracking-widest tg-text flex items-center justify-center gap-2">📎 {fileName ? 'Заменить файл' : 'Прикрепить файл'}</button>
-             {fileName && <p className="text-[10px] tg-hint px-2 truncate">Файл: {fileName}</p>}
-             <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" />
+          <div className="flex flex-col gap-3">
+             <label className="text-[10px] font-black tg-hint uppercase ml-1">Вложения</label>
+             
+             {/* Список файлов */}
+             <div className="flex flex-col gap-2">
+                 {files.map(f => (
+                     <div key={f.id} className="flex items-center justify-between p-3 tg-secondary-bg rounded-2xl border border-white/5">
+                         <div 
+                             className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity overflow-hidden"
+                             onClick={() => downloadFile(f)}
+                             title="Нажмите, чтобы скачать"
+                         >
+                             <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-500 shrink-0">
+                                 📎
+                             </div>
+                             <div className="flex flex-col overflow-hidden">
+                                 <span className="text-xs font-bold tg-text truncate">{f.name}</span>
+                                 <span className="text-[9px] tg-hint uppercase">{(f.size / 1024).toFixed(1)} KB</span>
+                             </div>
+                         </div>
+                         <button onClick={() => removeFile(f.id)} className="w-8 h-8 flex items-center justify-center text-gray-500 hover:text-red-500 transition-colors">
+                             ×
+                         </button>
+                     </div>
+                 ))}
+             </div>
+
+             {/* Кнопка добавления */}
+             <button onClick={() => fileInputRef.current?.click()} className="w-full py-4 rounded-2xl bg-black/5 border border-dashed border-gray-400/20 text-[10px] font-black uppercase tracking-widest tg-text hover:bg-black/10 transition-all flex items-center justify-center gap-2">
+                 <span>+</span> Добавить файл
+             </button>
+             
+             <input type="file" ref={fileInputRef} onChange={handleFileAdd} className="hidden" />
           </div>
         );
+
       case 'comments':
         return (
           <div className="flex flex-col gap-3">

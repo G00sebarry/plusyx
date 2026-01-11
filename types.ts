@@ -25,6 +25,15 @@ export interface TaskComment {
   date: string;
 }
 
+// 🔥 НОВЫЙ ИНТЕРФЕЙС ДЛЯ ФАЙЛА
+export interface TaskFile {
+  id: string;
+  name: string;
+  data: string; // Base64
+  type: string; // MIME type (например 'image/png', 'application/pdf')
+  size: number; // Размер в байтах
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -37,8 +46,14 @@ export interface Task {
   status: TaskStatus;
   columnId?: string; // Привязка к конкретной колонке
   color?: string;
+  
+  // Старые поля (оставляем, чтобы не крашилось при чтении старых задач)
   fileName?: string;
   fileData?: string;
+
+  // 🔥 НОВОЕ ПОЛЕ: Список файлов
+  files?: TaskFile[];
+
   coverData?: string;
   coverPosition?: number; // 0 to 100
   coverIntensity?: number; // 0 to 100
@@ -74,7 +89,6 @@ export interface Habit {
 }
 
 // --- 🔥 ВРЕДНЫЕ ПРИВЫЧКИ (БРОСИТЬ) ---
-// Новая сущность, которую мы добавили
 export interface AntiHabit {
   id: string;
   title: string;
@@ -87,7 +101,7 @@ export interface AntiHabit {
   
   history: { date: number; duration: number }[]; // История срывов
   
-  // Кастомизация обложки (наша фишка)
+  // Кастомизация обложки
   fileData?: string;
   coverPosition?: number;
   coverIntensity?: number;
