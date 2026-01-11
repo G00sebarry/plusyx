@@ -257,6 +257,57 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
       e.stopPropagation();
   };
 
+  // 🔥 НОВАЯ ФУНКЦИЯ ДЛЯ ОТРИСОВКИ ЧЕК-ЛИСТОВ (KAITEN STYLE) 🔥
+  const renderChecklists = (task: Task) => {
+    if (!task.checklists || task.checklists.length === 0) return null;
+
+    return (
+      <div className="flex flex-col gap-1.5 mt-2 relative z-10">
+        {task.checklists.map(list => {
+          const total = list.items.length;
+          if (total === 0) return null; 
+          
+          const done = list.items.filter(i => i.completed).length;
+          const isComplete = total > 0 && total === done;
+          const percent = Math.round((done / total) * 100);
+
+          return (
+            <div key={list.id} className="relative h-6 rounded-md overflow-hidden bg-black/30 border border-white/5 w-full group">
+              {/* Фон-прогресс бар */}
+              <div 
+                className={`absolute left-0 top-0 bottom-0 transition-all duration-300 ${isComplete ? 'bg-green-500/20' : 'bg-white/10'}`} 
+                style={{ width: `${percent}%` }}
+              />
+
+              {/* Контент строки */}
+              <div className="absolute inset-0 flex justify-between items-center px-2">
+                 {/* Название чек-листа */}
+                 <span className={`text-[9px] font-bold truncate pr-2 ${isComplete ? 'text-white/50 line-through' : 'text-white/90'}`}>
+                   {list.title}
+                 </span>
+
+                 {/* Счетчики */}
+                 <div className="flex items-center gap-1.5 shrink-0">
+                    {/* Если готово - галочка */}
+                    {isComplete ? (
+                        <div className="flex items-center gap-1">
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" className="text-green-400">
+                                <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                            <span className="text-[9px] font-bold text-green-400">{done}/{total}</span>
+                        </div>
+                    ) : (
+                        <span className="text-[9px] font-bold text-white/60">{done}/{total}</span>
+                    )}
+                 </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   return (
     <div className="flex overflow-x-auto h-full p-4 gap-5 snap-x snap-mandatory no-scrollbar">
       {columns.map((column, index) => {
@@ -349,17 +400,11 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
           
           <div className="flex flex-col gap-4 flex-1 pb-24 min-h-[500px]">
             {tasks.filter(t => t.columnId === column.id).map(task => {
-              const checklistItems = task.checklists?.flatMap(l => l.items) || [];
-              const completedCount = checklistItems.filter(i => i.completed).length;
-              const totalCount = checklistItems.length;
-              const progress = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
               const hasCover = !!task.coverData;
-
               const prevCol = index > 0 ? columns[index - 1] : null;
               const nextCol = index < columns.length - 1 ? columns[index + 1] : null;
 
               // --- ЛОГИКА БЛОКИРОВКИ DRAG ---
-              // Если открыто меню или идет редактирование копии -> отключаем перетаскивание карточки
               const isMenuOpen = activeTaskMenuId === task.id;
               const isCopying = copyingTaskId === task.id;
               const isDraggable = !isMenuOpen && !isCopying;
@@ -379,7 +424,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                   className={`relative transition-all duration-200 ${dropTargetId === task.id ? 'scale-105' : ''} ${isMenuOpen ? 'z-[100]' : 'z-0'}`}
                 >
                   <div 
-                    draggable={isDraggable} // <-- ВОТ ГЛАВНОЕ ИСПРАВЛЕНИЕ
+                    draggable={isDraggable} 
                     onDragStart={e => handleDragStart(e, task.id)}
                     onDragEnd={handleDragEnd}
                     className={`
@@ -388,7 +433,6 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                        ${isDraggable ? 'active:scale-[0.98] cursor-grab active:cursor-grabbing' : 'cursor-default'}
                     `}
                     onClick={() => {
-                        // Если меню открыто, клик по карточке закрывает его
                         if (isMenuOpen) setActiveTaskMenuId(null);
                         else onEditTask(task);
                     }}
@@ -417,7 +461,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                                     // Переключаем меню и сразу запрещаем драг через перерисовку родителя
                                     setActiveTaskMenuId(activeTaskMenuId === task.id ? null : task.id); 
                                 }}
-                                onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); }} // Чтобы кнопка не триггерила драг до стейта
+                                onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); }} 
                                 className={`
                                     p-1 rounded-lg transition-all duration-200 cursor-pointer relative z-50
                                     ${hasCover 
@@ -433,7 +477,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                                 <div 
                                     className="absolute right-0 top-8 w-44 bg-[#1e1e1e] rounded-xl shadow-2xl border border-gray-600/20 p-1.5 z-[100] animate-in fade-in zoom-in-95 duration-200 cursor-default" 
                                     onClick={(e) => e.stopPropagation()} 
-                                    onMouseDown={(e) => e.stopPropagation()} // Блокируем всплытие, чтобы не закрылось
+                                    onMouseDown={(e) => e.stopPropagation()}
                                 >
                                     <button 
                                         onClick={(e) => { 
@@ -464,15 +508,13 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                         </div>
                         {task.description && <p className={`text-[11px] line-clamp-2 italic ${hasCover ? 'text-white/60' : 'tg-hint opacity-70'}`}>{task.description}</p>}
                         
+                        {/* 🔥 РЕНДЕРИНГ ЧЕК-ЛИСТОВ ВМЕСТО ОДНОЙ ПОЛОСКИ 🔥 */}
+                        {renderChecklists(task)}
+
                         <div className="flex items-center justify-between mt-auto">
                             <div className="flex flex-col gap-2 flex-1">
                                 {task.date && (
                                    <TaskTimer task={task} hasCover={hasCover} />
-                                )}
-                                {totalCount > 0 && (
-                                  <div className={`w-16 h-1 rounded-full overflow-hidden ${hasCover ? 'bg-white/10' : 'bg-black/5'}`}>
-                                    <div className="h-full bg-green-500" style={{ width: `${progress}%` }} />
-                                  </div>
                                 )}
                             </div>
 
