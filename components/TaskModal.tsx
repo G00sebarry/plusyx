@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Task, TaskStatus, ChecklistItem, TaskComment, Checklist, TaskFile } from '../types';
+import { Task, TaskStatus, TaskComment, Checklist, TaskFile } from '../types';
 
 interface TaskModalProps {
   isOpen: boolean;
@@ -73,7 +73,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
   const [coverPosition, setCoverPosition] = useState(50);
   const [coverIntensity, setCoverIntensity] = useState(60);
 
-  // Файлы (Массив)
+  // Файлы (Оставляем стейт, но не используем в UI)
   const [files, setFiles] = useState<TaskFile[]>([]);
   
   const [checklists, setChecklists] = useState<Checklist[]>([]);
@@ -105,19 +105,8 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
       setCoverPosition(initialTask.coverPosition ?? 50);
       setCoverIntensity(initialTask.coverIntensity ?? 60);
       
-      // 🔥 ЛОГИКА ФАЙЛОВ (МИГРАЦИЯ)
-      // Если у задачи уже есть массив files - берем его.
-      // Если нет, но есть старые fileName/fileData - превращаем их в первый файл массива.
       if (initialTask.files && initialTask.files.length > 0) {
           setFiles(initialTask.files);
-      } else if (initialTask.fileName && initialTask.fileData) {
-          setFiles([{
-              id: 'legacy-file',
-              name: initialTask.fileName,
-              data: initialTask.fileData,
-              type: 'unknown',
-              size: 0
-          }]);
       } else {
           setFiles([]);
       }
@@ -125,11 +114,10 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
       setChecklists(initialTask.checklists || [{ id: 'default', title: 'Чек-лист', items: [], hideCompleted: false }]);
       setComments(initialTask.comments || []);
     } else {
-      // Сброс для новой задачи
       setTitle(''); setDescription(''); setDate(toLocalDateString(new Date())); setTime(''); setIsTimer(false);
       setStatus('todo'); setColumnId(undefined); setColor('default'); 
       setCoverData(''); setCoverPosition(50); setCoverIntensity(60);
-      setFiles([]); // Пустой список файлов
+      setFiles([]); 
       setChecklists([{ id: 'default', title: 'Чек-лист', items: [], hideCompleted: false }]); setComments([]);
     }
   }, [initialTask, isOpen]);
@@ -138,12 +126,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
     onSave({ 
       ...(initialTask?.id && { id: initialTask.id }), 
       title, description, date, time, isTimer, status, columnId, color, 
-      // Сохраняем новый массив файлов
-      files,
-      // Старые поля можно отправлять пустыми или не отправлять, 
-      // но для совместимости можно оставить undefined
-      fileName: undefined, 
-      fileData: undefined,
+      files, // Сохраняем то, что было (новые добавить нельзя)
       coverData, coverPosition, coverIntensity,
       checklists, comments 
     });
@@ -158,44 +141,6 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
     newOrder.splice(targetIdx, 0, moved);
     setBlocksOrder(newOrder);
     setDraggedBlock(targetIdx);
-  };
-
-  // 🔥 ДОБАВЛЕНИЕ НОВОГО ФАЙЛА
-  const handleFileAdd = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (f) {
-        if (f.size > 5 * 1024 * 1024) { alert("Лимит 5МБ"); return; }
-        const reader = new FileReader();
-        reader.onload = ev => {
-            const base64 = ev.target?.result as string;
-            const newFile: TaskFile = {
-                id: Math.random().toString(36).substr(2, 9),
-                name: f.name,
-                type: f.type,
-                size: f.size,
-                data: base64
-            };
-            setFiles([...files, newFile]);
-        };
-        reader.readAsDataURL(f);
-    }
-    // Сбрасываем инпут, чтобы можно было выбрать тот же файл повторно
-    e.target.value = '';
-  };
-
-  // 🔥 УДАЛЕНИЕ ФАЙЛА
-  const removeFile = (fileId: string) => {
-      setFiles(files.filter(f => f.id !== fileId));
-  };
-
-  // 🔥 СКАЧИВАНИЕ ФАЙЛА
-  const downloadFile = (file: TaskFile) => {
-      const link = document.createElement('a');
-      link.href = file.data;
-      link.download = file.name;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
   };
 
   const handleCoverChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -388,42 +333,22 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
           </div>
         );
       
-      // 🔥 НОВЫЙ БЛОК ФАЙЛОВ
+      // 🔥 ВОТ ОН, ЗАМОРОЖЕННЫЙ БЛОК. Все правильно, это в TaskModal 🔥
       case 'files':
         return (
           <div className="flex flex-col gap-3">
              <label className="text-[10px] font-black tg-hint uppercase ml-1">Вложения</label>
-             
-             {/* Список файлов */}
-             <div className="flex flex-col gap-2">
-                 {files.map(f => (
-                     <div key={f.id} className="flex items-center justify-between p-3 tg-secondary-bg rounded-2xl border border-white/5">
-                         <div 
-                             className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity overflow-hidden"
-                             onClick={() => downloadFile(f)}
-                             title="Нажмите, чтобы скачать"
-                         >
-                             <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-500 shrink-0">
-                                 📎
-                             </div>
-                             <div className="flex flex-col overflow-hidden">
-                                 <span className="text-xs font-bold tg-text truncate">{f.name}</span>
-                                 <span className="text-[9px] tg-hint uppercase">{(f.size / 1024).toFixed(1)} KB</span>
-                             </div>
-                         </div>
-                         <button onClick={() => removeFile(f.id)} className="w-8 h-8 flex items-center justify-center text-gray-500 hover:text-red-500 transition-colors">
-                             ×
-                         </button>
-                     </div>
-                 ))}
+             <div className="w-full py-6 rounded-2xl bg-black/5 border border-dashed border-gray-400/10 flex flex-col items-center justify-center gap-2 text-center select-none">
+                 <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-500 mb-1">
+                     ☁️
+                 </div>
+                 <span className="text-xs font-bold tg-text">Облачное хранилище</span>
+                 <span className="text-[10px] tg-hint max-w-[200px] leading-relaxed">
+                     Загрузка файлов станет доступна после подключения Supabase.
+                     <br/>
+                     <span className="text-blue-500 font-black uppercase tracking-widest mt-2 block">* В разработке</span>
+                 </span>
              </div>
-
-             {/* Кнопка добавления */}
-             <button onClick={() => fileInputRef.current?.click()} className="w-full py-4 rounded-2xl bg-black/5 border border-dashed border-gray-400/20 text-[10px] font-black uppercase tracking-widest tg-text hover:bg-black/10 transition-all flex items-center justify-center gap-2">
-                 <span>+</span> Добавить файл
-             </button>
-             
-             <input type="file" ref={fileInputRef} onChange={handleFileAdd} className="hidden" />
           </div>
         );
 
