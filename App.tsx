@@ -37,13 +37,40 @@ const App: React.FC = () => {
   });
 
   const [tasks, setTasks] = useState<Task[]>(() => {
-    const saved = localStorage.getItem('plusyx_tasks_v10');
+    const saved = localStorage.getItem('plusyx_tasks_v10'); // Твоя версия v10 сохранена
     return saved ? JSON.parse(saved) : [];
   });
 
+  // 🔥 ЛЕЧЕНИЕ ДАННЫХ ДЛЯ ТЕЛЕФОНА 🔥
+  // Мы проверяем старые привычки и добавляем им недостающие поля (days, emoji)
   const [habits, setHabits] = useState<Habit[]>(() => {
-    const saved = localStorage.getItem('plusyx_habits_v1');
-    return saved ? JSON.parse(saved) : [];
+    try {
+      const saved = localStorage.getItem('plusyx_habits_v1');
+      let parsed = saved ? JSON.parse(saved) : [];
+      
+      // Миграция данных "на лету"
+      parsed = parsed.map((h: any) => ({
+        ...h,
+        // Если нет title, берем старое name, или дефолт
+        title: h.title || h.name || 'Привычка',
+        // Если нет структуры frequency.days (старая версия), создаем дефолт
+        frequency: {
+          type: h.frequency?.type || 'daily',
+          days: Array.isArray(h.frequency?.days) ? h.frequency.days : [0, 1, 2, 3, 4, 5, 6]
+        },
+        // Если нет эмодзи
+        emoji: h.emoji || '🔥',
+        // Если нет описания
+        description: h.description || h.question || '',
+        // Убеждаемся, что история существует
+        history: h.history || {}
+      }));
+
+      return parsed;
+    } catch (e) { 
+      console.error("Ошибка миграции привычек", e);
+      return []; 
+    }
   });
   
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
@@ -134,8 +161,6 @@ const App: React.FC = () => {
     const originalTask = tasks.find(t => t.id === originalTaskId);
     if (!originalTask) return;
 
-    // Глубокое копирование чек-листов, чтобы разорвать связь с оригиналом
-    // и дать элементам новые ID (на всякий случай)
     const newChecklists = originalTask.checklists.map(list => ({
         ...list,
         id: Math.random().toString(36).substr(2, 9),
@@ -147,11 +172,10 @@ const App: React.FC = () => {
         id: Math.random().toString(36).substr(2, 9),
         title: newTitle,
         checklists: newChecklists,
-        comments: [] // Комментарии не копируем, начинаем с чистого листа
+        comments: []
     };
 
     setTasks(prev => {
-        // Находим индекс оригинала, чтобы вставить копию сразу за ним
         const index = prev.findIndex(t => t.id === originalTaskId);
         if (index === -1) return [newTask, ...prev];
 
@@ -325,6 +349,7 @@ const App: React.FC = () => {
         onClose={() => { setIsTaskModalOpen(false); setEditingTask(undefined); }} 
         onSave={editingTask?.id ? handleUpdateTask : handleAddTask} 
         initialTask={editingTask} 
+        columns={columns}
       />
 
       <HabitModal
