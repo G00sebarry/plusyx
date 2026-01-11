@@ -23,6 +23,41 @@ const COLOR_MAP: Record<string, string> = {
   'green': 'bg-green-500', 'blue': 'bg-blue-500', 'purple': 'bg-purple-500', 'pink': 'bg-pink-500',
 };
 
+// --- НОВЫЙ МИНИ-КОМПОНЕНТ ДЛЯ ПУНКТА (ЧТОБЫ РАСТЯГИВАЛСЯ) ---
+const AutoResizeTextarea: React.FC<{
+  value: string;
+  onChange: (val: string) => void;
+  onEnter: () => void;
+  completed: boolean;
+}> = ({ value, onChange, onEnter, completed }) => {
+  const ref = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (ref.current) {
+      ref.current.style.height = 'auto'; // Сброс
+      ref.current.style.height = ref.current.scrollHeight + 'px'; // Рост
+    }
+  }, [value]);
+
+  return (
+    <textarea
+      ref={ref}
+      rows={1}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault(); // Не делаем новую строку
+          onEnter(); // Создаем новый пункт
+        }
+      }}
+      className={`flex-1 text-sm tg-text bg-transparent outline-none resize-none overflow-hidden block ${completed ? 'line-through opacity-30 italic' : ''}`}
+      style={{ minHeight: '24px', lineHeight: '1.5' }}
+    />
+  );
+};
+// -------------------------------------------------------------
+
 export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, initialTask }) => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -32,9 +67,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
   const [status, setStatus] = useState<TaskStatus>('todo');
   const [columnId, setColumnId] = useState<string | undefined>(undefined);
   
-  // --- ЦВЕТ (теперь может быть 'default') ---
   const [color, setColor] = useState('default'); 
-  // -----------------------------------------
 
   const [fileName, setFileName] = useState('');
   const [fileData, setFileData] = useState('');
@@ -64,18 +97,20 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
       setIsTimer(initialTask.isTimer || false);
       setStatus(initialTask.status || 'todo');
       setColumnId(initialTask.columnId);
-      setColor(initialTask.color || 'default'); // Загружаем цвет или дефолт
+      setColor(initialTask.color || 'default');
       setFileName(initialTask.fileName || '');
       setFileData(initialTask.fileData || '');
       setCoverData(initialTask.coverData || '');
       setCoverPosition(initialTask.coverPosition ?? 50);
       setCoverIntensity(initialTask.coverIntensity ?? 60);
+      // Если чек-листов нет, создаем дефолтный "Чек-лист"
       setChecklists(initialTask.checklists || [{ id: 'default', title: 'Чек-лист', items: [], hideCompleted: false }]);
       setComments(initialTask.comments || []);
     } else {
       setTitle(''); setDescription(''); setDate(toLocalDateString(new Date())); setTime(''); setIsTimer(false);
       setStatus('todo'); setColumnId(undefined); setColor('default'); setFileName(''); setFileData(''); 
       setCoverData(''); setCoverPosition(50); setCoverIntensity(60);
+      // Новый чек-лист по дефолту
       setChecklists([{ id: 'default', title: 'Чек-лист', items: [], hideCompleted: false }]); setComments([]);
     }
   }, [initialTask, isOpen]);
@@ -123,7 +158,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
   const addNewChecklist = () => {
     const newList: Checklist = {
       id: Math.random().toString(36).substr(2, 9),
-      title: 'Новый список',
+      title: 'Чек-лист', // ИСПРАВЛЕНО: Было 'Новый список'
       items: [],
       hideCompleted: false
     };
@@ -151,15 +186,12 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
         return (
           <div className="flex flex-col gap-3">
              <div className="flex items-end gap-2">
-                
-                {/* --- БЛОК ВЫБОРА МЕТКИ --- */}
                 <div className="flex flex-col gap-1 relative">
                     <label className="text-[10px] font-black tg-hint uppercase ml-1">Метка</label>
                     <button 
                       onClick={() => setIsColorPickerOpen(!isColorPickerOpen)}
                       className="tg-secondary-bg h-12 w-16 px-2 rounded-2xl flex items-center justify-center border border-gray-400/10 active:scale-95 transition-all"
                     >
-                      {/* Если цвет выбран - показываем его, если нет - показываем перечеркнутый круг */}
                       {color !== 'default' ? (
                          <div className={`w-6 h-6 rounded-full ${COLOR_MAP[color]} shadow-sm ring-2 ring-white/10`} />
                       ) : (
@@ -171,7 +203,6 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
                     
                     {isColorPickerOpen && (
                       <div className="absolute top-16 left-0 bg-[#1c1c1e] p-2 rounded-2xl shadow-2xl flex gap-1.5 z-[210] border border-gray-400/20 overflow-x-auto max-w-[250px] no-scrollbar">
-                        {/* Кнопка "Нет цвета" */}
                         <button 
                             onClick={() => { setColor('default'); setIsColorPickerOpen(false); }} 
                             className={`w-8 h-8 rounded-xl flex items-center justify-center border border-gray-500/30 shrink-0 ${color === 'default' ? 'bg-white/10' : ''}`}
@@ -180,15 +211,12 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
                                 <div className="w-full h-px bg-gray-400 rotate-45 absolute top-1/2 left-0" />
                             </div>
                         </button>
-                        
-                        {/* Цвета */}
                         {COLORS.map(c => (
                           <button key={c} onClick={() => { setColor(c); setIsColorPickerOpen(false); }} className={`w-8 h-8 rounded-xl shrink-0 ${COLOR_MAP[c]} ${color === c ? 'ring-2 ring-white scale-110' : ''}`} />
                         ))}
                       </div>
                     )}
                 </div>
-                {/* ------------------------- */}
 
                 <div className="flex-1 grid grid-cols-2 gap-2">
                     <div className="flex flex-col gap-1">
@@ -284,12 +312,25 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
                    </div>
                    <div className="flex flex-col gap-1.5">
                       {list.items.filter(it => !list.hideCompleted || !it.completed).map((item) => (
-                        <div key={item.id} className="flex items-center gap-3 p-3 tg-secondary-bg rounded-2xl group">
-                           <button onClick={() => setChecklists(checklists.map(l => l.id === list.id ? { ...l, items: l.items.map(it => it.id === item.id ? { ...it, completed: !it.completed } : it) } : l))} className={`w-5 h-5 rounded-lg border-2 flex items-center justify-center shrink-0 ${item.completed ? 'bg-green-500 border-green-500' : 'border-gray-400/30'}`}>{item.completed && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4"><polyline points="20 6 9 17 4 12"/></svg>}</button>
-                           <input type="text" value={item.text} onChange={e => setChecklists(checklists.map(l => l.id === list.id ? { ...l, items: l.items.map(it => it.id === item.id ? { ...it, text: e.target.value } : it) } : l))} className={`flex-1 text-sm tg-text bg-transparent outline-none ${item.completed ? 'line-through opacity-30 italic' : ''}`} />
+                        <div key={item.id} className="flex items-start gap-3 p-3 tg-secondary-bg rounded-2xl group">
+                           {/* Кнопка галочки чуть опущена (mt-0.5), чтобы ровно стоять с текстом */}
+                           <button onClick={() => setChecklists(checklists.map(l => l.id === list.id ? { ...l, items: l.items.map(it => it.id === item.id ? { ...it, completed: !it.completed } : it) } : l))} className={`w-5 h-5 mt-0.5 rounded-lg border-2 flex items-center justify-center shrink-0 ${item.completed ? 'bg-green-500 border-green-500' : 'border-gray-400/30'}`}>{item.completed && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4"><polyline points="20 6 9 17 4 12"/></svg>}</button>
+                           
+                           {/* 🔥 ЗАМЕНА INPUT НА TEXTAREA 🔥 */}
+                           <AutoResizeTextarea 
+                                value={item.text}
+                                completed={item.completed}
+                                onChange={(val) => setChecklists(checklists.map(l => l.id === list.id ? { ...l, items: l.items.map(it => it.id === item.id ? { ...it, text: val } : it) } : l))}
+                                onEnter={() => {
+                                    // Логика Enter: создаем новый пункт в этом же списке
+                                    setChecklists(checklists.map(l => l.id === list.id ? { ...l, items: [...l.items, { id: Math.random().toString(36).substr(2, 9), text: '', completed: false }] } : l));
+                                }}
+                           />
+                           
                            <button onClick={() => setChecklists(checklists.map(l => l.id === list.id ? { ...l, items: l.items.filter(it => it.id !== item.id) } : l))} className="text-red-500/30 hover:text-red-500 px-2">×</button>
                         </div>
                       ))}
+                      {/* Нижний Input "Добавить..." остался Input-ом, как ты и просил */}
                       <input type="text" placeholder="Добавить..." className="flex-1 tg-secondary-bg p-3 px-4 rounded-xl text-xs font-bold tg-text outline-none mt-1" onKeyDown={e => e.key === 'Enter' && e.currentTarget.value.trim() && (setChecklists(checklists.map(l => l.id === list.id ? { ...l, items: [...l.items, { id: Math.random().toString(36).substr(2, 9), text: e.currentTarget.value, completed: false }] } : l)), e.currentTarget.value = '')} />
                    </div>
                 </div>
