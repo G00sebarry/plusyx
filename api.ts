@@ -1,10 +1,10 @@
 import { supabase } from './supabaseClient';
 import { Task, Column, Habit, AntiHabit } from './types';
 
-// --- ЗАДАЧИ (TASKS) ---
+// --- 1. ЗАДАЧИ (TASKS) ---
 export const fetchTasks = async (): Promise<Task[]> => {
   const { data, error } = await supabase.from('tasks').select('*').order('created_at', { ascending: true });
-  if (error) { console.error('Ошибка загрузки задач:', error); return []; }
+  if (error) { console.error('Ошибка задач:', error); return []; }
   return data as Task[];
 };
 
@@ -18,7 +18,7 @@ export const deleteTaskFromDb = async (taskId: string) => {
   if (error) console.error('Ошибка удаления задачи:', error);
 };
 
-// --- КОЛОНКИ (COLUMNS) ---
+// --- 2. КОЛОНКИ (COLUMNS) ---
 export const fetchColumns = async (): Promise<Column[]> => {
   const { data, error } = await supabase.from('columns').select('*').order('created_at', { ascending: true });
   if (error) return [];
@@ -30,10 +30,10 @@ export const saveColumnsToDb = async (columns: Column[]) => {
   if (error) console.error('Ошибка сохранения колонок:', error);
 };
 
-// --- 🔥 ПРИВЫЧКИ (HABITS) ---
+// --- 3. 🔥 ПОЛЕЗНЫЕ ПРИВЫЧКИ (HABITS) - ЭТОГО НЕ ХВАТАЛО ---
 export const fetchHabits = async (): Promise<Habit[]> => {
   const { data, error } = await supabase.from('habits').select('*').order('created_at', { ascending: true });
-  if (error) { console.error('Ошибка загрузки привычек:', error); return []; }
+  if (error) { console.error('Ошибка привычек:', error); return []; }
   return data as Habit[];
 };
 
@@ -47,10 +47,10 @@ export const deleteHabitFromDb = async (id: string) => {
   if (error) console.error('Ошибка удаления привычки:', error);
 };
 
-// --- 🔥 ВРЕДНЫЕ ПРИВЫЧКИ (ANTI-HABITS) ---
+// --- 4. 🔥 ВРЕДНЫЕ ПРИВЫЧКИ (ANTI-HABITS) - ЭТОГО ТОЖЕ НЕ БЫЛО ---
 export const fetchAntiHabits = async (): Promise<AntiHabit[]> => {
   const { data, error } = await supabase.from('anti_habits').select('*').order('created_at', { ascending: true });
-  if (error) { console.error('Ошибка загрузки AntiHabits:', error); return []; }
+  if (error) { console.error('Ошибка AntiHabits:', error); return []; }
   return data as AntiHabit[];
 };
 
