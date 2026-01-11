@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Habit } from '../types';
 
 interface HabitModalProps {
@@ -8,7 +8,7 @@ interface HabitModalProps {
   initialHabit?: Habit;
 }
 
-// Популярные шаблоны для быстрого старта
+// Популярные шаблоны
 const TEMPLATES = [
   { title: 'Пить воду', emoji: '💧', color: 'bg-blue-500', unit: 'мл', goal: 2000 },
   { title: 'Спорт', emoji: '🏃', color: 'bg-orange-500', unit: 'мин', goal: 45 },
@@ -25,7 +25,7 @@ const EMOJI_PRESETS = ['🔥', '💧', '🏃', '📚', '🧘', '💊', '💰', '
 
 export const HabitModal: React.FC<HabitModalProps> = ({ isOpen, onClose, onSave, initialHabit }) => {
   const [title, setTitle] = useState('');
-  const [description, setDescription] = useState(''); // Это теперь "Мотивация"
+  const [description, setDescription] = useState('');
   const [color, setColor] = useState('bg-blue-500');
   const [emoji, setEmoji] = useState('🔥');
   
@@ -33,12 +33,15 @@ export const HabitModal: React.FC<HabitModalProps> = ({ isOpen, onClose, onSave,
   const [goal, setGoal] = useState<number>(1);
   const [unit, setUnit] = useState('');
 
-  // Логика дней недели (0 - Вс, 1 - Пн ... 6 - Сб)
-  // По умолчанию выбираем все дни (Каждый день)
   const [selectedDays, setSelectedDays] = useState<number[]>([1, 2, 3, 4, 5, 6, 0]);
-
-  // Для кастомного эмодзи
   const [isCustomEmoji, setIsCustomEmoji] = useState(false);
+
+  // --- СОСТОЯНИЕ ДЛЯ ОБЛОЖКИ ---
+  const [fileData, setFileData] = useState<string>('');
+  const [coverPosition, setCoverPosition] = useState<number>(50);
+  const [coverIntensity, setCoverIntensity] = useState<number>(60);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  // -----------------------------
 
   useEffect(() => {
     if (initialHabit) {
@@ -49,12 +52,18 @@ export const HabitModal: React.FC<HabitModalProps> = ({ isOpen, onClose, onSave,
       setIsMeasurable(initialHabit.isMeasurable || false);
       setGoal(initialHabit.targetValue || 1);
       setUnit(initialHabit.unit || '');
-      // Восстанавливаем дни
+      
       if (initialHabit.frequency && initialHabit.frequency.days) {
         setSelectedDays(initialHabit.frequency.days);
       } else {
         setSelectedDays([1, 2, 3, 4, 5, 6, 0]);
       }
+
+      // Восстанавливаем обложку
+      setFileData(initialHabit.fileData || '');
+      setCoverPosition(initialHabit.coverPosition ?? 50);
+      setCoverIntensity(initialHabit.coverIntensity ?? 60);
+
     } else {
       resetForm();
     }
@@ -63,6 +72,7 @@ export const HabitModal: React.FC<HabitModalProps> = ({ isOpen, onClose, onSave,
   const resetForm = () => {
     setTitle(''); setDescription(''); setColor('bg-blue-500'); setEmoji('🔥');
     setIsMeasurable(false); setGoal(1); setUnit(''); setSelectedDays([1, 2, 3, 4, 5, 6, 0]);
+    setFileData(''); setCoverPosition(50); setCoverIntensity(60);
   };
 
   const handleTemplateClick = (t: typeof TEMPLATES[0]) => {
@@ -78,7 +88,6 @@ export const HabitModal: React.FC<HabitModalProps> = ({ isOpen, onClose, onSave,
 
   const toggleDay = (dayIndex: number) => {
     if (selectedDays.includes(dayIndex)) {
-      // Не даем убрать последний день (должен быть выбран хотя бы один)
       if (selectedDays.length > 1) {
         setSelectedDays(prev => prev.filter(d => d !== dayIndex));
       }
@@ -87,17 +96,25 @@ export const HabitModal: React.FC<HabitModalProps> = ({ isOpen, onClose, onSave,
     }
   };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (f) {
+        if (f.size > 3 * 1024 * 1024) { alert("Файл слишком большой (макс 3МБ)"); return; }
+        const r = new FileReader();
+        r.onload = ev => setFileData(ev.target?.result as string);
+        r.readAsDataURL(f);
+    }
+  };
+
   const handleSave = () => {
     if (!title.trim()) return;
-
-    // Определяем тип частоты для базы
     const isEveryDay = selectedDays.length === 7;
     
     const newHabit: Habit = {
-      ...(initialHabit || { id: '', history: {} }), // Сохраняем ID и историю если есть
+      ...(initialHabit || { id: '', history: {} }),
       id: initialHabit?.id || Math.random().toString(36).substr(2, 9),
       title,
-      description, // Мотивация
+      description,
       color,
       emoji,
       isMeasurable,
@@ -107,12 +124,16 @@ export const HabitModal: React.FC<HabitModalProps> = ({ isOpen, onClose, onSave,
         type: isEveryDay ? 'daily' : 'specific',
         days: selectedDays
       },
-      history: initialHabit?.history || {}
+      history: initialHabit?.history || {},
+      
+      // Сохраняем данные обложки
+      fileData,
+      coverPosition,
+      coverIntensity
     };
     onSave(newHabit);
   };
 
-  // Хелпер для определения "Будни / Выходные" (для UI)
   const getFrequencyLabel = () => {
     if (selectedDays.length === 7) return 'Каждый день';
     if (selectedDays.length === 5 && !selectedDays.includes(0) && !selectedDays.includes(6)) return 'По будням';
@@ -162,7 +183,6 @@ export const HabitModal: React.FC<HabitModalProps> = ({ isOpen, onClose, onSave,
                         {emoji}
                     </button>
                     
-                    {/* Палитра и выбор эмодзи */}
                     {isCustomEmoji && (
                         <div className="absolute top-16 left-0 bg-[#2c2c2e] p-3 rounded-2xl shadow-2xl border border-white/10 w-[280px] z-50 flex flex-col gap-3 animate-in fade-in zoom-in-95 origin-top-left">
                             <div className="grid grid-cols-6 gap-2">
@@ -171,11 +191,9 @@ export const HabitModal: React.FC<HabitModalProps> = ({ isOpen, onClose, onSave,
                                 ))}
                             </div>
                             <div className="flex gap-2 items-center bg-black/20 p-2 rounded-xl">
-                                <span className="text-[9px] font-bold text-gray-400 uppercase ml-1 whitespace-nowrap">Свой эмодзи:</span>
+                                <span className="text-[9px] font-bold text-gray-400 uppercase ml-1 whitespace-nowrap">Свой:</span>
                                 <input 
-                                    type="text" 
-                                    maxLength={2} 
-                                    placeholder="😎"
+                                    type="text" maxLength={2} placeholder="😎"
                                     className="w-full bg-transparent outline-none text-center font-bold text-white text-lg"
                                     onChange={(e) => { if(e.target.value) { setEmoji(e.target.value); } }}
                                 />
@@ -209,7 +227,6 @@ export const HabitModal: React.FC<HabitModalProps> = ({ isOpen, onClose, onSave,
                 <button onClick={() => setIsMeasurable(true)} className={`flex-1 py-3 text-[10px] font-black uppercase relative z-10 text-center transition-colors ${isMeasurable ? 'text-white' : 'tg-text opacity-50'}`}>Измеримая</button>
             </div>
 
-            {/* --- НАСТРОЙКИ ИЗМЕРИМОСТИ (ВЫЕЗЖАЮТ) --- */}
             {isMeasurable && (
                 <div className="flex gap-3 animate-in slide-in-from-top-2 fade-in">
                     <div className="flex-1 flex flex-col gap-1">
@@ -223,14 +240,13 @@ export const HabitModal: React.FC<HabitModalProps> = ({ isOpen, onClose, onSave,
                 </div>
             )}
 
-            {/* --- ДНИ НЕДЕЛИ (КРУЖОЧКИ) --- */}
+            {/* --- ДНИ НЕДЕЛИ --- */}
             <div className="flex flex-col gap-2">
                 <div className="flex justify-between items-end px-1">
                     <label className="text-[10px] font-black tg-hint uppercase">Дни выполнения</label>
                     <span className="text-[10px] font-bold text-[var(--tg-theme-button-color)] uppercase animate-pulse">{getFrequencyLabel()}</span>
                 </div>
                 <div className="flex justify-between gap-1 bg-black/5 p-2 rounded-2xl border border-white/5">
-                    {/* 1(Пн) -> 6(Сб) -> 0(Вс) */}
                     {[1, 2, 3, 4, 5, 6, 0].map((d) => {
                         const isSelected = selectedDays.includes(d);
                         const labels = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
@@ -238,10 +254,7 @@ export const HabitModal: React.FC<HabitModalProps> = ({ isOpen, onClose, onSave,
                             <button
                                 key={d}
                                 onClick={() => toggleDay(d)}
-                                className={`
-                                    w-10 h-10 rounded-full flex items-center justify-center text-[10px] font-black transition-all
-                                    ${isSelected ? 'bg-white text-black shadow-lg scale-105' : 'text-gray-500 hover:bg-white/5'}
-                                `}
+                                className={`w-10 h-10 rounded-full flex items-center justify-center text-[10px] font-black transition-all ${isSelected ? 'bg-white text-black shadow-lg scale-105' : 'text-gray-500 hover:bg-white/5'}`}
                             >
                                 {labels[d]}
                             </button>
@@ -249,6 +262,50 @@ export const HabitModal: React.FC<HabitModalProps> = ({ isOpen, onClose, onSave,
                     })}
                 </div>
             </div>
+
+            {/* --- БЛОК ОБЛОЖКИ (ВЕРНУЛИ И ПРОКАЧАЛИ) --- */}
+            <div className="flex flex-col gap-2">
+                <div className="flex justify-between items-center px-1">
+                     <label className="text-[10px] font-black tg-hint uppercase">Обложка</label>
+                     {fileData && <button onClick={() => setFileData('')} className="text-[9px] font-black text-red-500 uppercase hover:text-red-400">Удалить</button>}
+                </div>
+                {!fileData ? (
+                    <button 
+                        onClick={() => fileInputRef.current?.click()} 
+                        className="w-full py-3 rounded-2xl bg-black/5 border border-dashed border-gray-400/20 tg-text text-[10px] font-black uppercase tracking-widest hover:bg-black/10 transition-all flex items-center justify-center gap-2"
+                    >
+                       <span>📷</span> Загрузить фото
+                    </button>
+                ) : (
+                    <div className="bg-black/5 p-4 rounded-[28px] border border-white/5 animate-in fade-in">
+                        <div className="relative w-full h-32 rounded-2xl overflow-hidden bg-black/20 shadow-inner mb-4">
+                           <img src={fileData} className="w-full h-full object-cover" style={{ objectPosition: `50% ${coverPosition}%` }} />
+                           <div className="absolute inset-0 z-[1]" style={{ backgroundColor: `rgba(0,0,0,${coverIntensity/100})` }} />
+                           <div className="absolute bottom-2 right-2 z-10 bg-black/50 px-2 py-1 rounded-lg backdrop-blur-md">
+                              <span className="text-[8px] font-bold text-white uppercase">Превью</span>
+                           </div>
+                        </div>
+                        <div className="flex flex-col gap-3">
+                            <div className="flex flex-col gap-1.5">
+                                <div className="flex justify-between px-1">
+                                    <span className="text-[8px] font-black tg-hint uppercase">Позиция</span>
+                                    <span className="text-[8px] font-bold tg-text">{coverPosition}%</span>
+                                </div>
+                                <input type="range" min="0" max="100" value={coverPosition} onChange={e => setCoverPosition(Number(e.target.value))} className="w-full h-1 bg-black/10 rounded-full appearance-none touch-none accent-blue-500" />
+                            </div>
+                            <div className="flex flex-col gap-1.5">
+                                <div className="flex justify-between px-1">
+                                    <span className="text-[8px] font-black tg-hint uppercase">Затемнение</span>
+                                    <span className="text-[8px] font-bold tg-text">{coverIntensity}%</span>
+                                </div>
+                                <input type="range" min="0" max="100" value={coverIntensity} onChange={e => setCoverIntensity(Number(e.target.value))} className="w-full h-1 bg-black/10 rounded-full appearance-none touch-none accent-purple-500" />
+                            </div>
+                        </div>
+                    </div>
+                )}
+                <input type="file" ref={fileInputRef} accept="image/*" onChange={handleFileChange} className="hidden" />
+            </div>
+            {/* ------------------------------------------- */}
 
             {/* --- МОТИВАЦИЯ --- */}
             <div className="flex flex-col gap-2">
