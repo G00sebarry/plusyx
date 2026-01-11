@@ -8,7 +8,7 @@ interface AntiHabitCardProps {
   onDelete: (id: string) => void;
 }
 
-// 🔥 ЭТАПЫ (УРОВНИ СЛОЖНОСТИ) 🔥
+// 🔥 ЭТАПЫ (УРОВНИ СЛОЖНОСТИ)
 const MILESTONES = [
   { val: 1000 * 60 * 60 * 24, label: '24 часа' },
   { val: 1000 * 60 * 60 * 24 * 3, label: '3 дня' },
@@ -48,21 +48,14 @@ export const AntiHabitCard: React.FC<AntiHabitCardProps> = ({ habit, onRelapse, 
 
   const timeData = getFormattedTime();
 
-  // 🔥 ЛОГИКА ЦЕЛЕЙ 🔥
-  // Находим следующий уровень, который больше текущего прогресса
+  // Логика целей
   const nextMilestone = MILESTONES.find(m => m.val > diff) || MILESTONES[MILESTONES.length - 1];
-  
-  // Процент заполнения ДО СЛЕДУЮЩЕЙ ЦЕЛИ
-  // Если мы хотим, чтобы кольцо заполнялось от 0 до 100% для каждого уровня:
-  // (Например: прошел 3 дня, цель 7 дней. Прогресс круга показывает путь от 3 до 7)
-  // Но для простоты восприятия лучше классический вариант:
-  // Процент от старта до текущей цели.
   const progressPercent = Math.min(100, (diff / nextMilestone.val) * 100);
   
   // Рекорд
   const currentRecord = Math.max(habit.longestStreak, diff);
 
-  // Номер попытки (Длина истории + 1 текущая)
+  // Номер попытки
   const attemptNumber = (habit.history?.length || 0) + 1;
 
   // Визуал круга
@@ -89,7 +82,7 @@ export const AntiHabitCard: React.FC<AntiHabitCardProps> = ({ habit, onRelapse, 
     }
   };
 
-  // Красивый вывод срока рекорда
+  // Форматирование длительности для рекорда
   const formatDuration = (ms: number) => {
       const d = Math.floor(ms / (1000 * 60 * 60 * 24));
       if (d > 0) return `${d} дн`;
@@ -110,7 +103,7 @@ export const AntiHabitCard: React.FC<AntiHabitCardProps> = ({ habit, onRelapse, 
         {/* Overlay */}
         {hasCover && <div className="absolute inset-0 z-0 bg-black/60 backdrop-blur-[1px]" style={{ opacity: (habit.coverIntensity ?? 60) / 100 }} />}
 
-        {/* Header */}
+        {/* --- HEADER --- */}
         <div className="relative z-10 flex justify-between items-start">
             <div className="flex items-center gap-2">
                 <span className="text-xl shadow-sm">{habit.emoji}</span>
@@ -118,14 +111,14 @@ export const AntiHabitCard: React.FC<AntiHabitCardProps> = ({ habit, onRelapse, 
             </div>
             <button 
                 onClick={(e) => { e.stopPropagation(); onDelete(habit.id); }}
-                className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-red-500/20 text-white/40 hover:text-red-500 transition-colors"
+                className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-red-500/20 text-white/40 hover:text-red-500 transition-colors z-20"
             >
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
             </button>
         </div>
 
-        {/* Center Circle */}
-        <div className="relative z-10 flex justify-center items-center py-2">
+        {/* --- CENTER CIRCLE --- */}
+        <div className="relative z-10 flex justify-center items-center py-2 flex-1">
             <div className="relative w-40 h-40 flex items-center justify-center">
                 <svg className="absolute inset-0 w-full h-full -rotate-90 drop-shadow-2xl" viewBox="0 0 160 160">
                     <circle cx="80" cy="80" r={radius} fill="none" stroke={hasCover ? "rgba(255,255,255,0.1)" : "rgba(128,128,128,0.1)"} strokeWidth="6" />
@@ -145,44 +138,46 @@ export const AntiHabitCard: React.FC<AntiHabitCardProps> = ({ habit, onRelapse, 
             </div>
         </div>
 
-        {/* Footer Info */}
-        <div className="relative z-10 flex justify-between items-end">
-            
-            {/* Левый блок: Дата */}
-            <div className="flex flex-col gap-0.5">
+        {/* --- STATS COLUMN (RIGHT SIDE) --- */}
+        {/* Распределяем равномерно по высоте: top-14 (отступ от хедера) и bottom-5 (от низа) */}
+        <div className="absolute right-5 top-14 bottom-5 z-10 flex flex-col justify-between items-end pointer-events-none">
+             {/* Попытка (Верх) */}
+             <div className="flex flex-col items-end leading-none">
+                <span className={`text-[8px] uppercase font-bold ${hasCover ? 'text-white/40' : 'tg-hint'}`}>Попытка</span>
+                <span className={`text-[10px] font-bold ${hasCover ? 'text-white/90' : 'tg-text'}`}>#{attemptNumber}</span>
+             </div>
+             
+             {/* Цель (Середина - выровняется сама благодаря justify-between) */}
+             <div className="flex flex-col items-end leading-none">
+                <span className={`text-[8px] uppercase font-bold ${hasCover ? 'text-blue-200' : 'text-blue-500'}`}>Цель</span>
+                <span className={`text-[10px] font-bold ${hasCover ? 'text-white' : 'tg-text'}`}>{nextMilestone.label}</span>
+             </div>
+
+             {/* Рекорд (Низ) */}
+             <div className="flex flex-col items-end leading-none">
+                <span className={`text-[8px] uppercase font-bold ${hasCover ? 'text-yellow-200' : 'text-orange-500'}`}>Рекорд</span>
+                <span className={`text-[10px] font-bold ${hasCover ? 'text-white' : 'tg-text'}`}>{formatDuration(currentRecord)}</span>
+             </div>
+        </div>
+
+        {/* --- FOOTER (LEFT & CENTER BUTTON) --- */}
+        <div className="relative z-10 w-full h-8"> 
+            {/* Дата (Слева внизу) */}
+            <div className="absolute left-0 bottom-0 flex flex-col gap-0.5">
                  <span className={`text-[8px] uppercase font-bold ${hasCover ? 'text-white/40' : 'tg-hint'}`}>Начало</span>
                  <span className={`text-[10px] font-bold ${hasCover ? 'text-white/80' : 'tg-text'}`}>
                     {formatDateSmart(habit.startDate)}
                  </span>
             </div>
 
-            {/* Центральная кнопка */}
-            <button 
-                onClick={handleRelapseClick}
-                className="px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 text-[9px] font-black uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all active:scale-95 mx-2"
-            >
-                Я сорвался
-            </button>
-            
-            {/* Правый блок: Статистика */}
-            <div className="flex flex-col items-end gap-1.5">
-                 {/* Попытка */}
-                 <div className="flex flex-col items-end leading-none">
-                    <span className={`text-[8px] uppercase font-bold ${hasCover ? 'text-white/40' : 'tg-hint'}`}>Попытка</span>
-                    <span className={`text-[10px] font-bold ${hasCover ? 'text-white/90' : 'tg-text'}`}>#{attemptNumber}</span>
-                 </div>
-                 
-                 {/* Цель */}
-                 <div className="flex flex-col items-end leading-none">
-                    <span className={`text-[8px] uppercase font-bold ${hasCover ? 'text-blue-200' : 'text-blue-500'}`}>Цель</span>
-                    <span className={`text-[10px] font-bold ${hasCover ? 'text-white' : 'tg-text'}`}>{nextMilestone.label}</span>
-                 </div>
-
-                 {/* Рекорд */}
-                 <div className="flex flex-col items-end leading-none">
-                    <span className={`text-[8px] uppercase font-bold ${hasCover ? 'text-yellow-200' : 'text-orange-500'}`}>Рекорд</span>
-                    <span className={`text-[10px] font-bold ${hasCover ? 'text-white' : 'tg-text'}`}>{formatDuration(currentRecord)}</span>
-                 </div>
+            {/* Кнопка срыва (По центру низа) */}
+            <div className="absolute left-1/2 -translate-x-1/2 bottom-0">
+                <button 
+                    onClick={handleRelapseClick}
+                    className="px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 text-[9px] font-black uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all active:scale-95 whitespace-nowrap"
+                >
+                    Я сорвался
+                </button>
             </div>
         </div>
     </div>
