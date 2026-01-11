@@ -8,6 +8,21 @@ interface AntiHabitCardProps {
   onDelete: (id: string) => void;
 }
 
+// 🔥 ЭТАПЫ (УРОВНИ СЛОЖНОСТИ) 🔥
+const MILESTONES = [
+  { val: 1000 * 60 * 60 * 24, label: '24 часа' },
+  { val: 1000 * 60 * 60 * 24 * 3, label: '3 дня' },
+  { val: 1000 * 60 * 60 * 24 * 7, label: '7 дней' },
+  { val: 1000 * 60 * 60 * 24 * 14, label: '14 дней' },
+  { val: 1000 * 60 * 60 * 24 * 30, label: '30 дней' },
+  { val: 1000 * 60 * 60 * 24 * 90, label: '3 мес' },
+  { val: 1000 * 60 * 60 * 24 * 180, label: '6 мес' },
+  { val: 1000 * 60 * 60 * 24 * 365, label: '1 год' },
+  { val: 1000 * 60 * 60 * 24 * 365 * 3, label: '3 года' },
+  { val: 1000 * 60 * 60 * 24 * 365 * 5, label: '5 лет' },
+  { val: 1000 * 60 * 60 * 24 * 365 * 10, label: '10 лет' },
+];
+
 export const AntiHabitCard: React.FC<AntiHabitCardProps> = ({ habit, onRelapse, onEdit, onDelete }) => {
   const [now, setNow] = useState(Date.now());
 
@@ -18,7 +33,7 @@ export const AntiHabitCard: React.FC<AntiHabitCardProps> = ({ habit, onRelapse, 
 
   const diff = now - habit.startDate;
   
-  // Логика форматирования времени
+  // Форматирование времени (Таймер)
   const getFormattedTime = () => {
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
     const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
@@ -33,14 +48,24 @@ export const AntiHabitCard: React.FC<AntiHabitCardProps> = ({ habit, onRelapse, 
 
   const timeData = getFormattedTime();
 
-  // 🔥 ФИКС РЕКОРДА: Показываем либо сохраненный рекорд, либо текущий стрик, если он больше
+  // 🔥 ЛОГИКА ЦЕЛЕЙ 🔥
+  // Находим следующий уровень, который больше текущего прогресса
+  const nextMilestone = MILESTONES.find(m => m.val > diff) || MILESTONES[MILESTONES.length - 1];
+  
+  // Процент заполнения ДО СЛЕДУЮЩЕЙ ЦЕЛИ
+  // Если мы хотим, чтобы кольцо заполнялось от 0 до 100% для каждого уровня:
+  // (Например: прошел 3 дня, цель 7 дней. Прогресс круга показывает путь от 3 до 7)
+  // Но для простоты восприятия лучше классический вариант:
+  // Процент от старта до текущей цели.
+  const progressPercent = Math.min(100, (diff / nextMilestone.val) * 100);
+  
+  // Рекорд
   const currentRecord = Math.max(habit.longestStreak, diff);
 
-  // Расчет круга
-  const target = habit.goal || (currentRecord > 0 ? currentRecord : 1000 * 60 * 60 * 24 * 7); 
-  const progressPercent = Math.min(100, (diff / target) * 100);
-  
-  // 🔥 УВЕЛИЧЕННЫЙ КРУГ
+  // Номер попытки (Длина истории + 1 текущая)
+  const attemptNumber = (habit.history?.length || 0) + 1;
+
+  // Визуал круга
   const radius = 60; 
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (progressPercent / 100) * circumference;
@@ -48,15 +73,12 @@ export const AntiHabitCard: React.FC<AntiHabitCardProps> = ({ habit, onRelapse, 
   const hasCover = !!habit.fileData;
   const strokeColorClass = habit.color.replace('bg-', 'text-');
 
-  // 🔥 ФИКС ДАТЫ: Если год не текущий, показываем его
+  // Умная дата
   const formatDateSmart = (timestamp: number) => {
       const d = new Date(timestamp);
       const now = new Date();
       const options: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' };
-      
-      if (d.getFullYear() !== now.getFullYear()) {
-          options.year = 'numeric'; // Добавляем год, если это прошлое
-      }
+      if (d.getFullYear() !== now.getFullYear()) { options.year = 'numeric'; }
       return d.toLocaleDateString('ru-RU', options);
   };
 
@@ -65,6 +87,14 @@ export const AntiHabitCard: React.FC<AntiHabitCardProps> = ({ habit, onRelapse, 
     if (confirm('Сбросить таймер? Это значит, что произошел срыв.')) {
         onRelapse(habit.id);
     }
+  };
+
+  // Красивый вывод срока рекорда
+  const formatDuration = (ms: number) => {
+      const d = Math.floor(ms / (1000 * 60 * 60 * 24));
+      if (d > 0) return `${d} дн`;
+      const h = Math.floor(ms / (1000 * 60 * 60));
+      return `${h} час`;
   };
 
   return (
@@ -94,7 +124,7 @@ export const AntiHabitCard: React.FC<AntiHabitCardProps> = ({ habit, onRelapse, 
             </button>
         </div>
 
-        {/* Center Circle (BIG) */}
+        {/* Center Circle */}
         <div className="relative z-10 flex justify-center items-center py-2">
             <div className="relative w-40 h-40 flex items-center justify-center">
                 <svg className="absolute inset-0 w-full h-full -rotate-90 drop-shadow-2xl" viewBox="0 0 160 160">
@@ -115,27 +145,44 @@ export const AntiHabitCard: React.FC<AntiHabitCardProps> = ({ habit, onRelapse, 
             </div>
         </div>
 
-        {/* Footer */}
+        {/* Footer Info */}
         <div className="relative z-10 flex justify-between items-end">
+            
+            {/* Левый блок: Дата */}
             <div className="flex flex-col gap-0.5">
-                 <span className={`text-[9px] uppercase font-bold ${hasCover ? 'text-white/40' : 'tg-hint'}`}>Начало</span>
+                 <span className={`text-[8px] uppercase font-bold ${hasCover ? 'text-white/40' : 'tg-hint'}`}>Начало</span>
                  <span className={`text-[10px] font-bold ${hasCover ? 'text-white/80' : 'tg-text'}`}>
                     {formatDateSmart(habit.startDate)}
                  </span>
             </div>
 
+            {/* Центральная кнопка */}
             <button 
                 onClick={handleRelapseClick}
-                className="px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 text-[10px] font-black uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all active:scale-95"
+                className="px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 text-[9px] font-black uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all active:scale-95 mx-2"
             >
                 Я сорвался
             </button>
             
-            <div className="flex flex-col gap-0.5 items-end">
-                 <span className={`text-[9px] uppercase font-bold ${hasCover ? 'text-white/40' : 'tg-hint'}`}>Рекорд</span>
-                 <span className={`text-[10px] font-bold ${hasCover ? 'text-white/80' : 'tg-text'}`}>
-                    {Math.floor(currentRecord / (1000 * 60 * 60 * 24))} дн
-                 </span>
+            {/* Правый блок: Статистика */}
+            <div className="flex flex-col items-end gap-1.5">
+                 {/* Попытка */}
+                 <div className="flex flex-col items-end leading-none">
+                    <span className={`text-[8px] uppercase font-bold ${hasCover ? 'text-white/40' : 'tg-hint'}`}>Попытка</span>
+                    <span className={`text-[10px] font-bold ${hasCover ? 'text-white/90' : 'tg-text'}`}>#{attemptNumber}</span>
+                 </div>
+                 
+                 {/* Цель */}
+                 <div className="flex flex-col items-end leading-none">
+                    <span className={`text-[8px] uppercase font-bold ${hasCover ? 'text-blue-200' : 'text-blue-500'}`}>Цель</span>
+                    <span className={`text-[10px] font-bold ${hasCover ? 'text-white' : 'tg-text'}`}>{nextMilestone.label}</span>
+                 </div>
+
+                 {/* Рекорд */}
+                 <div className="flex flex-col items-end leading-none">
+                    <span className={`text-[8px] uppercase font-bold ${hasCover ? 'text-yellow-200' : 'text-orange-500'}`}>Рекорд</span>
+                    <span className={`text-[10px] font-bold ${hasCover ? 'text-white' : 'tg-text'}`}>{formatDuration(currentRecord)}</span>
+                 </div>
             </div>
         </div>
     </div>
