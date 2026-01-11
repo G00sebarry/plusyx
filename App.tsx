@@ -8,7 +8,6 @@ import { HabitModal } from './components/HabitModal';
 import { AntiHabitModal } from './components/AntiHabitModal';
 import { Task, ViewType, Habit, Column, AntiHabit } from './types';
 
-// 🔥 ИМПОРТИРУЕМ ВСЁ (Теперь это сработает, так как мы обновили api.ts)
 import { 
   fetchTasks, fetchColumns, saveTaskToDb, deleteTaskFromDb, saveColumnsToDb,
   fetchHabits, saveHabitToDb, deleteHabitFromDb,
@@ -32,7 +31,7 @@ const App: React.FC = () => {
   const [view, setView] = useState<ViewType>('kanban');
   const [isLoading, setIsLoading] = useState(true);
 
-  // --- ДАННЫЕ (ВСЕ ПУСТЫЕ, ЖДУТ ЗАГРУЗКИ) ---
+  // --- ДАННЫЕ ---
   const [columns, setColumns] = useState<Column[]>(DEFAULT_COLUMNS);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [habits, setHabits] = useState<Habit[]>([]);
@@ -215,7 +214,6 @@ const App: React.FC = () => {
         <div className="flex items-center gap-2">
             <div className="relative w-10 h-10 flex items-center justify-center logo-shadow"><svg width="40" height="40" viewBox="0 0 100 100"><rect x="15" y="15" width="50" height="70" fill="#9d73d2" rx="4" /><circle cx="40" cy="40" r="12" fill="white" opacity="0.2" /><g className="animate-plus-new" style={{ transformOrigin: 'center' }}><rect x="50" y="45" width="40" height="40" fill="#4cc3a1" rx="4" /><path d="M70 55 V75 M60 65 H80" stroke="white" strokeWidth="6" strokeLinecap="round" /></g></svg></div>
             <h1 className="text-2xl font-logo tg-text font-black ml-1">Plusyx</h1>
-            <span className="text-[10px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded font-bold border border-blue-500/30">CLOUD</span>
         </div>
         <div className="flex gap-2 relative">
             <button onClick={() => setIsCreateMenuOpen(!isCreateMenuOpen)} className={`w-10 h-10 rounded-xl bg-[var(--tg-theme-button-color)] text-white flex items-center justify-center shadow-lg active:scale-90 transition-all ${isCreateMenuOpen ? 'rotate-45' : ''}`}><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
