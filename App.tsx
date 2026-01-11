@@ -6,16 +6,13 @@ import { TaskModal } from './components/TaskModal';
 import { HabitTracker } from './components/HabitTracker';
 import { HabitModal } from './components/HabitModal';
 import { AntiHabitModal } from './components/AntiHabitModal';
-import { Task, ViewType, Habit, Column, AntiHabit } from './types';
+import { Task, ViewType, TaskStatus, Habit, Column, AntiHabit } from './types';
+import { supabase } from './supabaseClient';
 
-// 🔥 ИМПОРТИРУЕМ ВСЕ ФУНКЦИИ API
-import { 
-  fetchTasks, fetchColumns, saveTaskToDb, deleteTaskFromDb, saveColumnsToDb,
-  fetchHabits, saveHabitToDb, deleteHabitFromDb,
-  fetchAntiHabits, saveAntiHabitToDb, deleteAntiHabitFromDb
-} from './api';
+// 🔥 ИМПОРТИРУЕМ НАШИ НОВЫЕ ФУНКЦИИ РАБОТЫ С БАЗОЙ
+import { fetchTasks, fetchColumns, saveTaskToDb, deleteTaskFromDb, saveColumnsToDb } from './api';
 
-// Хелпер для даты
+// Хелпер для получения даты
 const toLocalDateString = (date: Date) => {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -31,13 +28,39 @@ const DEFAULT_COLUMNS: Column[] = [
 
 const App: React.FC = () => {
   const [view, setView] = useState<ViewType>('kanban');
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true); // ⏳ Индикатор загрузки базы
 
-  // --- STATE: ТЕПЕРЬ ВСЁ НАЧИНАЕТСЯ С ПУСТЫХ МАССИВОВ ---
+  // --- STATE: ТЕПЕРЬ НАЧИНАЕМ С ПУСТЫХ МАССИВОВ (Ждем базу) ---
   const [columns, setColumns] = useState<Column[]>(DEFAULT_COLUMNS);
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [habits, setHabits] = useState<Habit[]>([]);
-  const [antiHabits, setAntiHabits] = useState<AntiHabit[]>([]);
+  
+  // --- STATE: ПРИВЫЧКИ (ПОКА ОСТАВЛЯЕМ LOCALSTORAGE, ПЕРЕНЕСЕМ ПОЗЖЕ) ---
+  const [habits, setHabits] = useState<Habit[]>(() => {
+    try {
+      const saved = localStorage.getItem('plusyx_habits_v1');
+      let parsed = saved ? JSON.parse(saved) : [];
+      // Миграция старых данных (твой код)
+      parsed = parsed.map((h: any) => ({
+        ...h,
+        title: h.title || h.name || 'Привычка',
+        frequency: {
+          type: h.frequency?.type || 'daily',
+          days: Array.isArray(h.frequency?.days) ? h.frequency.days : [0, 1, 2, 3, 4, 5, 6]
+        },
+        emoji: h.emoji || '🔥',
+        description: h.description || h.question || '',
+        history: h.history || {}
+      }));
+      return parsed;
+    } catch (e) { return []; }
+  });
+
+  const [antiHabits, setAntiHabits] = useState<AntiHabit[]>(() => {
+    try {
+        const saved = localStorage.getItem('plusyx_antihabits_v1');
+        return saved ? JSON.parse(saved) : [];
+    } catch(e) { return []; }
+  });
   
   // --- UI STATE ---
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
@@ -51,35 +74,30 @@ const App: React.FC = () => {
   const [editingAntiHabit, setEditingAntiHabit] = useState<AntiHabit | undefined>(undefined);
   
   const [taskToDelete, setTaskToDelete] = useState<string | null>(null);
-  const [habitToDelete, setHabitToDelete] = useState<string | null>(null); // Используем один ID для удаления любых привычек
+  const [habitToDelete, setHabitToDelete] = useState<string | null>(null);
   
-  // --- ТЕМА И ОБОИ (Оставляем локально) ---
-  const [theme, setTheme] = useState<'light' | 'dark'>(() => (localStorage.getItem('plusyx_theme') as 'light' | 'dark') || 'light');
+  // --- THEME & WALLPAPER (ЭТО ОСТАВЛЯЕМ В LOCALSTORAGE - ТАК БЫСТРЕЕ) ---
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    return (localStorage.getItem('plusyx_theme') as 'light' | 'dark') || 'light'; 
+  });
   const [wallpaper, setWallpaper] = useState<string>(() => localStorage.getItem('plusyx_wallpaper') || '');
   const [wallpaperOpacity, setWallpaperOpacity] = useState<number>(() => Number(localStorage.getItem('plusyx_wallpaper_opacity')) || 30);
   const [wallpaperPosition, setWallpaperPosition] = useState<number>(() => Number(localStorage.getItem('plusyx_wallpaper_position')) || 50);
   const wallpaperInputRef = useRef<HTMLInputElement>(null);
 
-  // --- 🔥 ГЛОБАЛЬНАЯ ЗАГРУЗКА ДАННЫХ ---
+  // --- 🔥 1. ЗАГРУЗКА ДАННЫХ ИЗ SUPABASE ---
   useEffect(() => {
     const initData = async () => {
       setIsLoading(true);
       try {
-        // Грузим ВСЁ сразу параллельно
-        const [dbTasks, dbColumns, dbHabits, dbAntiHabits] = await Promise.all([
-           fetchTasks(), 
-           fetchColumns(),
-           fetchHabits(),
-           fetchAntiHabits()
-        ]);
+        const [dbTasks, dbColumns] = await Promise.all([ fetchTasks(), fetchColumns() ]);
         
         setTasks(dbTasks);
-        setHabits(dbHabits);
-        setAntiHabits(dbAntiHabits);
         
         if (dbColumns && dbColumns.length > 0) {
           setColumns(dbColumns);
         } else {
+          // Если база новая и колонок нет - сохраним дефолтные туда
           await saveColumnsToDb(DEFAULT_COLUMNS);
         }
       } catch (e) {
@@ -91,80 +109,105 @@ const App: React.FC = () => {
     initData();
   }, []);
 
-  // --- ЭФФЕКТЫ (Только локальные настройки) ---
-  useEffect(() => { document.body.classList.toggle('dark', theme === 'dark'); localStorage.setItem('plusyx_theme', theme); }, [theme]);
+  // --- EFFECTS (Только для локальных настроек и привычек) ---
+  useEffect(() => {
+    document.body.classList.toggle('dark', theme === 'dark');
+    localStorage.setItem('plusyx_theme', theme);
+  }, [theme]);
+
+  // УБРАЛИ сохранение tasks и columns в LocalStorage! Теперь только в БД.
+  useEffect(() => { localStorage.setItem('plusyx_habits_v1', JSON.stringify(habits)); }, [habits]);
+  useEffect(() => { localStorage.setItem('plusyx_antihabits_v1', JSON.stringify(antiHabits)); }, [antiHabits]); 
+  
   useEffect(() => {
     localStorage.setItem('plusyx_wallpaper', wallpaper);
     localStorage.setItem('plusyx_wallpaper_opacity', wallpaperOpacity.toString());
     localStorage.setItem('plusyx_wallpaper_position', wallpaperPosition.toString());
   }, [wallpaper, wallpaperOpacity, wallpaperPosition]);
 
-  // Telegram Button
+  // Telegram Setup
   useEffect(() => {
     const tg = window.Telegram?.WebApp;
     if (tg) {
-      if (view === 'tracker') tg.MainButton.hide();
-      else { tg.MainButton.setText("Создать задачу"); tg.MainButton.show(); }
-      const handleClick = () => { setEditingTask(undefined); setIsTaskModalOpen(true); };
+      if (view === 'tracker') {
+        tg.MainButton.hide();
+      } else {
+        tg.MainButton.setText("Создать задачу");
+        tg.MainButton.show();
+      }
+      const handleClick = () => {
+         setEditingTask(undefined);
+         setIsTaskModalOpen(true);
+      };
       tg.MainButton.onClick(handleClick);
       return () => tg.MainButton.offClick(handleClick);
     }
   }, [view]);
 
-  // --- 📝 ЗАДАЧИ ---
+  // --- 🔥 ОБРАБОТЧИКИ ЗАДАЧ (С DB) ---
+  
   const handleAddTask = async (taskData: Omit<Task, 'id'>) => {
     let cId = taskData.columnId;
     if (!cId) {
       const col = columns.find(c => c.type === taskData.status) || columns[0];
       cId = col?.id || 'col-todo'; 
     }
+    // Генерируем ID локально для оптимистичного UI
     const newTask: Task = { ...taskData, id: Math.random().toString(36).substr(2, 9), columnId: cId };
+    
+    // 1. Сразу обновляем экран (чтобы юзер не ждал)
     setTasks(prev => [newTask, ...prev]);
     setIsTaskModalOpen(false);
     setEditingTask(undefined);
     window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
+
+    // 2. Тихо сохраняем в базу
     await saveTaskToDb(newTask);
   };
 
   const handleUpdateTask = async (updatedTask: Task) => {
+    // 1. UI
     setTasks(prev => prev.map(t => t.id === updatedTask.id ? updatedTask : t));
     setIsTaskModalOpen(false);
     setEditingTask(undefined);
     window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('medium');
+
+    // 2. DB
     await saveTaskToDb(updatedTask);
   };
 
-  const handleMoveTask = async (id: string, targetColId: string, targetId?: string) => {
-    const targetCol = columns.find(c => c.id === targetColId);
-    if (!targetCol) return;
-    let taskToSave: Task | undefined;
-
-    setTasks(prev => {
-      const res = [...prev];
-      const idx = res.findIndex(t => t.id === id);
-      if (idx === -1) return prev;
-      const [task] = res.splice(idx, 1);
-      task.columnId = targetColId;
-      task.status = targetCol.type; 
-      taskToSave = task; 
-      if (targetId) {
-        const tIdx = res.findIndex(t => t.id === targetId);
-        res.splice(tIdx === -1 ? res.length : tIdx, 0, task);
-      } else { res.push(task); }
-      return res;
-    });
-    if (taskToSave) await saveTaskToDb(taskToSave);
+  const handleDeleteTaskConfirm = async () => {
+     if (taskToDelete) {
+        const id = taskToDelete;
+        // 1. UI
+        setTasks(prev => prev.filter(t => t.id !== id)); 
+        setTaskToDelete(null);
+        // 2. DB
+        await deleteTaskFromDb(id);
+     }
   };
 
   const handleCopyTask = async (originalTaskId: string, newTitle: string) => {
     const originalTask = tasks.find(t => t.id === originalTaskId);
     if (!originalTask) return;
+
+    // Генерируем новые ID для чек-листов, чтобы они не были связаны
     const newChecklists = originalTask.checklists.map(list => ({
-        ...list, id: Math.random().toString(36).substr(2, 9), items: list.items.map(item => ({...item, id: Math.random().toString(36).substr(2, 9)}))
+        ...list,
+        id: Math.random().toString(36).substr(2, 9),
+        items: list.items.map(item => ({...item, id: Math.random().toString(36).substr(2, 9)}))
     }));
+
     const newTask: Task = {
-        ...originalTask, id: Math.random().toString(36).substr(2, 9), title: newTitle, checklists: newChecklists, comments: [], files: []
+        ...originalTask,
+        id: Math.random().toString(36).substr(2, 9),
+        title: newTitle,
+        checklists: newChecklists,
+        comments: [],
+        files: [] // Файлы не копируем, чтобы не дублировать тяжелые данные
     };
+
+    // 1. UI
     setTasks(prev => {
         const index = prev.findIndex(t => t.id === originalTaskId);
         if (index === -1) return [newTask, ...prev];
@@ -172,91 +215,89 @@ const App: React.FC = () => {
         newTasks.splice(index + 1, 0, newTask);
         return newTasks;
     });
+
+    // 2. DB
     await saveTaskToDb(newTask);
   };
 
-  // --- 🌱 ПРИВЫЧКИ (DB) ---
-  const handleAddHabit = async (habitData: Habit) => {
+  const handleMoveTask = async (id: string, targetColId: string, targetId?: string) => {
+    const targetCol = columns.find(c => c.id === targetColId);
+    if (!targetCol) return;
+
+    // Сначала вычисляем новую задачу, чтобы отправить в БД
+    let taskToSave: Task | undefined;
+
+    setTasks(prev => {
+      const res = [...prev];
+      const idx = res.findIndex(t => t.id === id);
+      if (idx === -1) return prev;
+      
+      const [task] = res.splice(idx, 1);
+      task.columnId = targetColId;
+      task.status = targetCol.type; 
+      taskToSave = task; // Запоминаем для сохранения
+
+      if (targetId) {
+        const tIdx = res.findIndex(t => t.id === targetId);
+        res.splice(tIdx === -1 ? res.length : tIdx, 0, task);
+      } else {
+        res.push(task);
+      }
+      return res;
+    });
+
+    // DB
+    if (taskToSave) {
+        await saveTaskToDb(taskToSave);
+    }
+  };
+
+  // --- ПРИВЫЧКИ (ПОКА LOCALSTORAGE) ---
+  const handleAddHabit = (habitData: Habit) => {
     setHabits(prev => [habitData, ...prev]);
     setIsHabitModalOpen(false);
     window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
-    await saveHabitToDb(habitData);
   };
-
-  const handleUpdateHabit = async (updatedHabit: Habit) => {
+  const handleUpdateHabit = (updatedHabit: Habit) => {
     setHabits(prev => prev.map(h => h.id === updatedHabit.id ? updatedHabit : h));
     setIsHabitModalOpen(false);
     setEditingHabit(undefined);
-    await saveHabitToDb(updatedHabit);
   };
-
-  const handleToggleHabit = async (id: string, date: string, value: number | boolean) => {
-    let updatedHabit: Habit | undefined;
-    
+  const handleToggleHabit = (id: string, date: string, value: number | boolean) => {
     setHabits(prev => prev.map(h => {
-      if (h.id === id) {
-        updatedHabit = { ...h, history: { ...h.history, [date]: value } };
-        return updatedHabit;
-      }
+      if (h.id === id) return { ...h, history: { ...h.history, [date]: value } };
       return h;
     }));
-    
     window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
-    if (updatedHabit) await saveHabitToDb(updatedHabit);
   };
 
-  // --- ⛔ ВРЕДНЫЕ ПРИВЫЧКИ (DB) ---
-  const handleAddAntiHabit = async (habit: AntiHabit) => {
+  // --- ВРЕДНЫЕ ПРИВЫЧКИ (ПОКА LOCALSTORAGE) ---
+  const handleAddAntiHabit = (habit: AntiHabit) => {
     setAntiHabits(prev => [habit, ...prev]);
     setIsAntiHabitModalOpen(false);
     window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
-    await saveAntiHabitToDb(habit);
   };
-
-  const handleUpdateAntiHabit = async (habit: AntiHabit) => {
+  const handleUpdateAntiHabit = (habit: AntiHabit) => {
     setAntiHabits(prev => prev.map(h => h.id === habit.id ? habit : h));
     setIsAntiHabitModalOpen(false);
     setEditingAntiHabit(undefined);
-    await saveAntiHabitToDb(habit);
   };
-
-  const handleRelapse = async (id: string) => {
-    let updatedHabit: AntiHabit | undefined;
+  const handleRelapse = (id: string) => {
     setAntiHabits(prev => prev.map(h => {
         if (h.id === id) {
             const now = Date.now();
             const currentDuration = now - h.startDate;
             const newRecord = Math.max(h.longestStreak, currentDuration);
-            updatedHabit = {
-                ...h, startDate: now, longestStreak: newRecord, history: [...h.history, { date: now, duration: currentDuration }]
+            return {
+                ...h,
+                startDate: now, 
+                longestStreak: newRecord,
+                history: [...h.history, { date: now, duration: currentDuration }]
             };
-            return updatedHabit;
         }
         return h;
     }));
     window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('warning');
-    if (updatedHabit) await saveAntiHabitToDb(updatedHabit);
-  };
-
-  // --- 🗑️ УДАЛЕНИЕ (ОБЩЕЕ) ---
-  const handleDeleteConfirm = async () => {
-    if (taskToDelete) {
-       const id = taskToDelete;
-       setTasks(prev => prev.filter(t => t.id !== id)); 
-       setTaskToDelete(null);
-       await deleteTaskFromDb(id);
-    } else if (habitToDelete) {
-       // Ищем где была эта привычка
-       const isHabit = habits.find(h => h.id === habitToDelete);
-       const isAnti = antiHabits.find(h => h.id === habitToDelete);
-
-       setHabits(prev => prev.filter(h => h.id !== habitToDelete));
-       setAntiHabits(prev => prev.filter(h => h.id !== habitToDelete));
-       setHabitToDelete(null);
-
-       if (isHabit) await deleteHabitFromDb(isHabit.id);
-       if (isAnti) await deleteAntiHabitFromDb(isAnti.id);
-    }
   };
 
   // --- ОБОИ ---
@@ -270,11 +311,12 @@ const App: React.FC = () => {
     }
   };
 
+  // --- ЗАГРУЗОЧНЫЙ ЭКРАН ---
   if (isLoading) {
       return (
           <div className="h-screen w-screen tg-bg flex items-center justify-center flex-col gap-4">
               <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-              <div className="text-sm font-bold tg-text opacity-50 animate-pulse">Синхронизация с облаком...</div>
+              <div className="text-sm font-bold tg-text opacity-50 animate-pulse">Загрузка базы данных...</div>
           </div>
       );
   }
@@ -285,7 +327,12 @@ const App: React.FC = () => {
       {wallpaper && (
         <div 
           className="fixed inset-0 z-0 pointer-events-none transition-all duration-300 ease-out" 
-          style={{ backgroundImage: `url(${wallpaper})`, backgroundSize: 'cover', backgroundPosition: `50% ${wallpaperPosition}%`, opacity: wallpaperOpacity / 100 }} 
+          style={{ 
+            backgroundImage: `url(${wallpaper})`, 
+            backgroundSize: 'cover', 
+            backgroundPosition: `50% ${wallpaperPosition}%`,
+            opacity: wallpaperOpacity / 100
+          }} 
         />
       )}
 
@@ -303,6 +350,7 @@ const App: React.FC = () => {
                 </svg>
             </div>
             <h1 className="text-2xl font-logo tg-text font-black ml-1">Plusyx</h1>
+            {/* Индикатор облака (декор) */}
             <span className="text-[10px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded font-bold border border-blue-500/30">CLOUD</span>
         </div>
         <div className="flex gap-2 relative">
@@ -386,9 +434,23 @@ const App: React.FC = () => {
                 <div className="w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto mb-2">
                     <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
                 </div>
-                <h2 className="text-xl font-black tg-text text-center uppercase tracking-widest leading-tight">Удалить?</h2>
+                <h2 className="text-xl font-black tg-text text-center uppercase tracking-widest leading-tight">
+                  {taskToDelete ? 'Удалить задачу?' : 'Удалить?'}
+                </h2>
                 <div className="flex flex-col gap-3">
-                    <button onClick={handleDeleteConfirm} className="w-full py-4 bg-red-500 text-white rounded-2xl font-bold shadow-lg shadow-red-500/20 active:scale-95 transition-all">Да, удалить</button>
+                    <button 
+                      onClick={() => { 
+                        if (taskToDelete) { handleDeleteTaskConfirm(); } 
+                        else {
+                          setHabits(prev => prev.filter(h => h.id !== habitToDelete));
+                          setAntiHabits(prev => prev.filter(h => h.id !== habitToDelete));
+                          setHabitToDelete(null);
+                        }
+                      }} 
+                      className="w-full py-4 bg-red-500 text-white rounded-2xl font-bold shadow-lg shadow-red-500/20 active:scale-95 transition-all"
+                    >
+                      Да, удалить
+                    </button>
                     <button onClick={() => { setTaskToDelete(null); setHabitToDelete(null); }} className="w-full py-4 tg-secondary-bg tg-text rounded-2xl font-bold active:scale-95 transition-all">Отмена</button>
                 </div>
             </div>
