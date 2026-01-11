@@ -257,7 +257,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
       e.stopPropagation();
   };
 
-  // 🔥 НОВАЯ ФУНКЦИЯ ДЛЯ ОТРИСОВКИ ЧЕК-ЛИСТОВ (KAITEN STYLE) 🔥
+  // 🔥 KAITEN STYLE CHECKLISTS 🔥
   const renderChecklists = (task: Task) => {
     if (!task.checklists || task.checklists.length === 0) return null;
 
@@ -400,7 +400,10 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
           
           <div className="flex flex-col gap-4 flex-1 pb-24 min-h-[500px]">
             {tasks.filter(t => t.columnId === column.id).map(task => {
-              const hasCover = !!task.coverData;
+              // 🔥 УНИВЕРСАЛЬНАЯ ОБЛОЖКА: Ищем в coverData (новое), если нет - в fileData (старое)
+              const activeCover = task.coverData || task.fileData;
+              const hasCover = !!activeCover;
+              
               const prevCol = index > 0 ? columns[index - 1] : null;
               const nextCol = index < columns.length - 1 ? columns[index + 1] : null;
 
@@ -409,6 +412,10 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
               const isCopying = copyingTaskId === task.id;
               const isDraggable = !isMenuOpen && !isCopying;
               // ------------------------------
+
+              // 🔥 СЧЕТЧИКИ ДЛЯ ИКОНОК 🔥
+              const filesCount = (task.files?.length || 0) + (task.fileName ? 1 : 0);
+              const commentsCount = task.comments?.length || 0;
 
               return (
                 <div key={task.id} className="flex flex-col gap-2"> 
@@ -444,7 +451,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
 
                     {hasCover && (
                       <>
-                        <img src={task.coverData} className="absolute inset-0 w-full h-full object-cover z-0" style={{ objectPosition: `50% ${task.coverPosition ?? 50}%` }} />
+                        <img src={activeCover} className="absolute inset-0 w-full h-full object-cover z-0" style={{ objectPosition: `50% ${task.coverPosition ?? 50}%` }} />
                         <div className="absolute inset-0 z-[1]" style={{ backgroundColor: `rgba(0,0,0,${(task.coverIntensity ?? 60) / 100})` }} />
                       </>
                     )}
@@ -511,14 +518,36 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                         {/* 🔥 РЕНДЕРИНГ ЧЕК-ЛИСТОВ ВМЕСТО ОДНОЙ ПОЛОСКИ 🔥 */}
                         {renderChecklists(task)}
 
-                        <div className="flex items-center justify-between mt-auto">
-                            <div className="flex flex-col gap-2 flex-1">
+                        <div className="flex items-center justify-between mt-auto pt-2">
+                            {/* ЛЕВАЯ ЧАСТЬ: ТАЙМЕР + ИКОНКИ (СКРЕПКА, КОММЕНТ) */}
+                            <div className="flex flex-col gap-1.5 flex-1">
                                 {task.date && (
                                    <TaskTimer task={task} hasCover={hasCover} />
                                 )}
+                                
+                                {/* 🔥 БЛОК ИКОНОК 🔥 */}
+                                {(filesCount > 0 || commentsCount > 0) && (
+                                   <div className="flex items-center gap-2">
+                                      {/* Скрепка */}
+                                      {filesCount > 0 && (
+                                        <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md ${hasCover ? 'bg-black/40 text-white/90' : 'bg-black/5 text-gray-500'}`}>
+                                           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="shrink-0"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                                           <span className="text-[9px] font-bold">{filesCount}</span>
+                                        </div>
+                                      )}
+                                      
+                                      {/* Комментарий */}
+                                      {commentsCount > 0 && (
+                                        <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md ${hasCover ? 'bg-black/40 text-white/90' : 'bg-black/5 text-gray-500'}`}>
+                                           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="shrink-0"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                                           <span className="text-[9px] font-bold">{commentsCount}</span>
+                                        </div>
+                                      )}
+                                   </div>
+                                )}
                             </div>
 
-                            <div className="flex gap-1.5 ml-2">
+                            <div className="flex gap-1.5 ml-2 self-end">
                                 {prevCol && (
                                   <button 
                                     onClick={e => { stopProp(e); handleQuickMove(task.id, 'left', column.id); }}
