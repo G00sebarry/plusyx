@@ -45,19 +45,18 @@ export const deleteTaskFromDb = async (taskId: string) => {
   if (error) console.error('Ошибка удаления задачи:', error);
 };
 
-// --- 🔥 КОЛОНКИ (ИСПРАВЛЕНО: order -> position) ---
+// --- КОЛОНКИ ---
 export const fetchColumns = async (userId: string): Promise<Column[]> => {
   const { data, error } = await supabase
     .from('columns')
     .select('*')
     .eq('user_id', userId)
-    .order('position', { ascending: true }); // Сортируем по position
+    .order('position', { ascending: true });
 
   if (error) {
     console.error('Ошибка загрузки колонок:', error);
     return [];
   }
-  
   return data as Column[];
 };
 
@@ -67,22 +66,35 @@ export const saveColumnsToDb = async (columns: Column[], userId: string) => {
     user_id: userId,
     title: col.title,
     type: col.type,
-    position: index // Сохраняем как position
+    position: index
   }));
 
   const { error } = await supabase.from('columns').upsert(updates);
   if (error) console.error('Ошибка сохранения колонок:', error);
 };
 
-// --- ПРИВЫЧКИ ---
+// --- 🔥 ПРИВЫЧКИ (ИСПРАВЛЕНО: targetValue -> target_value) ---
 export const fetchHabits = async (userId: string): Promise<Habit[]> => {
   const { data, error } = await supabase.from('habits').select('*').eq('user_id', userId).order('created_at', { ascending: false });
   if (error) { console.error(error); return []; }
-  return data as Habit[];
+  
+  // Переводим с языка Базы на язык React
+  return data.map((h: any) => ({
+    ...h,
+    targetValue: h.target_value // 👈 Важный момент
+  })) as Habit[];
 };
 
 export const saveHabitToDb = async (habit: Habit, userId: string) => {
-  const { error } = await supabase.from('habits').upsert({ ...habit, user_id: userId });
+  // Переводим с языка React на язык Базы
+  const { targetValue, ...rest } = habit;
+  const dbHabit = {
+    ...rest,
+    target_value: targetValue, // 👈 Важный момент
+    user_id: userId
+  };
+
+  const { error } = await supabase.from('habits').upsert(dbHabit);
   if (error) console.error(error);
 };
 
@@ -91,15 +103,30 @@ export const deleteHabitFromDb = async (id: string) => {
   if (error) console.error(error);
 };
 
-// --- АНТИ-ПРИВЫЧКИ ---
+// --- 🔥 АНТИ-ПРИВЫЧКИ (ИСПРАВЛЕНО: startDate, longestStreak) ---
 export const fetchAntiHabits = async (userId: string): Promise<AntiHabit[]> => {
   const { data, error } = await supabase.from('antihabits').select('*').eq('user_id', userId).order('created_at', { ascending: false });
   if (error) { console.error(error); return []; }
-  return data as AntiHabit[];
+  
+  // Переводим с языка Базы на язык React
+  return data.map((h: any) => ({
+    ...h,
+    startDate: h.start_date,       // 👈
+    longestStreak: h.longest_streak // 👈
+  })) as AntiHabit[];
 };
 
 export const saveAntiHabitToDb = async (habit: AntiHabit, userId: string) => {
-  const { error } = await supabase.from('antihabits').upsert({ ...habit, user_id: userId });
+  // Переводим с языка React на язык Базы
+  const { startDate, longestStreak, ...rest } = habit;
+  const dbHabit = {
+    ...rest,
+    start_date: startDate,         // 👈
+    longest_streak: longestStreak, // 👈
+    user_id: userId
+  };
+
+  const { error } = await supabase.from('antihabits').upsert(dbHabit);
   if (error) console.error(error);
 };
 
