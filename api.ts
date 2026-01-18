@@ -31,12 +31,18 @@ export const saveTasksOrderToDb = async (tasks: Task[], userId: string) => {
 };
 
 export const deleteTaskFromDb = async (taskId: string) => {
-  await supabase.from('tasks').delete().eq('id', taskId);
+  const { error } = await supabase.from('tasks').delete().eq('id', taskId);
+  if (error) console.error('Ошибка удаления задачи:', error);
 };
 
 // --- КОЛОНКИ ---
 export const fetchColumns = async (userId: string): Promise<Column[]> => {
-  const { data, error } = await supabase.from('columns').select('*').eq('user_id', userId).order('position', { ascending: true });
+  const { data, error } = await supabase
+    .from('columns')
+    .select('*')
+    .eq('user_id', userId)
+    .order('position', { ascending: true });
+
   if (error) { console.error('Error fetching columns:', error); return []; }
   return data as Column[];
 };
@@ -67,33 +73,33 @@ export const deleteHabitFromDb = async (id: string) => {
   await supabase.from('habits').delete().eq('id', id);
 };
 
-// --- 🔥 АНТИ-ПРИВЫЧКИ (ПОЛНЫЙ МАППИНГ) ---
+// --- АНТИ-ПРИВЫЧКИ ---
 export const fetchAntiHabits = async (userId: string): Promise<AntiHabit[]> => {
   const { data, error } = await supabase.from('antihabits').select('*').eq('user_id', userId).order('created_at', { ascending: false });
   if (error) { console.error("Fetch Error:", error); return []; }
   
-  // Переводим Snake_case (База) -> CamelCase (React)
+  // Маппинг (База -> React)
   return data.map((h: any) => ({
     ...h,
     startDate: h.start_date,
     longestStreak: h.longest_streak,
-    fileData: h.file_data,            // 👈 Картинка
-    coverPosition: h.cover_position,  // 👈 Позиция
-    coverIntensity: h.cover_intensity // 👈 Затемнение
+    fileData: h.file_data,            
+    coverPosition: h.cover_position,  
+    coverIntensity: h.cover_intensity 
   })) as AntiHabit[];
 };
 
 export const saveAntiHabitToDb = async (habit: AntiHabit, userId: string) => {
-  // Переводим CamelCase (React) -> Snake_case (База)
+  // Маппинг (React -> База)
   const { startDate, longestStreak, fileData, coverPosition, coverIntensity, ...rest } = habit;
   
   const dbHabit = {
     ...rest,
     start_date: startDate,
     longest_streak: longestStreak,
-    file_data: fileData,            // 👈 Картинка
-    cover_position: coverPosition,  // 👈 Позиция
-    cover_intensity: coverIntensity,// 👈 Затемнение
+    file_data: fileData,            
+    cover_position: coverPosition,  
+    cover_intensity: coverIntensity,
     user_id: userId
   };
 
@@ -106,4 +112,29 @@ export const saveAntiHabitToDb = async (habit: AntiHabit, userId: string) => {
 
 export const deleteAntiHabitFromDb = async (id: string) => {
   await supabase.from('antihabits').delete().eq('id', id);
+};
+
+// --- ☁️ ЗАГРУЗКА ФАЙЛОВ (STORAGE) ---
+export const uploadImage = async (file: File): Promise<string | null> => {
+  try {
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
+    const filePath = `${fileName}`;
+
+    const { data, error } = await supabase.storage
+      .from('covers')
+      .upload(filePath, file);
+
+    if (error) throw error;
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('covers')
+      .getPublicUrl(filePath);
+
+    return publicUrl;
+  } catch (error) {
+    console.error('Ошибка загрузки файла:', error);
+    alert('Не удалось загрузить изображение. Попробуйте файл поменьше.');
+    return null;
+  }
 };
