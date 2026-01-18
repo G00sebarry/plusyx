@@ -10,7 +10,7 @@ import { Task, ViewType, Habit, Column, AntiHabit } from './types';
 
 // 🔥 ИМПОРТ ФУНКЦИЙ API
 import { 
-  fetchTasks, fetchColumns, saveTaskToDb, deleteTaskFromDb, saveColumnsToDb,
+  fetchTasks, fetchColumns, saveTaskToDb, deleteTaskFromDb, saveColumnsToDb, saveTasksOrderToDb, // <--- ДОБАВИЛ СЮДА
   fetchHabits, saveHabitToDb, deleteHabitFromDb,
   fetchAntiHabits, saveAntiHabitToDb, deleteAntiHabitFromDb
 } from './api';
@@ -33,14 +33,11 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
 
   // --- 🆔 АВТОРИЗАЦИЯ ---
-  // Определяем ID пользователя один раз при запуске
   const [userId] = useState<string>(() => {
     const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
-    // Если есть ID от Телеграма - используем его
     if (tgUser && tgUser.id) {
         return String(tgUser.id);
     }
-    // Если мы тестируем в браузере - используем тестовый ID
     return 'test-browser-user';
   });
 
@@ -71,12 +68,11 @@ const App: React.FC = () => {
   const [wallpaperPosition, setWallpaperPosition] = useState<number>(() => Number(localStorage.getItem('plusyx_wallpaper_position')) || 50);
   const wallpaperInputRef = useRef<HTMLInputElement>(null);
 
-  // --- 🔥 ЗАГРУЗКА (ТЕПЕРЬ С USER ID) ---
+  // --- 🔥 ЗАГРУЗКА ---
   useEffect(() => {
     const initData = async () => {
       setIsLoading(true);
       try {
-        // Передаем userId во все функции загрузки
         const [dbTasks, dbColumns, dbHabits, dbAntiHabits] = await Promise.all([
            fetchTasks(userId), 
            fetchColumns(userId), 
@@ -89,7 +85,7 @@ const App: React.FC = () => {
         setAntiHabits(dbAntiHabits);
         
         if (dbColumns && dbColumns.length > 0) setColumns(dbColumns);
-        else await saveColumnsToDb(DEFAULT_COLUMNS, userId); // Сохраняем дефолтные для этого юзера
+        else await saveColumnsToDb(DEFAULT_COLUMNS, userId);
 
       } catch (e) { console.error("Critical Init Error:", e); } 
       finally { setIsLoading(false); }
@@ -116,75 +112,120 @@ const App: React.FC = () => {
   }, [view]);
 
   // --- TASKS ---
+  
+  // 🔥 ОБНОВЛЕНО: Добавление задачи с учетом позиции
   const handleAddTask = async (taskData: Omit<Task, 'id'>) => {
     let cId = taskData.columnId;
     if (!cId) { const col = columns.find(c => c.type === taskData.status) || columns[0]; cId = col?.id || 'col-todo'; }
-    const newTask: Task = { ...taskData, id: Math.random().toString(36).substr(2, 9), columnId: cId };
-    setTasks(prev => [newTask, ...prev]);
+    
+    // Находим позицию: берем максимальную в колонке и добавляем 1000
+    const columnTasks = tasks.filter(t => t.columnId === cId);
+    const maxPos = columnTasks.length > 0 ? Math.max(...columnTasks.map(t => t.position || 0)) : 0;
+
+    const newTask: Task = { 
+      ...taskData, 
+      id: Math.random().toString(36).substr(2, 9), 
+      columnId: cId,
+      position: maxPos + 1000 // Ставим в конец
+    };
+    
+    setTasks(prev => [...prev, newTask]); // Рендер потом сам отсортирует
     setIsTaskModalOpen(false);
     window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
-    await saveTaskToDb(newTask, userId); // 🔥 Передаем ID
+    await saveTaskToDb(newTask, userId);
   };
+
   const handleUpdateTask = async (updatedTask: Task) => {
     setTasks(prev => prev.map(t => t.id === updatedTask.id ? updatedTask : t));
     setIsTaskModalOpen(false); setEditingTask(undefined);
     window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('medium');
-    await saveTaskToDb(updatedTask, userId); // 🔥 Передаем ID
+    await saveTaskToDb(updatedTask, userId);
   };
+
+  // 🔥 ОБНОВЛЕНО: Перемещение с сохранением порядка!
   const handleMoveTask = async (id: string, targetColId: string, targetId?: string) => {
     const targetCol = columns.find(c => c.id === targetColId);
     if (!targetCol) return;
-    let taskToSave: Task | undefined;
+
     setTasks(prev => {
-      const res = [...prev];
-      const idx = res.findIndex(t => t.id === id);
-      if (idx === -1) return prev;
-      const [task] = res.splice(idx, 1);
-      task.columnId = targetColId; task.status = targetCol.type; 
-      taskToSave = task; 
-      if (targetId) { const tIdx = res.findIndex(t => t.id === targetId); res.splice(tIdx === -1 ? res.length : tIdx, 0, task); } 
-      else { res.push(task); }
-      return res;
+      const newTasks = [...prev];
+      const taskIndex = newTasks.findIndex(t => t.id === id);
+      if (taskIndex === -1) return prev;
+
+      // 1. Берем задачу
+      const [movedTask] = newTasks.splice(taskIndex, 1);
+      movedTask.columnId = targetColId;
+      movedTask.status = targetCol.type;
+
+      // 2. Вставляем в новое место
+      if (targetId) {
+        const targetIndex = newTasks.findIndex(t => t.id === targetId);
+        newTasks.splice(targetIndex === -1 ? newTasks.length : targetIndex, 0, movedTask);
+      } else {
+        newTasks.push(movedTask);
+      }
+
+      // 3. ПЕРЕСЧИТЫВАЕМ ПОРЯДОК В ЦЕЛЕВОЙ КОЛОНКЕ
+      const tasksInColumn = newTasks.filter(t => t.columnId === targetColId);
+      tasksInColumn.forEach((t, index) => {
+         t.position = index; // 0, 1, 2...
+      });
+
+      // 4. Сохраняем порядок в базу (фоном)
+      saveTasksOrderToDb(tasksInColumn, userId);
+
+      return newTasks;
     });
-    if (taskToSave) await saveTaskToDb(taskToSave, userId); // 🔥 Передаем ID
   };
+
   const handleCopyTask = async (originalTaskId: string, newTitle: string) => {
     const originalTask = tasks.find(t => t.id === originalTaskId);
     if (!originalTask) return;
     const newChecklists = originalTask.checklists.map(list => ({...list, id: Math.random().toString(36).substr(2, 9), items: list.items.map(item => ({...item, id: Math.random().toString(36).substr(2, 9)}))}));
-    const newTask: Task = { ...originalTask, id: Math.random().toString(36).substr(2, 9), title: newTitle, checklists: newChecklists, comments: [], files: [] };
+    
+    // Копию ставим чуть ниже оригинала по позиции
+    const newTask: Task = { 
+        ...originalTask, 
+        id: Math.random().toString(36).substr(2, 9), 
+        title: newTitle, 
+        checklists: newChecklists, 
+        comments: [], 
+        files: [],
+        position: (originalTask.position || 0) + 0.5 
+    };
+
     setTasks(prev => { const index = prev.findIndex(t => t.id === originalTaskId); if (index === -1) return [newTask, ...prev]; const newTasks = [...prev]; newTasks.splice(index + 1, 0, newTask); return newTasks; });
-    await saveTaskToDb(newTask, userId); // 🔥 Передаем ID
+    await saveTaskToDb(newTask, userId);
   };
 
   // --- HABITS ---
   const handleAddHabit = async (habitData: Habit) => {
     setHabits(prev => [habitData, ...prev]); setIsHabitModalOpen(false);
     window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
-    await saveHabitToDb(habitData, userId); // 🔥 Передаем ID
+    await saveHabitToDb(habitData, userId);
   };
   const handleUpdateHabit = async (updatedHabit: Habit) => {
     setHabits(prev => prev.map(h => h.id === updatedHabit.id ? updatedHabit : h));
     setIsHabitModalOpen(false); setEditingHabit(undefined);
-    await saveHabitToDb(updatedHabit, userId); // 🔥 Передаем ID
+    await saveHabitToDb(updatedHabit, userId);
   };
   const handleToggleHabit = async (id: string, date: string, value: number | boolean) => {
     let updatedHabit: Habit | undefined;
     setHabits(prev => prev.map(h => { if (h.id === id) { updatedHabit = { ...h, history: { ...h.history, [date]: value } }; return updatedHabit; } return h; }));
     window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
-    if (updatedHabit) await saveHabitToDb(updatedHabit, userId); // 🔥 Передаем ID
+    if (updatedHabit) await saveHabitToDb(updatedHabit, userId);
   };
 
   // --- ANTI HABITS ---
   const handleAddAntiHabit = async (habit: AntiHabit) => {
     setAntiHabits(prev => [habit, ...prev]); setIsAntiHabitModalOpen(false);
     window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
-    await saveAntiHabitToDb(habit, userId); // 🔥 Передаем ID
+    await saveAntiHabitToDb(habit, userId);
   };
   const handleUpdateAntiHabit = async (habit: AntiHabit) => {
     setAntiHabits(prev => prev.map(h => h.id === habit.id ? habit : h));
     setIsAntiHabitModalOpen(false); setEditingAntiHabit(undefined);
-    await saveAntiHabitToDb(habit, userId); // 🔥 Передаем ID
+    await saveAntiHabitToDb(habit, userId);
   };
   const handleRelapse = async (id: string) => {
     let updatedHabit: AntiHabit | undefined;
@@ -196,7 +237,7 @@ const App: React.FC = () => {
         } return h;
     }));
     window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('warning');
-    if (updatedHabit) await saveAntiHabitToDb(updatedHabit, userId); // 🔥 Передаем ID
+    if (updatedHabit) await saveAntiHabitToDb(updatedHabit, userId);
   };
 
   // --- DELETE ---

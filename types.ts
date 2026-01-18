@@ -46,7 +46,8 @@ export interface Task {
   status: TaskStatus;
   columnId?: string; // Привязка к конкретной колонке
   color?: string;
-  
+    // 🔥 ДОБАВИЛИ ЭТО ПОЛЕ
+  position: number;
   // Старые поля (оставляем, чтобы не крашилось при чтении старых задач)
   fileName?: string;
   fileData?: string;

@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Task, TaskStatus, TaskComment, Checklist, TaskFile } from '../types';
+
+import { Task, TaskStatus, TaskComment, Checklist, TaskFile, Column } from '../types'; // 🔥 Добавили Column
 
 interface TaskModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (task: any) => void;
   initialTask?: Task;
+  columns: Column[]; // 🔥 НАУЧИЛИ МОДАЛКУ ПРИНИМАТЬ КОЛОНКИ
 }
 
 const toLocalDateString = (date: Date) => {

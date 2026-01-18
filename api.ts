@@ -6,7 +6,9 @@ export const fetchTasks = async (userId: string): Promise<Task[]> => {
   const { data, error } = await supabase
     .from('tasks')
     .select('*')
-    .eq('user_id', userId) // 🔥 ФИЛЬТР: Берем только твои
+    .eq('user_id', userId)
+    // 🔥 ИЗМЕНЕНИЕ: Сортируем сначала по позиции, потом по дате (для старых)
+    .order('position', { ascending: true })
     .order('created_at', { ascending: true });
 
   if (error) { console.error('Ошибка задач:', error); return []; }
@@ -19,11 +21,22 @@ export const saveTaskToDb = async (task: Task, userId: string) => {
   if (error) console.error('Ошибка сохранения задачи:', error);
 };
 
+// 🔥 НОВАЯ ФУНКЦИЯ: Сохраняем сразу пачку задач (для сортировки)
+export const saveTasksOrderToDb = async (tasks: Task[], userId: string) => {
+  const updates = tasks.map(t => ({
+    ...t,
+    user_id: userId
+  }));
+  
+  const { error } = await supabase.from('tasks').upsert(updates);
+  if (error) console.error('Ошибка обновления порядка:', error);
+};
+
 export const deleteTaskFromDb = async (taskId: string) => {
-  // Удаляем только по ID задачи (ID уникален, так что тут user_id не обязателен, но можно добавить для безопасности)
   const { error } = await supabase.from('tasks').delete().eq('id', taskId);
   if (error) console.error('Ошибка удаления задачи:', error);
 };
+
 
 // --- КОЛОНКИ ---
 export const fetchColumns = async (userId: string): Promise<Column[]> => {
