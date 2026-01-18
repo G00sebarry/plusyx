@@ -16,6 +16,12 @@ const toLocalDateString = (date: Date) => {
   return `${y}-${m}-${d}`;
 };
 
+// --- 🔥 ХЕЛПЕР ДЛЯ ПОИСКА ССЫЛОК (НОВОЕ) ---
+const extractUrls = (text: string) => {
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  return text.match(urlRegex) || [];
+};
+
 type TaskBlockType = 'meta' | 'cover' | 'checklists' | 'files' | 'comments';
 
 const COLORS = ['slate', 'red', 'orange', 'green', 'blue', 'purple', 'pink'];
@@ -124,10 +130,16 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
   const [editingListId, setEditingListId] = useState<string | null>(null);
 
+  // 🔥 НОВОЕ: СТАТУС СОХРАНЕНИЯ
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   const coverInputRef = useRef<HTMLInputElement>(null);
 
+  // 🔥 ОБНОВЛЕННЫЙ USE EFFECT ДЛЯ ИНИЦИАЛИЗАЦИИ
   useEffect(() => {
-    if (initialTask) {
+    if (isOpen && initialTask) {
+      // Редактирование
       setTitle(initialTask.title || '');
       setDescription(initialTask.description || '');
       setDate(initialTask.date || toLocalDateString(new Date()));
@@ -136,15 +148,15 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
       setStatus(initialTask.status || 'todo');
       setColumnId(initialTask.columnId || columns.find(c => c.type === initialTask.status)?.id);
       setColor(initialTask.color || 'default');
-      
       setCoverData(initialTask.coverData || '');
       setCoverPosition(initialTask.coverPosition ?? 50);
       setCoverIntensity(initialTask.coverIntensity ?? 60);
       setFiles(initialTask.files || []);
-
       setChecklists(initialTask.checklists || [{ id: 'default', title: 'Чек-лист', items: [], hideCompleted: false }]);
       setComments(initialTask.comments || []);
-    } else {
+      setSaveStatus('saved');
+    } else if (isOpen && !initialTask) {
+      // Создание
       setTitle(''); setDescription(''); setDate(toLocalDateString(new Date())); setTime(''); setIsTimer(false);
       const defaultCol = columns[0];
       setStatus(defaultCol?.type || 'todo'); 
@@ -153,17 +165,39 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
       setCoverData(''); setCoverPosition(50); setCoverIntensity(60);
       setFiles([]); 
       setChecklists([{ id: 'default', title: 'Чек-лист', items: [], hideCompleted: false }]); setComments([]);
+      setSaveStatus('unsaved');
     }
-  }, [initialTask, isOpen, columns]);
+  }, [isOpen, initialTask?.id]); // Зависим только от ID, чтобы не сбрасывать форму при автосохранении
 
-  const handleSave = () => {
-    onSave({ 
-      ...(initialTask?.id && { id: initialTask.id }), 
-      title, description, date, time, isTimer, status, columnId, color, 
-      files,
-      coverData, coverPosition, coverIntensity,
-      checklists, comments 
-    });
+  // 🔥 ФУНКЦИЯ СБОРА ДАННЫХ (ЧТОБЫ НЕ ДУБЛИРОВАТЬ)
+  const getTaskData = () => ({
+    ...(initialTask?.id && { id: initialTask.id }), 
+    title, description, date, time, isTimer, status, columnId, color, 
+    files,
+    coverData, coverPosition, coverIntensity,
+    checklists, comments 
+  });
+
+  // 🔥 АВТОСОХРАНЕНИЕ (НОВОЕ)
+  useEffect(() => {
+    // Работает только если окно открыто и задача уже существует (не новая)
+    if (!isOpen || !initialTask?.id) return;
+
+    setSaveStatus('saving');
+
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+
+    saveTimeoutRef.current = setTimeout(() => {
+        onSave(getTaskData());
+        setSaveStatus('saved');
+    }, 1000); // Сохраняем через 1 секунду после последнего изменения
+
+    return () => { if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current); };
+  }, [title, description, date, time, isTimer, status, columnId, color, coverData, coverPosition, coverIntensity, checklists, comments]);
+
+  const handleManualSave = () => {
+    onSave(getTaskData());
+    onClose();
   };
 
   const handleBlockDragStart = (idx: number) => setDraggedBlock(idx);
@@ -212,7 +246,6 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
     setActiveMenuId(null);
   };
 
-  // --- 🔥 НОВАЯ ЛОГИКА КОММЕНТАРИЕВ ---
   const updateComment = (id: string, text: string) => {
     setComments(comments.map(c => c.id === id ? { ...c, text } : c));
   };
@@ -220,6 +253,9 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
   const deleteComment = (id: string) => {
     setComments(comments.filter(c => c.id !== id));
   };
+
+  // 🔥 ИЩЕМ ССЫЛКИ
+  const detectedLinks = extractUrls(description);
 
   const renderBlock = (type: TaskBlockType) => {
     switch (type) {
@@ -408,7 +444,6 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
           </div>
         );
 
-      // 🔥 ОБНОВЛЕННЫЙ БЛОК КОММЕНТАРИЕВ
       case 'comments':
         return (
           <div className="flex flex-col gap-3">
@@ -443,11 +478,24 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
 
   return (
     <div className="fixed inset-0 z-[200] flex items-end justify-center sm:items-center">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={handleManualSave} />
       <div className="relative w-full max-w-lg tg-bg rounded-t-[40px] sm:rounded-[32px] shadow-2xl p-6 flex flex-col gap-5 animate-in slide-in-from-bottom duration-300 max-h-[92vh] overflow-y-auto no-scrollbar pb-12">
         <div className="flex justify-between items-center mb-1">
-          <h2 className="text-xl font-black tg-text tracking-tighter uppercase">{initialTask?.id ? 'Правка' : 'Создать'}</h2>
-          <button onClick={onClose} className="w-10 h-10 flex items-center justify-center tg-secondary-bg tg-text rounded-full font-light text-2xl">×</button>
+          <div className="flex items-center gap-3">
+              <h2 className="text-xl font-black tg-text tracking-tighter uppercase">{initialTask?.id ? 'Правка' : 'Создать'}</h2>
+              {/* 🔥 ИНДИКАТОР АВТОСОХРАНЕНИЯ (только для существующих) */}
+              {initialTask?.id && (
+                  <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full transition-all duration-300 ${saveStatus === 'saving' ? 'bg-blue-500/10 text-blue-500' : 'bg-green-500/10 text-green-500'}`}>
+                      {saveStatus === 'saving' ? (
+                          <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                      )}
+                      <span className="text-[9px] font-black uppercase tracking-wider">{saveStatus === 'saving' ? 'Saving...' : 'Saved'}</span>
+                  </div>
+              )}
+          </div>
+          <button onClick={handleManualSave} className="w-10 h-10 flex items-center justify-center tg-secondary-bg tg-text rounded-full font-light text-2xl active:scale-95 transition-all">×</button>
         </div>
         <div className="flex flex-col gap-4">
           <DynamicTextarea 
@@ -458,13 +506,29 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
              isTitle={true}
              isOpen={isOpen}
           />
-          <DynamicTextarea 
-             value={description} 
-             onChange={setDescription} 
-             placeholder="Описание..."
-             className="w-full tg-secondary-bg p-4 rounded-2xl tg-text text-sm leading-relaxed placeholder:opacity-30 min-h-[80px]"
-             isOpen={isOpen}
-          />
+          
+          <div className="flex flex-col gap-2">
+             <DynamicTextarea 
+                value={description} 
+                onChange={setDescription} 
+                placeholder="Описание..."
+                className="w-full tg-secondary-bg p-4 rounded-2xl tg-text text-sm leading-relaxed placeholder:opacity-30 min-h-[80px]"
+                isOpen={isOpen}
+             />
+             
+             {/* 🔥 ЧИПЫ ДЛЯ ССЫЛОК (НОВОЕ) */}
+             {detectedLinks.length > 0 && (
+                 <div className="flex flex-wrap gap-2 px-1">
+                     {detectedLinks.map((url, i) => (
+                         <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-500 px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all border border-blue-500/20 active:scale-95">
+                             <span>🔗</span>
+                             <span className="max-w-[150px] truncate">{url.replace(/^https?:\/\/(www\.)?/, '')}</span>
+                             <span>↗</span>
+                         </a>
+                     ))}
+                 </div>
+             )}
+          </div>
         </div>
         <div className="flex flex-col gap-6">
           {blocksOrder.map((block, idx) => (
@@ -483,9 +547,13 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
             </div>
           ))}
         </div>
-        <button onClick={handleSave} className="w-full py-5 rounded-[28px] bg-[var(--tg-theme-button-color)] text-white font-black text-lg shadow-2xl active:scale-95 transition-all mt-4 uppercase tracking-widest">
-          {initialTask?.id ? 'Сохранить' : 'Готово'}
-        </button>
+        
+        {/* 🔥 КНОПКА "СОХРАНИТЬ" ТОЛЬКО ДЛЯ НОВЫХ ЗАДАЧ */}
+        {!initialTask?.id ? (
+             <button onClick={handleManualSave} className="w-full py-5 rounded-[28px] bg-[var(--tg-theme-button-color)] text-white font-black text-lg shadow-2xl active:scale-95 transition-all mt-4 uppercase tracking-widest">Создать</button>
+        ) : (
+             <div className="h-4" /> // Пустое место для скролла
+        )}
       </div>
       {(isColorPickerOpen || activeMenuId) && <div className="fixed inset-0 z-[205]" onClick={() => { setIsColorPickerOpen(false); setActiveMenuId(null); }} />}
     </div>
