@@ -10,7 +10,7 @@ import { Task, ViewType, Habit, Column, AntiHabit } from './types';
 
 // 🔥 ИМПОРТ ФУНКЦИЙ API
 import { 
-  fetchTasks, fetchColumns, saveTaskToDb, deleteTaskFromDb, saveColumnsToDb, saveTasksOrderToDb, // <--- ДОБАВИЛ СЮДА
+  fetchTasks, fetchColumns, saveTaskToDb, deleteTaskFromDb, saveColumnsToDb, saveTasksOrderToDb,
   fetchHabits, saveHabitToDb, deleteHabitFromDb,
   fetchAntiHabits, saveAntiHabitToDb, deleteAntiHabitFromDb
 } from './api';
@@ -113,12 +113,10 @@ const App: React.FC = () => {
 
   // --- TASKS ---
   
-  // 🔥 ОБНОВЛЕНО: Добавление задачи с учетом позиции
   const handleAddTask = async (taskData: Omit<Task, 'id'>) => {
     let cId = taskData.columnId;
     if (!cId) { const col = columns.find(c => c.type === taskData.status) || columns[0]; cId = col?.id || 'col-todo'; }
     
-    // Находим позицию: берем максимальную в колонке и добавляем 1000
     const columnTasks = tasks.filter(t => t.columnId === cId);
     const maxPos = columnTasks.length > 0 ? Math.max(...columnTasks.map(t => t.position || 0)) : 0;
 
@@ -126,23 +124,25 @@ const App: React.FC = () => {
       ...taskData, 
       id: Math.random().toString(36).substr(2, 9), 
       columnId: cId,
-      position: maxPos + 1000 // Ставим в конец
+      position: maxPos + 1000 
     };
     
-    setTasks(prev => [...prev, newTask]); // Рендер потом сам отсортирует
-    setIsTaskModalOpen(false);
+    setTasks(prev => [...prev, newTask]); 
+    setIsTaskModalOpen(false); // Закрываем только при СОЗДАНИИ
     window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
     await saveTaskToDb(newTask, userId);
   };
 
+  // 🔥🔥🔥 ИСПРАВЛЕННАЯ ФУНКЦИЯ 🔥🔥🔥
   const handleUpdateTask = async (updatedTask: Task) => {
     setTasks(prev => prev.map(t => t.id === updatedTask.id ? updatedTask : t));
-    setIsTaskModalOpen(false); setEditingTask(undefined);
-    window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('medium');
+    
+    // МЫ УБРАЛИ ЗДЕСЬ setIsTaskModalOpen(false)
+    // ТЕПЕРЬ ОКНО НЕ ЗАКРЫВАЕТСЯ ПРИ АВТОСОХРАНЕНИИ
+    
     await saveTaskToDb(updatedTask, userId);
   };
 
-  // 🔥 ОБНОВЛЕНО: Перемещение с сохранением порядка!
   const handleMoveTask = async (id: string, targetColId: string, targetId?: string) => {
     const targetCol = columns.find(c => c.id === targetColId);
     if (!targetCol) return;
@@ -152,12 +152,10 @@ const App: React.FC = () => {
       const taskIndex = newTasks.findIndex(t => t.id === id);
       if (taskIndex === -1) return prev;
 
-      // 1. Берем задачу
       const [movedTask] = newTasks.splice(taskIndex, 1);
       movedTask.columnId = targetColId;
       movedTask.status = targetCol.type;
 
-      // 2. Вставляем в новое место
       if (targetId) {
         const targetIndex = newTasks.findIndex(t => t.id === targetId);
         newTasks.splice(targetIndex === -1 ? newTasks.length : targetIndex, 0, movedTask);
@@ -165,15 +163,10 @@ const App: React.FC = () => {
         newTasks.push(movedTask);
       }
 
-      // 3. ПЕРЕСЧИТЫВАЕМ ПОРЯДОК В ЦЕЛЕВОЙ КОЛОНКЕ
       const tasksInColumn = newTasks.filter(t => t.columnId === targetColId);
-      tasksInColumn.forEach((t, index) => {
-         t.position = index; // 0, 1, 2...
-      });
+      tasksInColumn.forEach((t, index) => { t.position = index; });
 
-      // 4. Сохраняем порядок в базу (фоном)
       saveTasksOrderToDb(tasksInColumn, userId);
-
       return newTasks;
     });
   };
@@ -183,7 +176,6 @@ const App: React.FC = () => {
     if (!originalTask) return;
     const newChecklists = originalTask.checklists.map(list => ({...list, id: Math.random().toString(36).substr(2, 9), items: list.items.map(item => ({...item, id: Math.random().toString(36).substr(2, 9)}))}));
     
-    // Копию ставим чуть ниже оригинала по позиции
     const newTask: Task = { 
         ...originalTask, 
         id: Math.random().toString(36).substr(2, 9), 
@@ -286,7 +278,19 @@ const App: React.FC = () => {
         {view === 'tracker' && <HabitTracker habits={habits} antiHabits={antiHabits} onToggleHabit={handleToggleHabit} onEditHabit={(h) => { setEditingHabit(h); setIsHabitModalOpen(true); }} onDeleteHabit={(id) => setHabitToDelete(id)} onAddHabit={() => { setEditingHabit(undefined); setIsHabitModalOpen(true); }} onReorderHabits={setHabits} onAddAntiHabit={() => { setEditingAntiHabit(undefined); setIsAntiHabitModalOpen(true); }} onEditAntiHabit={(h) => { setEditingAntiHabit(h); setIsAntiHabitModalOpen(true); }} onDeleteAntiHabit={(id) => setHabitToDelete(id)} onRelapseAntiHabit={handleRelapse} />}
       </main>
       <BottomNav activeView={view} onViewChange={setView} />
-      <TaskModal isOpen={isTaskModalOpen || (!!editingTask && !!editingTask.id)} onClose={() => { setIsTaskModalOpen(false); setEditingTask(undefined); }} onSave={editingTask?.id ? handleUpdateTask : handleAddTask} initialTask={editingTask} columns={columns} />
+      
+      {/* 
+         ЗДЕСЬ УПРАВЛЕНИЕ ЗАКРЫТИЕМ
+         onClose вызывается только когда ты жмешь крестик или фон 
+      */}
+      <TaskModal 
+        isOpen={isTaskModalOpen || (!!editingTask && !!editingTask.id)} 
+        onClose={() => { setIsTaskModalOpen(false); setEditingTask(undefined); }} 
+        onSave={editingTask?.id ? handleUpdateTask : handleAddTask} 
+        initialTask={editingTask} 
+        columns={columns} 
+      />
+
       <HabitModal isOpen={isHabitModalOpen || (!!editingHabit && !!editingHabit.id)} onClose={() => { setIsHabitModalOpen(false); setEditingHabit(undefined); }} onSave={editingHabit?.id ? handleUpdateHabit : handleAddHabit} initialHabit={editingHabit} />
       <AntiHabitModal isOpen={isAntiHabitModalOpen || (!!editingAntiHabit && !!editingAntiHabit.id)} onClose={() => { setIsAntiHabitModalOpen(false); setEditingAntiHabit(undefined); }} onSave={editingAntiHabit?.id ? handleUpdateAntiHabit : handleAddAntiHabit} initialHabit={editingAntiHabit} />
       {(taskToDelete || habitToDelete) && (<div className="fixed inset-0 z-[300] flex items-center justify-center p-6"><div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => { setTaskToDelete(null); setHabitToDelete(null); }} /><div className="relative w-full max-w-xs tg-bg rounded-[32px] p-8 shadow-2xl flex flex-col gap-6 animate-in zoom-in duration-200"><div className="w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto mb-2"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg></div><h2 className="text-xl font-black tg-text text-center uppercase tracking-widest leading-tight">{taskToDelete ? 'Удалить задачу?' : 'Удалить?'}</h2><div className="flex flex-col gap-3"><button onClick={handleDeleteConfirm} className="w-full py-4 bg-red-500 text-white rounded-2xl font-bold shadow-lg shadow-red-500/20 active:scale-95 transition-all">Да, удалить</button><button onClick={() => { setTaskToDelete(null); setHabitToDelete(null); }} className="w-full py-4 tg-secondary-bg tg-text rounded-2xl font-bold active:scale-95 transition-all">Отмена</button></div></div></div>)}
