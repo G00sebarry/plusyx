@@ -152,7 +152,10 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   const [newColTitle, setNewColTitle] = useState('');
   
   const [activeMenuColId, setActiveMenuColId] = useState<string | null>(null);
+  
+  // 🔥 ЛОКАЛЬНОЕ СОСТОЯНИЕ ДЛЯ РЕДАКТИРОВАНИЯ НАЗВАНИЯ КОЛОНКИ
   const [editingColId, setEditingColId] = useState<string | null>(null);
+  const [editingColTitle, setEditingColTitle] = useState('');
 
   const [activeTaskMenuId, setActiveTaskMenuId] = useState<string | null>(null);
   const [copyingTaskId, setCopyingTaskId] = useState<string | null>(null);
@@ -160,15 +163,34 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
 
   const handleAddColumn = () => {
     if (!newColTitle.trim()) { setIsAddingColumn(false); return; }
+    
+    // Создаем новую колонку
     const newCol: Column = {
       id: `col-${Math.random().toString(36).substr(2, 9)}`,
-      title: newColTitle,
+      title: newColTitle.trim(),
       type: 'todo' 
     };
+    
+    // Обновляем список (это триггерит сохранение в App.tsx)
     onUpdateColumns([...columns, newCol]);
+    
     setNewColTitle('');
     setIsAddingColumn(false);
     window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
+  };
+
+  const startEditingColumn = (col: Column) => {
+    setEditingColId(col.id);
+    setEditingColTitle(col.title);
+  };
+
+  // 🔥 СОХРАНЯЕМ НАЗВАНИЕ ТОЛЬКО ПРИ ЗАВЕРШЕНИИ (BLUR или ENTER)
+  const saveColumnTitle = () => {
+    if (editingColId && editingColTitle.trim()) {
+        const updatedColumns = columns.map(c => c.id === editingColId ? { ...c, title: editingColTitle.trim() } : c);
+        onUpdateColumns(updatedColumns);
+    }
+    setEditingColId(null);
   };
 
   const handleDeleteColumn = (colId: string) => {
@@ -252,12 +274,10 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
     target.style.transform = 'scale(1)';
   };
 
-  // Этот метод мы используем, чтобы остановить всплытие на кнопках
   const stopProp = (e: React.BaseSyntheticEvent) => {
       e.stopPropagation();
   };
 
-  // 🔥 KAITEN STYLE CHECKLISTS 🔥
   const renderChecklists = (task: Task) => {
     if (!task.checklists || task.checklists.length === 0) return null;
 
@@ -273,22 +293,15 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
 
           return (
             <div key={list.id} className="relative h-6 rounded-md overflow-hidden bg-black/30 border border-white/5 w-full group">
-              {/* Фон-прогресс бар */}
               <div 
                 className={`absolute left-0 top-0 bottom-0 transition-all duration-300 ${isComplete ? 'bg-green-500/20' : 'bg-white/10'}`} 
                 style={{ width: `${percent}%` }}
               />
-
-              {/* Контент строки */}
               <div className="absolute inset-0 flex justify-between items-center px-2">
-                 {/* Название чек-листа */}
                  <span className={`text-[9px] font-bold truncate pr-2 ${isComplete ? 'text-white/50 line-through' : 'text-white/90'}`}>
                    {list.title}
                  </span>
-
-                 {/* Счетчики */}
                  <div className="flex items-center gap-1.5 shrink-0">
-                    {/* Если готово - галочка */}
                     {isComplete ? (
                         <div className="flex items-center gap-1">
                             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" className="text-green-400">
@@ -329,13 +342,13 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
               <input 
                 autoFocus 
                 className="bg-transparent tg-text font-black text-[11px] uppercase tracking-[0.2em] outline-none border-b border-blue-500 w-full mr-4"
-                value={column.title}
-                onChange={e => onUpdateColumns(columns.map(c => c.id === column.id ? { ...c, title: e.target.value } : c))}
-                onBlur={() => setEditingColId(null)}
-                onKeyDown={e => e.key === 'Enter' && setEditingColId(null)}
+                value={editingColTitle}
+                onChange={e => setEditingColTitle(e.target.value)}
+                onBlur={saveColumnTitle}
+                onKeyDown={e => e.key === 'Enter' && saveColumnTitle()}
               />
             ) : (
-              <h2 onClick={() => setEditingColId(column.id)} className="text-[11px] font-black tg-text opacity-90 uppercase tracking-[0.2em] truncate mr-2 cursor-pointer">{column.title}</h2>
+              <h2 onClick={() => startEditingColumn(column)} className="text-[11px] font-black tg-text opacity-90 uppercase tracking-[0.2em] truncate mr-2 cursor-pointer">{column.title}</h2>
             )}
             
             <div className="flex items-center gap-2">
@@ -355,7 +368,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                   
                   {activeMenuColId === column.id && (
                     <div className="absolute right-0 top-10 w-48 tg-secondary-bg rounded-2xl shadow-2xl border border-gray-400/10 p-2 z-[70] animate-in fade-in zoom-in-95 duration-200">
-                        <button onClick={() => setEditingColId(column.id)} className="w-full text-left p-2.5 hover:bg-black/5 rounded-xl text-[9px] font-black uppercase tracking-widest tg-text">✏️ Переименовать</button>
+                        <button onClick={() => startEditingColumn(column)} className="w-full text-left p-2.5 hover:bg-black/5 rounded-xl text-[9px] font-black uppercase tracking-widest tg-text">✏️ Переименовать</button>
                         
                         <div className="my-1 border-t border-gray-400/5" />
                         <div className="px-2.5 py-1.5 text-[8px] font-black tg-hint uppercase">Позиция:</div>
@@ -400,20 +413,13 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
           
           <div className="flex flex-col gap-4 flex-1 pb-24 min-h-[500px]">
             {tasks.filter(t => t.columnId === column.id).map(task => {
-              // 🔥 УНИВЕРСАЛЬНАЯ ОБЛОЖКА: Ищем в coverData (новое), если нет - в fileData (старое)
               const activeCover = task.coverData || task.fileData;
               const hasCover = !!activeCover;
-              
               const prevCol = index > 0 ? columns[index - 1] : null;
               const nextCol = index < columns.length - 1 ? columns[index + 1] : null;
-
-              // --- ЛОГИКА БЛОКИРОВКИ DRAG ---
               const isMenuOpen = activeTaskMenuId === task.id;
               const isCopying = copyingTaskId === task.id;
               const isDraggable = !isMenuOpen && !isCopying;
-              // ------------------------------
-
-              // 🔥 СЧЕТЧИКИ ДЛЯ ИКОНОК 🔥
               const filesCount = (task.files?.length || 0) + (task.fileName ? 1 : 0);
               const commentsCount = task.comments?.length || 0;
 
@@ -444,7 +450,6 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                         else onEditTask(task);
                     }}
                   >
-                    {/* МЕТКА */}
                     {task.color && task.color !== 'default' && (
                        <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${COLOR_MAP[task.color] || 'bg-blue-500'} z-20`} />
                     )}
@@ -460,12 +465,10 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                         <div className="flex justify-between items-start gap-2">
                           <h3 className={`font-bold text-[15px] leading-tight flex-1 tracking-tight ${hasCover ? 'text-white' : 'tg-text'}`}>{task.title}</h3>
                           
-                          {/* --- КНОПКА МЕНЮ ЗАДАЧИ (ТРИ ТОЧКИ) --- */}
                           <div className="relative">
                             <button 
                                 onClick={e => { 
                                     e.stopPropagation(); 
-                                    // Переключаем меню и сразу запрещаем драг через перерисовку родителя
                                     setActiveTaskMenuId(activeTaskMenuId === task.id ? null : task.id); 
                                 }}
                                 onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); }} 
@@ -479,7 +482,6 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
                             </button>
 
-                            {/* Выпадающее меню */}
                             {activeTaskMenuId === task.id && (
                                 <div 
                                     className="absolute right-0 top-8 w-44 bg-[#1e1e1e] rounded-xl shadow-2xl border border-gray-600/20 p-1.5 z-[100] animate-in fade-in zoom-in-95 duration-200 cursor-default" 
@@ -510,33 +512,24 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                                 </div>
                             )}
                           </div>
-                          {/* -------------------------------------- */}
-
                         </div>
                         {task.description && <p className={`text-[11px] line-clamp-2 italic ${hasCover ? 'text-white/60' : 'tg-hint opacity-70'}`}>{task.description}</p>}
                         
-                        {/* 🔥 РЕНДЕРИНГ ЧЕК-ЛИСТОВ ВМЕСТО ОДНОЙ ПОЛОСКИ 🔥 */}
                         {renderChecklists(task)}
 
                         <div className="flex items-center justify-between mt-auto pt-2">
-                            {/* ЛЕВАЯ ЧАСТЬ: ТАЙМЕР + ИКОНКИ (СКРЕПКА, КОММЕНТ) */}
                             <div className="flex flex-col gap-1.5 flex-1">
                                 {task.date && (
                                    <TaskTimer task={task} hasCover={hasCover} />
                                 )}
-                                
-                                {/* 🔥 БЛОК ИКОНОК 🔥 */}
                                 {(filesCount > 0 || commentsCount > 0) && (
                                    <div className="flex items-center gap-2">
-                                      {/* Скрепка */}
                                       {filesCount > 0 && (
                                         <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md ${hasCover ? 'bg-black/40 text-white/90' : 'bg-black/5 text-gray-500'}`}>
                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="shrink-0"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
                                            <span className="text-[9px] font-bold">{filesCount}</span>
                                         </div>
                                       )}
-                                      
-                                      {/* Комментарий */}
                                       {commentsCount > 0 && (
                                         <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md ${hasCover ? 'bg-black/40 text-white/90' : 'bg-black/5 text-gray-500'}`}>
                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="shrink-0"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
@@ -576,7 +569,6 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                   </div>
                 </div>
 
-                {/* --- ФОРМА СОЗДАНИЯ КОПИИ --- */}
                 {copyingTaskId === task.id && (
                     <div 
                         className="bg-[#1e1e1e] p-4 rounded-[24px] border border-l-4 border-l-[var(--tg-theme-button-color)] border-gray-600/30 animate-in slide-in-from-top-2 duration-300 shadow-2xl mt-1 cursor-default"
@@ -615,8 +607,6 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                         </div>
                     </div>
                 )}
-                {/* --------------------------- */}
-
                 </div>
               );
             })}
