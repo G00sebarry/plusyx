@@ -111,6 +111,13 @@ const App: React.FC = () => {
     }
   }, [view]);
 
+  // --- КОЛОНКИ (ИСПРАВЛЕНИЕ) ---
+  // 🔥 Эта функция теперь сохраняет колонки в базу
+  const handleUpdateColumns = async (newColumns: Column[]) => {
+    setColumns(newColumns); // Обновляем UI
+    await saveColumnsToDb(newColumns, userId); // Сохраняем в Supabase
+  };
+
   // --- TASKS ---
   
   const handleAddTask = async (taskData: Omit<Task, 'id'>) => {
@@ -128,18 +135,14 @@ const App: React.FC = () => {
     };
     
     setTasks(prev => [...prev, newTask]); 
-    setIsTaskModalOpen(false); // Закрываем только при СОЗДАНИИ
+    setIsTaskModalOpen(false); 
     window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
     await saveTaskToDb(newTask, userId);
   };
 
-  // 🔥🔥🔥 ИСПРАВЛЕННАЯ ФУНКЦИЯ 🔥🔥🔥
   const handleUpdateTask = async (updatedTask: Task) => {
     setTasks(prev => prev.map(t => t.id === updatedTask.id ? updatedTask : t));
-    
-    // МЫ УБРАЛИ ЗДЕСЬ setIsTaskModalOpen(false)
-    // ТЕПЕРЬ ОКНО НЕ ЗАКРЫВАЕТСЯ ПРИ АВТОСОХРАНЕНИИ
-    
+    // Окно не закрываем (автосохранение)
     await saveTaskToDb(updatedTask, userId);
   };
 
@@ -273,16 +276,13 @@ const App: React.FC = () => {
       </header>
       {isCreateMenuOpen && <div className="fixed inset-0 z-[140]" onClick={() => setIsCreateMenuOpen(false)} />}
       <main className="flex-1 overflow-y-auto pb-24 relative z-10">
-        {view === 'kanban' && <KanbanBoard tasks={tasks} columns={columns} onUpdateColumns={setColumns} onMoveTask={handleMoveTask} onEditTask={setEditingTask} onDeleteTask={setTaskToDelete} onCopyTask={handleCopyTask} onQuickAdd={(s, cId) => { setEditingTask({ id:'', title:'', description:'', date:toLocalDateString(new Date()), status:s, columnId: cId, checklists: [], comments: []} as Task); setIsTaskModalOpen(true); }} onDragEnd={() => {}} />}
+        {/* 🔥 ИСПОЛЬЗУЕМ НОВУЮ ФУНКЦИЮ handleUpdateColumns */}
+        {view === 'kanban' && <KanbanBoard tasks={tasks} columns={columns} onUpdateColumns={handleUpdateColumns} onMoveTask={handleMoveTask} onEditTask={setEditingTask} onDeleteTask={setTaskToDelete} onCopyTask={handleCopyTask} onQuickAdd={(s, cId) => { setEditingTask({ id:'', title:'', description:'', date:toLocalDateString(new Date()), status:s, columnId: cId, checklists: [], comments: []} as Task); setIsTaskModalOpen(true); }} onDragEnd={() => {}} />}
         {view === 'calendar' && <CalendarView tasks={tasks} habits={habits} onEditTask={(t) => { setEditingTask(t); setIsTaskModalOpen(true); }} />}
         {view === 'tracker' && <HabitTracker habits={habits} antiHabits={antiHabits} onToggleHabit={handleToggleHabit} onEditHabit={(h) => { setEditingHabit(h); setIsHabitModalOpen(true); }} onDeleteHabit={(id) => setHabitToDelete(id)} onAddHabit={() => { setEditingHabit(undefined); setIsHabitModalOpen(true); }} onReorderHabits={setHabits} onAddAntiHabit={() => { setEditingAntiHabit(undefined); setIsAntiHabitModalOpen(true); }} onEditAntiHabit={(h) => { setEditingAntiHabit(h); setIsAntiHabitModalOpen(true); }} onDeleteAntiHabit={(id) => setHabitToDelete(id)} onRelapseAntiHabit={handleRelapse} />}
       </main>
       <BottomNav activeView={view} onViewChange={setView} />
       
-      {/* 
-         ЗДЕСЬ УПРАВЛЕНИЕ ЗАКРЫТИЕМ
-         onClose вызывается только когда ты жмешь крестик или фон 
-      */}
       <TaskModal 
         isOpen={isTaskModalOpen || (!!editingTask && !!editingTask.id)} 
         onClose={() => { setIsTaskModalOpen(false); setEditingTask(undefined); }} 
