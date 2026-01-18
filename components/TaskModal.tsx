@@ -1,13 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-
-import { Task, TaskStatus, TaskComment, Checklist, TaskFile, Column } from '../types'; // 🔥 Добавили Column
+import { Task, TaskStatus, TaskComment, Checklist, TaskFile, Column } from '../types';
 
 interface TaskModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (task: any) => void;
   initialTask?: Task;
-  columns: Column[]; // 🔥 НАУЧИЛИ МОДАЛКУ ПРИНИМАТЬ КОЛОНКИ
+  columns: Column[];
 }
 
 const toLocalDateString = (date: Date) => {
@@ -25,7 +24,43 @@ const COLOR_MAP: Record<string, string> = {
   'green': 'bg-green-500', 'blue': 'bg-blue-500', 'purple': 'bg-purple-500', 'pink': 'bg-pink-500',
 };
 
-// --- МИНИ-КОМПОНЕНТ ДЛЯ ПУНКТА ЧЕК-ЛИСТА ---
+// --- 🔥 ИСПРАВЛЕННЫЙ КОМПОНЕНТ ---
+const DynamicTextarea: React.FC<{
+  value: string;
+  onChange: (val: string) => void;
+  placeholder?: string;
+  className?: string;
+  isTitle?: boolean;
+  isOpen?: boolean; // <--- ДОБАВИЛИ СЮДА
+}> = ({ value, onChange, placeholder, className, isTitle, isOpen }) => { // <--- И СЮДА
+  const ref = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (ref.current) {
+      ref.current.style.height = 'auto'; 
+      ref.current.style.height = ref.current.scrollHeight + 'px'; 
+    }
+  }, [value, isOpen]); // Теперь isOpen здесь легален
+
+  return (
+    <textarea
+      ref={ref}
+      rows={1}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      className={`bg-transparent outline-none overflow-hidden resize-none block ${className}`}
+      onKeyDown={(e) => {
+          if (isTitle && e.key === 'Enter') {
+              e.preventDefault();
+              e.currentTarget.blur();
+          }
+      }}
+    />
+  );
+};
+
+// --- КОМПОНЕНТ ДЛЯ ПУНКТА ЧЕК-ЛИСТА ---
 const AutoResizeTextarea: React.FC<{
   value: string;
   onChange: (val: string) => void;
@@ -59,7 +94,7 @@ const AutoResizeTextarea: React.FC<{
   );
 };
 
-export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, initialTask }) => {
+export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, initialTask, columns }) => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [date, setDate] = useState(toLocalDateString(new Date()));
@@ -75,7 +110,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
   const [coverPosition, setCoverPosition] = useState(50);
   const [coverIntensity, setCoverIntensity] = useState(60);
 
-  // Файлы (Оставляем стейт, но не используем в UI)
+  // Файлы
   const [files, setFiles] = useState<TaskFile[]>([]);
   
   const [checklists, setChecklists] = useState<Checklist[]>([]);
@@ -89,7 +124,6 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
   const [editingListId, setEditingListId] = useState<string | null>(null);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -100,35 +134,33 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
       setTime(initialTask.time || '');
       setIsTimer(initialTask.isTimer || false);
       setStatus(initialTask.status || 'todo');
-      setColumnId(initialTask.columnId);
+      setColumnId(initialTask.columnId || columns.find(c => c.type === initialTask.status)?.id);
       setColor(initialTask.color || 'default');
       
       setCoverData(initialTask.coverData || '');
       setCoverPosition(initialTask.coverPosition ?? 50);
       setCoverIntensity(initialTask.coverIntensity ?? 60);
-      
-      if (initialTask.files && initialTask.files.length > 0) {
-          setFiles(initialTask.files);
-      } else {
-          setFiles([]);
-      }
+      setFiles(initialTask.files || []);
 
       setChecklists(initialTask.checklists || [{ id: 'default', title: 'Чек-лист', items: [], hideCompleted: false }]);
       setComments(initialTask.comments || []);
     } else {
       setTitle(''); setDescription(''); setDate(toLocalDateString(new Date())); setTime(''); setIsTimer(false);
-      setStatus('todo'); setColumnId(undefined); setColor('default'); 
+      const defaultCol = columns[0];
+      setStatus(defaultCol?.type || 'todo'); 
+      setColumnId(defaultCol?.id); 
+      setColor('default'); 
       setCoverData(''); setCoverPosition(50); setCoverIntensity(60);
       setFiles([]); 
       setChecklists([{ id: 'default', title: 'Чек-лист', items: [], hideCompleted: false }]); setComments([]);
     }
-  }, [initialTask, isOpen]);
+  }, [initialTask, isOpen, columns]);
 
   const handleSave = () => {
     onSave({ 
       ...(initialTask?.id && { id: initialTask.id }), 
       title, description, date, time, isTimer, status, columnId, color, 
-      files, // Сохраняем то, что было (новые добавить нельзя)
+      files,
       coverData, coverPosition, coverIntensity,
       checklists, comments 
     });
@@ -251,10 +283,24 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
                     </div>
                 </div>
              </div>
-             <div className="flex p-1 bg-black/10 rounded-2xl">
-                {(['todo', 'in-progress', 'done'] as TaskStatus[]).map(s => (
-                    <button key={s} onClick={() => setStatus(s)} className={`flex-1 py-3 text-[10px] font-black uppercase tracking-tighter rounded-xl transition-all ${status === s ? 'bg-[var(--tg-theme-button-color)] text-white shadow-md' : 'text-gray-500'}`}>{s === 'todo' ? 'Очередь' : s === 'in-progress' ? 'В работе' : 'Готово'}</button>
-                ))}
+             
+             <div className="flex flex-col gap-1 mt-1">
+                 <label className="text-[10px] font-black tg-hint uppercase ml-1">Колонка</label>
+                 <div className="flex p-1 bg-black/10 rounded-2xl overflow-x-auto no-scrollbar gap-1">
+                    {columns.map(col => (
+                        <button 
+                            key={col.id} 
+                            onClick={() => { setStatus(col.type); setColumnId(col.id); }} 
+                            className={`flex-1 py-3 px-4 min-w-[80px] text-[10px] font-black uppercase tracking-tighter rounded-xl transition-all whitespace-nowrap 
+                                ${columnId === col.id 
+                                    ? 'bg-[var(--tg-theme-button-color)] text-white shadow-md' 
+                                    : 'text-gray-500 hover:bg-black/5'
+                                }`}
+                        >
+                            {col.title}
+                        </button>
+                    ))}
+                 </div>
              </div>
           </div>
         );
@@ -335,7 +381,6 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
           </div>
         );
       
-      // 🔥 ВОТ ОН, ЗАМОРОЖЕННЫЙ БЛОК. Все правильно, это в TaskModal 🔥
       case 'files':
         return (
           <div className="flex flex-col gap-3">
@@ -382,8 +427,21 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
           <button onClick={onClose} className="w-10 h-10 flex items-center justify-center tg-secondary-bg tg-text rounded-full font-light text-2xl">×</button>
         </div>
         <div className="flex flex-col gap-4">
-          <input type="text" value={title} onChange={e => setTitle(e.target.value)} className="w-full tg-secondary-bg p-4 rounded-2xl tg-text outline-none text-base font-bold placeholder:opacity-40" placeholder="Заголовок задачи" />
-          <textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Описание..." rows={2} className="w-full tg-secondary-bg p-4 rounded-2xl tg-text outline-none resize-none text-sm leading-relaxed placeholder:opacity-30" />
+          <DynamicTextarea 
+             value={title} 
+             onChange={setTitle} 
+             placeholder="Заголовок задачи"
+             className="w-full tg-secondary-bg p-4 rounded-2xl tg-text text-base font-bold placeholder:opacity-40"
+             isTitle={true}
+             isOpen={isOpen} // <--- ПЕРЕДАЛИ СЮДА
+          />
+          <DynamicTextarea 
+             value={description} 
+             onChange={setDescription} 
+             placeholder="Описание..."
+             className="w-full tg-secondary-bg p-4 rounded-2xl tg-text text-sm leading-relaxed placeholder:opacity-30 min-h-[80px]"
+             isOpen={isOpen} // <--- И СЮДА
+          />
         </div>
         <div className="flex flex-col gap-6">
           {blocksOrder.map((block, idx) => (
