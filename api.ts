@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { Task, Column, Habit, AntiHabit } from './types';
-import { supabase } from './supabaseClient'; // Убедись, что путь правильный
+import { supabase } from './supabaseClient';
 
 // --- ЗАДАЧИ ---
 export const fetchTasks = async (userId: string): Promise<Task[]> => {
@@ -8,8 +8,8 @@ export const fetchTasks = async (userId: string): Promise<Task[]> => {
     .from('tasks')
     .select('*')
     .eq('user_id', userId)
-    .order('position', { ascending: true }) // Сначала по позиции
-    .order('created_at', { ascending: true }); // Потом по дате
+    .order('position', { ascending: true }) 
+    .order('created_at', { ascending: true });
 
   if (error) {
     console.error('Ошибка загрузки задач:', error);
@@ -19,7 +19,6 @@ export const fetchTasks = async (userId: string): Promise<Task[]> => {
 };
 
 export const saveTaskToDb = async (task: Task, userId: string) => {
-  // Удаляем undefined поля, чтобы Supabase не ругался
   const cleanTask = JSON.parse(JSON.stringify(task)); 
   const { error } = await supabase.from('tasks').upsert({ ...cleanTask, user_id: userId });
   if (error) console.error('Ошибка сохранения задачи:', error);
@@ -27,20 +26,16 @@ export const saveTaskToDb = async (task: Task, userId: string) => {
 
 export const saveTasksOrderToDb = async (tasks: Task[], userId: string) => {
   if (tasks.length === 0) return;
-  
   const updates = tasks.map(t => ({
     id: t.id,
     user_id: userId,
     position: t.position,
     columnId: t.columnId,
     status: t.status,
-    // Нам нужно передать обязательные поля, даже если они не меняются, для upsert
     title: t.title,
     description: t.description,
     date: t.date
   }));
-  
-  // Upsert позволяет обновить существующие записи
   const { error } = await supabase.from('tasks').upsert(updates);
   if (error) console.error('Ошибка сохранения порядка:', error);
 };
@@ -50,31 +45,29 @@ export const deleteTaskFromDb = async (taskId: string) => {
   if (error) console.error('Ошибка удаления задачи:', error);
 };
 
-// --- 🔥 КОЛОНКИ (НОВОЕ) ---
+// --- 🔥 КОЛОНКИ (ИСПРАВЛЕНО: order -> position) ---
 export const fetchColumns = async (userId: string): Promise<Column[]> => {
   const { data, error } = await supabase
     .from('columns')
     .select('*')
     .eq('user_id', userId)
-    .order('order', { ascending: true }); // Сортируем по полю "order"
+    .order('position', { ascending: true }); // Сортируем по position
 
   if (error) {
-    console.error('Ошибка колонок:', error);
+    console.error('Ошибка загрузки колонок:', error);
     return [];
   }
   
-  // Если у юзера нет колонок в базе, вернем пустой массив (App.tsx создаст дефолтные)
   return data as Column[];
 };
 
 export const saveColumnsToDb = async (columns: Column[], userId: string) => {
-  // Превращаем массив колонок в формат для базы, добавляя user_id и order (индекс)
   const updates = columns.map((col, index) => ({
     id: col.id,
     user_id: userId,
     title: col.title,
     type: col.type,
-    order: index // Сохраняем порядок (0, 1, 2...)
+    position: index // Сохраняем как position
   }));
 
   const { error } = await supabase.from('columns').upsert(updates);
