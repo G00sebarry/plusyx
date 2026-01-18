@@ -24,15 +24,15 @@ const COLOR_MAP: Record<string, string> = {
   'green': 'bg-green-500', 'blue': 'bg-blue-500', 'purple': 'bg-purple-500', 'pink': 'bg-pink-500',
 };
 
-// --- 🔥 ИСПРАВЛЕННЫЙ КОМПОНЕНТ ---
+// --- КОМПОНЕНТ: САМОРАСШИРЯЮЩЕЕСЯ ПОЛЕ ---
 const DynamicTextarea: React.FC<{
   value: string;
   onChange: (val: string) => void;
   placeholder?: string;
   className?: string;
   isTitle?: boolean;
-  isOpen?: boolean; // <--- ДОБАВИЛИ СЮДА
-}> = ({ value, onChange, placeholder, className, isTitle, isOpen }) => { // <--- И СЮДА
+  isOpen?: boolean;
+}> = ({ value, onChange, placeholder, className, isTitle, isOpen }) => {
   const ref = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -40,7 +40,7 @@ const DynamicTextarea: React.FC<{
       ref.current.style.height = 'auto'; 
       ref.current.style.height = ref.current.scrollHeight + 'px'; 
     }
-  }, [value, isOpen]); // Теперь isOpen здесь легален
+  }, [value, isOpen]);
 
   return (
     <textarea
@@ -210,6 +210,15 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
   const toggleHideCompleted = (id: string) => {
     setChecklists(checklists.map(l => l.id === id ? { ...l, hideCompleted: !l.hideCompleted } : l));
     setActiveMenuId(null);
+  };
+
+  // --- 🔥 НОВАЯ ЛОГИКА КОММЕНТАРИЕВ ---
+  const updateComment = (id: string, text: string) => {
+    setComments(comments.map(c => c.id === id ? { ...c, text } : c));
+  };
+
+  const deleteComment = (id: string) => {
+    setComments(comments.filter(c => c.id !== id));
   };
 
   const renderBlock = (type: TaskBlockType) => {
@@ -399,13 +408,27 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
           </div>
         );
 
+      // 🔥 ОБНОВЛЕННЫЙ БЛОК КОММЕНТАРИЕВ
       case 'comments':
         return (
           <div className="flex flex-col gap-3">
              <label className="text-[10px] font-black tg-hint uppercase ml-1">Комментарии</label>
              <div className="flex flex-col gap-2">
                 {comments.map(c => (
-                  <div key={c.id} className="p-3.5 tg-secondary-bg rounded-2xl border border-black/5"><p className="text-xs tg-text font-medium">{c.text}</p><span className="text-[8px] tg-hint font-black block text-right opacity-40">{c.date}</span></div>
+                  <div key={c.id} className="group relative p-3 tg-secondary-bg rounded-2xl border border-black/5 flex items-start gap-2">
+                     <div className="flex-1">
+                         <DynamicTextarea 
+                            value={c.text}
+                            onChange={(val) => updateComment(c.id, val)}
+                            className="w-full text-xs tg-text font-medium"
+                            isOpen={isOpen}
+                         />
+                     </div>
+                     <div className="flex flex-col items-end gap-1">
+                         <button onClick={() => deleteComment(c.id)} className="text-red-500/50 hover:text-red-500 p-1">×</button>
+                         <span className="text-[8px] tg-hint font-black opacity-40 whitespace-nowrap">{c.date}</span>
+                     </div>
+                  </div>
                 ))}
                 <input type="text" value={newComment} onChange={e => setNewComment(e.target.value)} onKeyDown={e => e.key === 'Enter' && newComment.trim() && (setComments([...comments, { id: Math.random().toString(36).substr(2, 9), text: newComment, date: new Date().toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'}) }]), setNewComment(''))} placeholder="Ваш комментарий..." className="w-full tg-secondary-bg p-4 rounded-2xl text-xs tg-text outline-none" />
              </div>
@@ -433,14 +456,14 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
              placeholder="Заголовок задачи"
              className="w-full tg-secondary-bg p-4 rounded-2xl tg-text text-base font-bold placeholder:opacity-40"
              isTitle={true}
-             isOpen={isOpen} // <--- ПЕРЕДАЛИ СЮДА
+             isOpen={isOpen}
           />
           <DynamicTextarea 
              value={description} 
              onChange={setDescription} 
              placeholder="Описание..."
              className="w-full tg-secondary-bg p-4 rounded-2xl tg-text text-sm leading-relaxed placeholder:opacity-30 min-h-[80px]"
-             isOpen={isOpen} // <--- И СЮДА
+             isOpen={isOpen}
           />
         </div>
         <div className="flex flex-col gap-6">
