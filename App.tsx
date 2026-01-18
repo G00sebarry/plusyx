@@ -29,7 +29,12 @@ const DEFAULT_COLUMNS: Column[] = [
 ];
 
 const App: React.FC = () => {
-  const [view, setView] = useState<ViewType>('kanban');
+  // 🔥 1. ЗАГРУЖАЕМ ПОСЛЕДНЮЮ ВКЛАДКУ ИЗ ПАМЯТИ
+  const [view, setView] = useState<ViewType>(() => {
+    const savedView = localStorage.getItem('plusyx_current_view');
+    return (savedView as ViewType) || 'kanban';
+  });
+
   const [isLoading, setIsLoading] = useState(true);
 
   // --- 🆔 АВТОРИЗАЦИЯ ---
@@ -67,6 +72,11 @@ const App: React.FC = () => {
   const [wallpaperOpacity, setWallpaperOpacity] = useState<number>(() => Number(localStorage.getItem('plusyx_wallpaper_opacity')) || 30);
   const [wallpaperPosition, setWallpaperPosition] = useState<number>(() => Number(localStorage.getItem('plusyx_wallpaper_position')) || 50);
   const wallpaperInputRef = useRef<HTMLInputElement>(null);
+
+  // 🔥 2. СОХРАНЯЕМ ТЕКУЩУЮ ВКЛАДКУ ПРИ ИЗМЕНЕНИИ
+  useEffect(() => {
+    localStorage.setItem('plusyx_current_view', view);
+  }, [view]);
 
   // --- 🔥 ЗАГРУЗКА ---
   useEffect(() => {
@@ -111,15 +121,13 @@ const App: React.FC = () => {
     }
   }, [view]);
 
-  // --- КОЛОНКИ (ИСПРАВЛЕНИЕ) ---
-  // 🔥 Эта функция теперь сохраняет колонки в базу
+  // --- КОЛОНКИ ---
   const handleUpdateColumns = async (newColumns: Column[]) => {
-    setColumns(newColumns); // Обновляем UI
-    await saveColumnsToDb(newColumns, userId); // Сохраняем в Supabase
+    setColumns(newColumns);
+    await saveColumnsToDb(newColumns, userId);
   };
 
   // --- TASKS ---
-  
   const handleAddTask = async (taskData: Omit<Task, 'id'>) => {
     let cId = taskData.columnId;
     if (!cId) { const col = columns.find(c => c.type === taskData.status) || columns[0]; cId = col?.id || 'col-todo'; }
@@ -142,7 +150,6 @@ const App: React.FC = () => {
 
   const handleUpdateTask = async (updatedTask: Task) => {
     setTasks(prev => prev.map(t => t.id === updatedTask.id ? updatedTask : t));
-    // Окно не закрываем (автосохранение)
     await saveTaskToDb(updatedTask, userId);
   };
 
@@ -276,7 +283,6 @@ const App: React.FC = () => {
       </header>
       {isCreateMenuOpen && <div className="fixed inset-0 z-[140]" onClick={() => setIsCreateMenuOpen(false)} />}
       <main className="flex-1 overflow-y-auto pb-24 relative z-10">
-        {/* 🔥 ИСПОЛЬЗУЕМ НОВУЮ ФУНКЦИЮ handleUpdateColumns */}
         {view === 'kanban' && <KanbanBoard tasks={tasks} columns={columns} onUpdateColumns={handleUpdateColumns} onMoveTask={handleMoveTask} onEditTask={setEditingTask} onDeleteTask={setTaskToDelete} onCopyTask={handleCopyTask} onQuickAdd={(s, cId) => { setEditingTask({ id:'', title:'', description:'', date:toLocalDateString(new Date()), status:s, columnId: cId, checklists: [], comments: []} as Task); setIsTaskModalOpen(true); }} onDragEnd={() => {}} />}
         {view === 'calendar' && <CalendarView tasks={tasks} habits={habits} onEditTask={(t) => { setEditingTask(t); setIsTaskModalOpen(true); }} />}
         {view === 'tracker' && <HabitTracker habits={habits} antiHabits={antiHabits} onToggleHabit={handleToggleHabit} onEditHabit={(h) => { setEditingHabit(h); setIsHabitModalOpen(true); }} onDeleteHabit={(id) => setHabitToDelete(id)} onAddHabit={() => { setEditingHabit(undefined); setIsHabitModalOpen(true); }} onReorderHabits={setHabits} onAddAntiHabit={() => { setEditingAntiHabit(undefined); setIsAntiHabitModalOpen(true); }} onEditAntiHabit={(h) => { setEditingAntiHabit(h); setIsAntiHabitModalOpen(true); }} onDeleteAntiHabit={(id) => setHabitToDelete(id)} onRelapseAntiHabit={handleRelapse} />}
