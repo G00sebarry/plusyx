@@ -16,7 +16,7 @@ const toLocalDateString = (date: Date) => {
   return `${y}-${m}-${d}`;
 };
 
-// --- 🔥 ХЕЛПЕР ДЛЯ ПОИСКА ССЫЛОК (НОВОЕ) ---
+// --- ХЕЛПЕР ДЛЯ ПОИСКА ССЫЛОК ---
 const extractUrls = (text: string) => {
   const urlRegex = /(https?:\/\/[^\s]+)/g;
   return text.match(urlRegex) || [];
@@ -30,7 +30,7 @@ const COLOR_MAP: Record<string, string> = {
   'green': 'bg-green-500', 'blue': 'bg-blue-500', 'purple': 'bg-purple-500', 'pink': 'bg-pink-500',
 };
 
-// --- КОМПОНЕНТ: САМОРАСШИРЯЮЩЕЕСЯ ПОЛЕ ---
+// --- КОМПОНЕНТ: САМОРАСШИРЯЮЩЕЕСЯ ПОЛЕ (ОБЩЕЕ) ---
 const DynamicTextarea: React.FC<{
   value: string;
   onChange: (val: string) => void;
@@ -66,34 +66,36 @@ const DynamicTextarea: React.FC<{
   );
 };
 
-// --- КОМПОНЕНТ ДЛЯ ПУНКТА ЧЕК-ЛИСТА ---
+// --- КОМПОНЕНТ ДЛЯ ПУНКТА ЧЕК-ЛИСТА (УМНЫЙ ВВОД) ---
 const AutoResizeTextarea: React.FC<{
   value: string;
   onChange: (val: string) => void;
-  onEnter: () => void;
+  onKeyDown: (e: React.KeyboardEvent) => void;
   completed: boolean;
-}> = ({ value, onChange, onEnter, completed }) => {
-  const ref = useRef<HTMLTextAreaElement>(null);
+  textareaRef: (el: HTMLTextAreaElement | null) => void;
+}> = ({ value, onChange, onKeyDown, completed, textareaRef }) => {
+  
+  const internalRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const setRef = (el: HTMLTextAreaElement | null) => {
+    internalRef.current = el;
+    textareaRef(el);
+  };
 
   useEffect(() => {
-    if (ref.current) {
-      ref.current.style.height = 'auto';
-      ref.current.style.height = ref.current.scrollHeight + 'px';
+    if (internalRef.current) {
+      internalRef.current.style.height = 'auto';
+      internalRef.current.style.height = internalRef.current.scrollHeight + 'px';
     }
   }, [value]);
 
   return (
     <textarea
-      ref={ref}
+      ref={setRef}
       rows={1}
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          onEnter();
-        }
-      }}
+      onKeyDown={onKeyDown}
       className={`flex-1 text-sm tg-text bg-transparent outline-none resize-none overflow-hidden block ${completed ? 'line-through opacity-30 italic' : ''}`}
       style={{ minHeight: '24px', lineHeight: '1.5' }}
     />
@@ -130,16 +132,28 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
   const [editingListId, setEditingListId] = useState<string | null>(null);
 
-  // 🔥 НОВОЕ: СТАТУС СОХРАНЕНИЯ
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const coverInputRef = useRef<HTMLInputElement>(null);
 
-  // 🔥 ОБНОВЛЕННЫЙ USE EFFECT ДЛЯ ИНИЦИАЛИЗАЦИИ
+  // 🔥 ХРАНИЛИЩЕ РЕФОВ ДЛЯ ФОКУСА
+  const itemInputRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
+  const [focusTarget, setFocusTarget] = useState<{ listId: string, itemId: string } | null>(null);
+
+  // 🔥 ЭФФЕКТ ДЛЯ ФОКУСИРОВКИ
+  useEffect(() => {
+    if (focusTarget) {
+      const el = itemInputRefs.current[focusTarget.itemId];
+      if (el) {
+        el.focus();
+        setFocusTarget(null);
+      }
+    }
+  }, [checklists, focusTarget]);
+
   useEffect(() => {
     if (isOpen && initialTask) {
-      // Редактирование
       setTitle(initialTask.title || '');
       setDescription(initialTask.description || '');
       setDate(initialTask.date || toLocalDateString(new Date()));
@@ -156,7 +170,6 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
       setComments(initialTask.comments || []);
       setSaveStatus('saved');
     } else if (isOpen && !initialTask) {
-      // Создание
       setTitle(''); setDescription(''); setDate(toLocalDateString(new Date())); setTime(''); setIsTimer(false);
       const defaultCol = columns[0];
       setStatus(defaultCol?.type || 'todo'); 
@@ -167,9 +180,8 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
       setChecklists([{ id: 'default', title: 'Чек-лист', items: [], hideCompleted: false }]); setComments([]);
       setSaveStatus('unsaved');
     }
-  }, [isOpen, initialTask?.id]); // Зависим только от ID, чтобы не сбрасывать форму при автосохранении
+  }, [isOpen, initialTask?.id]);
 
-  // 🔥 ФУНКЦИЯ СБОРА ДАННЫХ (ЧТОБЫ НЕ ДУБЛИРОВАТЬ)
   const getTaskData = () => ({
     ...(initialTask?.id && { id: initialTask.id }), 
     title, description, date, time, isTimer, status, columnId, color, 
@@ -178,20 +190,14 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
     checklists, comments 
   });
 
-  // 🔥 АВТОСОХРАНЕНИЕ (НОВОЕ)
   useEffect(() => {
-    // Работает только если окно открыто и задача уже существует (не новая)
     if (!isOpen || !initialTask?.id) return;
-
     setSaveStatus('saving');
-
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-
     saveTimeoutRef.current = setTimeout(() => {
         onSave(getTaskData());
         setSaveStatus('saved');
-    }, 1000); // Сохраняем через 1 секунду после последнего изменения
-
+    }, 1000);
     return () => { if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current); };
   }, [title, description, date, time, isTimer, status, columnId, color, coverData, coverPosition, coverIntensity, checklists, comments]);
 
@@ -246,6 +252,25 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
     setActiveMenuId(null);
   };
 
+  // 🔥 ОБРАБОТЧИК КЛАВИШ В ЧЕК-ЛИСТЕ
+  const handleItemKeyDown = (e: React.KeyboardEvent, listId: string, itemId: string, index: number) => {
+    const list = checklists.find(l => l.id === listId);
+    if (!list) return;
+
+    // ENTER: Создать новую строку СНИЗУ
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        const newItem = { id: Math.random().toString(36).substr(2, 9), text: '', completed: false };
+        const newItems = [...list.items];
+        newItems.splice(index + 1, 0, newItem); // Вставляем после текущего
+
+        setChecklists(checklists.map(l => l.id === listId ? { ...l, items: newItems } : l));
+        setFocusTarget({ listId, itemId: newItem.id }); // Фокус на новый
+    }
+
+    // BACKSPACE УДАЛЁН ПО ПРОСЬБЕ (чтобы случайно не прыгать)
+  };
+
   const updateComment = (id: string, text: string) => {
     setComments(comments.map(c => c.id === id ? { ...c, text } : c));
   };
@@ -254,7 +279,6 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
     setComments(comments.filter(c => c.id !== id));
   };
 
-  // 🔥 ИЩЕМ ССЫЛКИ
   const detectedLinks = extractUrls(description);
 
   const renderBlock = (type: TaskBlockType) => {
@@ -402,17 +426,16 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
                       </div>
                    </div>
                    <div className="flex flex-col gap-1.5">
-                      {list.items.filter(it => !list.hideCompleted || !it.completed).map((item) => (
+                      {list.items.filter(it => !list.hideCompleted || !it.completed).map((item, index) => (
                         <div key={item.id} className="flex items-start gap-3 p-3 tg-secondary-bg rounded-2xl group">
                            <button onClick={() => setChecklists(checklists.map(l => l.id === list.id ? { ...l, items: l.items.map(it => it.id === item.id ? { ...it, completed: !it.completed } : it) } : l))} className={`w-5 h-5 mt-0.5 rounded-lg border-2 flex items-center justify-center shrink-0 ${item.completed ? 'bg-green-500 border-green-500' : 'border-gray-400/30'}`}>{item.completed && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4"><polyline points="20 6 9 17 4 12"/></svg>}</button>
                            
                            <AutoResizeTextarea 
                                 value={item.text}
                                 completed={item.completed}
+                                textareaRef={(el) => { itemInputRefs.current[item.id] = el; }}
                                 onChange={(val) => setChecklists(checklists.map(l => l.id === list.id ? { ...l, items: l.items.map(it => it.id === item.id ? { ...it, text: val } : it) } : l))}
-                                onEnter={() => {
-                                    setChecklists(checklists.map(l => l.id === list.id ? { ...l, items: [...l.items, { id: Math.random().toString(36).substr(2, 9), text: '', completed: false }] } : l));
-                                }}
+                                onKeyDown={(e) => handleItemKeyDown(e, list.id, item.id, index)}
                            />
                            
                            <button onClick={() => setChecklists(checklists.map(l => l.id === list.id ? { ...l, items: l.items.filter(it => it.id !== item.id) } : l))} className="text-red-500/30 hover:text-red-500 px-2">×</button>
