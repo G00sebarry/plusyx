@@ -200,40 +200,67 @@ const App: React.FC = () => {
     await saveTaskToDb(newTask, userId);
   };
 
-  // --- HABITS ---
+  // --- HABITS (ИСПРАВЛЕНО) ---
   const handleAddHabit = async (habitData: Habit) => {
-    setHabits(prev => [habitData, ...prev]); setIsHabitModalOpen(false);
+    const newHabit = { ...habitData, id: Math.random().toString(36).substr(2, 9) };
+    setHabits(prev => [newHabit, ...prev]); 
+    setIsHabitModalOpen(false);
     window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
-    await saveHabitToDb(habitData, userId);
+    await saveHabitToDb(newHabit, userId);
   };
+
   const handleUpdateHabit = async (updatedHabit: Habit) => {
     setHabits(prev => prev.map(h => h.id === updatedHabit.id ? updatedHabit : h));
-    setIsHabitModalOpen(false); setEditingHabit(undefined);
+    setIsHabitModalOpen(false); 
+    setEditingHabit(undefined);
     await saveHabitToDb(updatedHabit, userId);
   };
+
   const handleToggleHabit = async (id: string, date: string, value: number | boolean) => {
     let updatedHabit: Habit | undefined;
-    setHabits(prev => prev.map(h => { if (h.id === id) { updatedHabit = { ...h, history: { ...h.history, [date]: value } }; return updatedHabit; } return h; }));
+    
+    setHabits(prev => prev.map(h => { 
+        if (h.id === id) { 
+            // Создаем копию привычки с обновленной историей
+            updatedHabit = { 
+                ...h, 
+                history: { ...h.history, [date]: value } 
+            }; 
+            return updatedHabit; 
+        } 
+        return h; 
+    }));
+    
     window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
-    if (updatedHabit) await saveHabitToDb(updatedHabit, userId);
+    
+    if (updatedHabit) {
+        await saveHabitToDb(updatedHabit, userId);
+    }
   };
 
   // --- ANTI HABITS ---
   const handleAddAntiHabit = async (habit: AntiHabit) => {
-    setAntiHabits(prev => [habit, ...prev]); setIsAntiHabitModalOpen(false);
+    const newHabit = { ...habit, id: Math.random().toString(36).substr(2, 9) };
+    setAntiHabits(prev => [newHabit, ...prev]); 
+    setIsAntiHabitModalOpen(false);
     window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
-    await saveAntiHabitToDb(habit, userId);
+    await saveAntiHabitToDb(newHabit, userId);
   };
+
   const handleUpdateAntiHabit = async (habit: AntiHabit) => {
     setAntiHabits(prev => prev.map(h => h.id === habit.id ? habit : h));
-    setIsAntiHabitModalOpen(false); setEditingAntiHabit(undefined);
+    setIsAntiHabitModalOpen(false); 
+    setEditingAntiHabit(undefined);
     await saveAntiHabitToDb(habit, userId);
   };
+
   const handleRelapse = async (id: string) => {
     let updatedHabit: AntiHabit | undefined;
     setAntiHabits(prev => prev.map(h => {
         if (h.id === id) {
-            const now = Date.now(); const currentDuration = now - h.startDate; const newRecord = Math.max(h.longestStreak, currentDuration);
+            const now = Date.now(); 
+            const currentDuration = now - h.startDate; 
+            const newRecord = Math.max(h.longestStreak, currentDuration);
             updatedHabit = { ...h, startDate: now, longestStreak: newRecord, history: [...h.history, { date: now, duration: currentDuration }] };
             return updatedHabit;
         } return h;
@@ -245,14 +272,18 @@ const App: React.FC = () => {
   // --- DELETE ---
   const handleDeleteConfirm = async () => {
     if (taskToDelete) {
-       const id = taskToDelete; setTasks(prev => prev.filter(t => t.id !== id)); setTaskToDelete(null);
+       const id = taskToDelete; 
+       setTasks(prev => prev.filter(t => t.id !== id)); 
+       setTaskToDelete(null);
        await deleteTaskFromDb(id);
     } else if (habitToDelete) {
        const isHabit = habits.find(h => h.id === habitToDelete);
        const isAnti = antiHabits.find(h => h.id === habitToDelete);
+       
        setHabits(prev => prev.filter(h => h.id !== habitToDelete));
        setAntiHabits(prev => prev.filter(h => h.id !== habitToDelete));
        setHabitToDelete(null);
+       
        if (isHabit) await deleteHabitFromDb(habitToDelete);
        if (isAnti) await deleteAntiHabitFromDb(habitToDelete);
     }
