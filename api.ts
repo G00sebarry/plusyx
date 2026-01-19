@@ -62,6 +62,7 @@ export const saveColumnsToDb = async (columns, userId) => {
 };
 
 // --- 🔥 ПРИВЫЧКИ (ПОЛЕЗНЫЕ) ---
+// Исправлено строго по твоим скриншотам (emoji, target_value)
 export const fetchHabits = async (userId) => {
   const { data, error } = await supabase
     .from('habits')
@@ -75,22 +76,31 @@ export const fetchHabits = async (userId) => {
     id: h.id,
     title: h.title,
     color: h.color,
-    icon: h.emoji,          // База (emoji) -> React (icon)
+    icon: h.emoji,               // БАЗА (emoji) -> REACT (icon)
     frequency: h.frequency,
-    targetValue: h.target_value, // База (target_value) -> React (targetValue)
+    targetValue: h.target_value, // БАЗА (target_value) -> REACT (targetValue)
     history: h.history || {}
   }));
 };
 
 export const saveHabitToDb = async (habit, userId) => {
+  console.log("Saving Habit:", habit);
+
   const dbHabit = {
     id: habit.id,
     user_id: userId,
     title: habit.title,
     color: habit.color,
-    emoji: habit.icon,      // React (icon) -> База (emoji)
+    
+    // Смотрим скрин 1: колонка называется 'emoji'
+    emoji: habit.icon,      
+    
     frequency: habit.frequency,
-    target_value: habit.targetValue, // React (targetValue) -> База (target_value)
+    
+    // Смотрим скрин 3: колонка называется 'target_value'
+    // Добавляем || 1, чтобы не отправлять пустоту
+    target_value: habit.targetValue || 1, 
+    
     history: habit.history
   };
 
@@ -98,7 +108,10 @@ export const saveHabitToDb = async (habit, userId) => {
   
   if (error) {
     console.error("Save Habit Error:", error);
-    // alert(`Ошибка: ${error.message}`); // Можно включить для отладки
+    // Если выскочит ошибка — сразу увидим почему!
+    alert(`ОШИБКА СОХРАНЕНИЯ ПРИВЫЧКИ:\n${error.message}`);
+  } else {
+    console.log("✅ Привычка успешно сохранена!");
   }
 };
 
@@ -106,8 +119,8 @@ export const deleteHabitFromDb = async (id) => {
   await supabase.from('habits').delete().eq('id', id);
 };
 
-// --- ⛔ АНТИ-ПРИВЫЧКИ (ИСПРАВЛЕНО) ---
-// Используем таблицу 'antihabits' (слитно), как на скринах 3 и 4
+// --- ⛔ АНТИ-ПРИВЫЧКИ ---
+// Таблица 'antihabits' (слитно), как мы и договаривались
 export const fetchAntiHabits = async (userId) => {
   const { data, error } = await supabase
     .from('antihabits') 
@@ -119,7 +132,6 @@ export const fetchAntiHabits = async (userId) => {
   
   return (data || []).map(h => ({
     ...h,
-    // Маппинг из базы (snake_case) в React (camelCase)
     startDate: h.start_date,
     longestStreak: h.longest_streak,
     fileData: h.file_data,            
@@ -131,8 +143,6 @@ export const fetchAntiHabits = async (userId) => {
 export const saveAntiHabitToDb = async (habit, userId) => {
   const { startDate, longestStreak, fileData, coverPosition, coverIntensity, ...rest } = habit;
   
-  // Маппинг из React (camelCase) в базу (snake_case)
-  // Смотрим на твой скрин №4: там колонки cover_position и cover_intensity
   const dbHabit = {
     ...rest,
     start_date: startDate,
