@@ -61,8 +61,7 @@ export const saveColumnsToDb = async (columns, userId) => {
   if (error) console.error('Error saving columns:', error);
 };
 
-// --- 🔥 ПРИВЫЧКИ (ПОЛЕЗНЫЕ) ---
-// Исправлено строго по твоим скриншотам (emoji, target_value)
+// --- 🔥 ПРИВЫЧКИ (FIX: Принудительные числа) ---
 export const fetchHabits = async (userId) => {
   const { data, error } = await supabase
     .from('habits')
@@ -76,30 +75,30 @@ export const fetchHabits = async (userId) => {
     id: h.id,
     title: h.title,
     color: h.color,
-    icon: h.emoji,               // БАЗА (emoji) -> REACT (icon)
+    icon: h.emoji, 
     frequency: h.frequency,
-    targetValue: h.target_value, // БАЗА (target_value) -> REACT (targetValue)
+    
+    // 🔥 ФИКС: Гарантируем, что это число. Если null -> будет 1.
+    targetValue: Number(h.target_value) || 1, 
+    
     history: h.history || {}
   }));
 };
 
 export const saveHabitToDb = async (habit, userId) => {
-  console.log("Saving Habit:", habit);
+  // 🔥 ЛОГ: Посмотрим, что именно React пытается сохранить
+  console.log("Saving Habit:", habit.title, "Target:", habit.targetValue);
 
   const dbHabit = {
     id: habit.id,
     user_id: userId,
     title: habit.title,
     color: habit.color,
-    
-    // Смотрим скрин 1: колонка называется 'emoji'
     emoji: habit.icon,      
-    
     frequency: habit.frequency,
     
-    // Смотрим скрин 3: колонка называется 'target_value'
-    // Добавляем || 1, чтобы не отправлять пустоту
-    target_value: habit.targetValue || 1, 
+    // 🔥 ФИКС: Принудительно сохраняем число
+    target_value: Number(habit.targetValue) || 1, 
     
     history: habit.history
   };
@@ -108,10 +107,7 @@ export const saveHabitToDb = async (habit, userId) => {
   
   if (error) {
     console.error("Save Habit Error:", error);
-    // Если выскочит ошибка — сразу увидим почему!
-    alert(`ОШИБКА СОХРАНЕНИЯ ПРИВЫЧКИ:\n${error.message}`);
-  } else {
-    console.log("✅ Привычка успешно сохранена!");
+    alert(`ОШИБКА СОХРАНЕНИЯ: ${error.message}`);
   }
 };
 
@@ -120,7 +116,6 @@ export const deleteHabitFromDb = async (id) => {
 };
 
 // --- ⛔ АНТИ-ПРИВЫЧКИ ---
-// Таблица 'antihabits' (слитно), как мы и договаривались
 export const fetchAntiHabits = async (userId) => {
   const { data, error } = await supabase
     .from('antihabits') 
@@ -157,7 +152,6 @@ export const saveAntiHabitToDb = async (habit, userId) => {
   
   if (error) {
       console.error("Save AntiHabit Error:", error);
-      alert("Ошибка сохранения вредной привычки: " + error.message);
   }
 };
 
