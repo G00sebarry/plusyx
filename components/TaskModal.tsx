@@ -234,9 +234,26 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
     setActiveMenuId(null);
   };
 
-  // 🔥 ОБРАБОТЧИК КЛАВИШ В ЧЕК-ЛИСТЕ
+  // 🔥 НОВАЯ ФУНКЦИЯ: ПЕРЕМЕЩЕНИЕ СТРОК
+  const moveChecklistItem = (listId: string, index: number, direction: 'up' | 'down') => {
+    setChecklists(prev => prev.map(list => {
+        if (list.id !== listId) return list;
+        const newItems = [...list.items];
+        
+        if (direction === 'up' && index > 0) {
+            // Меняем местами с верхним
+            [newItems[index], newItems[index - 1]] = [newItems[index - 1], newItems[index]];
+        } else if (direction === 'down' && index < newItems.length - 1) {
+            // Меняем местами с нижним
+            [newItems[index], newItems[index + 1]] = [newItems[index + 1], newItems[index]];
+        }
+        
+        return { ...list, items: newItems };
+    }));
+  };
+
+  // ОБРАБОТЧИК КЛАВИШ В ЧЕК-ЛИСТЕ
   const handleItemKeyDown = (e: React.KeyboardEvent) => {
-    // ENTER: Просто убираем клавиатуру (сохраняем текущий текст)
     if (e.key === 'Enter') {
         e.preventDefault();
         e.currentTarget.blur();
@@ -377,7 +394,9 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
       case 'checklists':
         return (
           <div className="flex flex-col gap-6">
-             {checklists.map((list) => (
+             {checklists.map((list) => {
+                const visibleItems = list.hideCompleted ? list.items.filter(i => !i.completed) : list.items;
+                return (
                 <div key={list.id} className="flex flex-col gap-2 bg-black/5 p-4 rounded-[32px] border border-gray-400/5">
                    <div className="flex justify-between items-center px-2">
                       <div className="flex items-center gap-2">
@@ -398,7 +417,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
                       </div>
                    </div>
                    <div className="flex flex-col gap-1.5">
-                      {list.items.filter(it => !list.hideCompleted || !it.completed).map((item) => (
+                      {visibleItems.map((item, index) => (
                         <div key={item.id} className="flex items-start gap-3 p-3 tg-secondary-bg rounded-2xl group">
                            <button onClick={() => setChecklists(checklists.map(l => l.id === list.id ? { ...l, items: l.items.map(it => it.id === item.id ? { ...it, completed: !it.completed } : it) } : l))} className={`w-5 h-5 mt-0.5 rounded-lg border-2 flex items-center justify-center shrink-0 ${item.completed ? 'bg-green-500 border-green-500' : 'border-gray-400/30'}`}>{item.completed && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4"><polyline points="20 6 9 17 4 12"/></svg>}</button>
                            
@@ -409,13 +428,40 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
                                 onKeyDown={handleItemKeyDown}
                            />
                            
-                           <button onClick={() => setChecklists(checklists.map(l => l.id === list.id ? { ...l, items: l.items.filter(it => it.id !== item.id) } : l))} className="text-red-500/30 hover:text-red-500 px-2">×</button>
+                           {/* 🔥 БЛОК УПРАВЛЕНИЯ: ВВЕРХ / ВНИЗ / УДАЛИТЬ */}
+                           <div className="flex items-center gap-0.5">
+                               {/* Кнопка ВВЕРХ (скрыта у первого) */}
+                               <button 
+                                   disabled={index === 0}
+                                   onClick={() => moveChecklistItem(list.id, index, 'up')}
+                                   className={`w-6 h-6 flex items-center justify-center rounded-lg text-gray-600 hover:text-white hover:bg-white/5 transition-all active:scale-90 ${index === 0 ? 'opacity-0 pointer-events-none' : ''}`}
+                               >
+                                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="18 15 12 9 6 15"></polyline></svg>
+                               </button>
+
+                               {/* Кнопка ВНИЗ (скрыта у последнего) */}
+                               <button 
+                                   disabled={index === visibleItems.length - 1}
+                                   onClick={() => moveChecklistItem(list.id, index, 'down')}
+                                   className={`w-6 h-6 flex items-center justify-center rounded-lg text-gray-600 hover:text-white hover:bg-white/5 transition-all active:scale-90 ${index === visibleItems.length - 1 ? 'opacity-0 pointer-events-none' : ''}`}
+                               >
+                                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                               </button>
+
+                               {/* Кнопка УДАЛИТЬ */}
+                               <button 
+                                   onClick={() => setChecklists(checklists.map(l => l.id === list.id ? { ...l, items: l.items.filter(it => it.id !== item.id) } : l))} 
+                                   className="w-6 h-6 flex items-center justify-center rounded-lg text-red-500/40 hover:text-red-500 hover:bg-red-500/10 transition-all active:scale-90 ml-1"
+                               >
+                                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                               </button>
+                           </div>
                         </div>
                       ))}
                       <input type="text" placeholder="Добавить..." className="flex-1 tg-secondary-bg p-3 px-4 rounded-xl text-xs font-bold tg-text outline-none mt-1" onKeyDown={e => e.key === 'Enter' && e.currentTarget.value.trim() && (setChecklists(checklists.map(l => l.id === list.id ? { ...l, items: [...l.items, { id: Math.random().toString(36).substr(2, 9), text: e.currentTarget.value, completed: false }] } : l)), e.currentTarget.value = '')} />
                    </div>
                 </div>
-             ))}
+             );})}
              <button onClick={addNewChecklist} className="w-full py-3 border border-dashed border-gray-400/30 rounded-2xl text-[10px] font-black uppercase tg-hint">+ Новый чек-лист</button>
           </div>
         );
