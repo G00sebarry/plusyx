@@ -66,32 +66,26 @@ const DynamicTextarea: React.FC<{
   );
 };
 
-// --- КОМПОНЕНТ ДЛЯ ПУНКТА ЧЕК-ЛИСТА (УМНЫЙ ВВОД) ---
+// --- КОМПОНЕНТ ДЛЯ ПУНКТА ЧЕК-ЛИСТА ---
 const AutoResizeTextarea: React.FC<{
   value: string;
   onChange: (val: string) => void;
   onKeyDown: (e: React.KeyboardEvent) => void;
   completed: boolean;
-  textareaRef: (el: HTMLTextAreaElement | null) => void;
-}> = ({ value, onChange, onKeyDown, completed, textareaRef }) => {
+}> = ({ value, onChange, onKeyDown, completed }) => {
   
-  const internalRef = useRef<HTMLTextAreaElement | null>(null);
-
-  const setRef = (el: HTMLTextAreaElement | null) => {
-    internalRef.current = el;
-    textareaRef(el);
-  };
+  const ref = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    if (internalRef.current) {
-      internalRef.current.style.height = 'auto';
-      internalRef.current.style.height = internalRef.current.scrollHeight + 'px';
+    if (ref.current) {
+      ref.current.style.height = 'auto';
+      ref.current.style.height = ref.current.scrollHeight + 'px';
     }
   }, [value]);
 
   return (
     <textarea
-      ref={setRef}
+      ref={ref}
       rows={1}
       value={value}
       onChange={(e) => onChange(e.target.value)}
@@ -137,21 +131,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
 
   const coverInputRef = useRef<HTMLInputElement>(null);
 
-  // 🔥 ХРАНИЛИЩЕ РЕФОВ ДЛЯ ФОКУСА
-  const itemInputRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
-  const [focusTarget, setFocusTarget] = useState<{ listId: string, itemId: string } | null>(null);
-
-  // 🔥 ЭФФЕКТ ДЛЯ ФОКУСИРОВКИ
-  useEffect(() => {
-    if (focusTarget) {
-      const el = itemInputRefs.current[focusTarget.itemId];
-      if (el) {
-        el.focus();
-        setFocusTarget(null);
-      }
-    }
-  }, [checklists, focusTarget]);
-
+  // Инициализация
   useEffect(() => {
     if (isOpen && initialTask) {
       setTitle(initialTask.title || '');
@@ -190,6 +170,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
     checklists, comments 
   });
 
+  // Автосохранение
   useEffect(() => {
     if (!isOpen || !initialTask?.id) return;
     setSaveStatus('saving');
@@ -227,6 +208,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
     }
   };
 
+  // --- ЛОГИКА ЧЕК-ЛИСТОВ ---
   const addNewChecklist = () => {
     const newList: Checklist = {
       id: Math.random().toString(36).substr(2, 9),
@@ -253,22 +235,12 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
   };
 
   // 🔥 ОБРАБОТЧИК КЛАВИШ В ЧЕК-ЛИСТЕ
-  const handleItemKeyDown = (e: React.KeyboardEvent, listId: string, itemId: string, index: number) => {
-    const list = checklists.find(l => l.id === listId);
-    if (!list) return;
-
-    // ENTER: Создать новую строку СНИЗУ
+  const handleItemKeyDown = (e: React.KeyboardEvent) => {
+    // ENTER: Просто убираем клавиатуру (сохраняем текущий текст)
     if (e.key === 'Enter') {
         e.preventDefault();
-        const newItem = { id: Math.random().toString(36).substr(2, 9), text: '', completed: false };
-        const newItems = [...list.items];
-        newItems.splice(index + 1, 0, newItem); // Вставляем после текущего
-
-        setChecklists(checklists.map(l => l.id === listId ? { ...l, items: newItems } : l));
-        setFocusTarget({ listId, itemId: newItem.id }); // Фокус на новый
+        e.currentTarget.blur();
     }
-
-    // BACKSPACE УДАЛЁН ПО ПРОСЬБЕ (чтобы случайно не прыгать)
   };
 
   const updateComment = (id: string, text: string) => {
@@ -426,16 +398,15 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
                       </div>
                    </div>
                    <div className="flex flex-col gap-1.5">
-                      {list.items.filter(it => !list.hideCompleted || !it.completed).map((item, index) => (
+                      {list.items.filter(it => !list.hideCompleted || !it.completed).map((item) => (
                         <div key={item.id} className="flex items-start gap-3 p-3 tg-secondary-bg rounded-2xl group">
                            <button onClick={() => setChecklists(checklists.map(l => l.id === list.id ? { ...l, items: l.items.map(it => it.id === item.id ? { ...it, completed: !it.completed } : it) } : l))} className={`w-5 h-5 mt-0.5 rounded-lg border-2 flex items-center justify-center shrink-0 ${item.completed ? 'bg-green-500 border-green-500' : 'border-gray-400/30'}`}>{item.completed && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4"><polyline points="20 6 9 17 4 12"/></svg>}</button>
                            
                            <AutoResizeTextarea 
                                 value={item.text}
                                 completed={item.completed}
-                                textareaRef={(el) => { itemInputRefs.current[item.id] = el; }}
                                 onChange={(val) => setChecklists(checklists.map(l => l.id === list.id ? { ...l, items: l.items.map(it => it.id === item.id ? { ...it, text: val } : it) } : l))}
-                                onKeyDown={(e) => handleItemKeyDown(e, list.id, item.id, index)}
+                                onKeyDown={handleItemKeyDown}
                            />
                            
                            <button onClick={() => setChecklists(checklists.map(l => l.id === list.id ? { ...l, items: l.items.filter(it => it.id !== item.id) } : l))} className="text-red-500/30 hover:text-red-500 px-2">×</button>
