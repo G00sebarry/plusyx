@@ -234,25 +234,28 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
     setActiveMenuId(null);
   };
 
-  // 🔥 НОВАЯ ФУНКЦИЯ: ПЕРЕМЕЩЕНИЕ СТРОК
+  // 🔥 ИСПРАВЛЕННАЯ ФУНКЦИЯ ПЕРЕМЕЩЕНИЯ
   const moveChecklistItem = (listId: string, index: number, direction: 'up' | 'down') => {
     setChecklists(prev => prev.map(list => {
         if (list.id !== listId) return list;
-        const newItems = [...list.items];
         
+        const newItems = [...list.items]; // Создаем копию массива
+
+        // Используем классический "стакан" для обмена переменных, чтобы React точно понял
         if (direction === 'up' && index > 0) {
-            // Меняем местами с верхним
-            [newItems[index], newItems[index - 1]] = [newItems[index - 1], newItems[index]];
+            const temp = newItems[index];
+            newItems[index] = newItems[index - 1];
+            newItems[index - 1] = temp;
         } else if (direction === 'down' && index < newItems.length - 1) {
-            // Меняем местами с нижним
-            [newItems[index], newItems[index + 1]] = [newItems[index + 1], newItems[index]];
+            const temp = newItems[index];
+            newItems[index] = newItems[index + 1];
+            newItems[index + 1] = temp;
         }
         
         return { ...list, items: newItems };
     }));
   };
 
-  // ОБРАБОТЧИК КЛАВИШ В ЧЕК-ЛИСТЕ
   const handleItemKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
         e.preventDefault();
@@ -395,7 +398,9 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
         return (
           <div className="flex flex-col gap-6">
              {checklists.map((list) => {
+                // Если скрываем готовые, то используем только невыполненные
                 const visibleItems = list.hideCompleted ? list.items.filter(i => !i.completed) : list.items;
+                
                 return (
                 <div key={list.id} className="flex flex-col gap-2 bg-black/5 p-4 rounded-[32px] border border-gray-400/5">
                    <div className="flex justify-between items-center px-2">
@@ -430,19 +435,19 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
                            
                            {/* 🔥 БЛОК УПРАВЛЕНИЯ: ВВЕРХ / ВНИЗ / УДАЛИТЬ */}
                            <div className="flex items-center gap-0.5">
-                               {/* Кнопка ВВЕРХ (скрыта у первого) */}
+                               {/* Кнопка ВВЕРХ */}
                                <button 
                                    disabled={index === 0}
-                                   onClick={() => moveChecklistItem(list.id, index, 'up')}
+                                   onClick={(e) => { e.stopPropagation(); moveChecklistItem(list.id, index, 'up'); }}
                                    className={`w-6 h-6 flex items-center justify-center rounded-lg text-gray-600 hover:text-white hover:bg-white/5 transition-all active:scale-90 ${index === 0 ? 'opacity-0 pointer-events-none' : ''}`}
                                >
                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="18 15 12 9 6 15"></polyline></svg>
                                </button>
 
-                               {/* Кнопка ВНИЗ (скрыта у последнего) */}
+                               {/* Кнопка ВНИЗ */}
                                <button 
                                    disabled={index === visibleItems.length - 1}
-                                   onClick={() => moveChecklistItem(list.id, index, 'down')}
+                                   onClick={(e) => { e.stopPropagation(); moveChecklistItem(list.id, index, 'down'); }}
                                    className={`w-6 h-6 flex items-center justify-center rounded-lg text-gray-600 hover:text-white hover:bg-white/5 transition-all active:scale-90 ${index === visibleItems.length - 1 ? 'opacity-0 pointer-events-none' : ''}`}
                                >
                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="6 9 12 15 18 9"></polyline></svg>
@@ -450,7 +455,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
 
                                {/* Кнопка УДАЛИТЬ */}
                                <button 
-                                   onClick={() => setChecklists(checklists.map(l => l.id === list.id ? { ...l, items: l.items.filter(it => it.id !== item.id) } : l))} 
+                                   onClick={(e) => { e.stopPropagation(); setChecklists(checklists.map(l => l.id === list.id ? { ...l, items: l.items.filter(it => it.id !== item.id) } : l)); }} 
                                    className="w-6 h-6 flex items-center justify-center rounded-lg text-red-500/40 hover:text-red-500 hover:bg-red-500/10 transition-all active:scale-90 ml-1"
                                >
                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
