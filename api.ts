@@ -61,55 +61,44 @@ export const saveColumnsToDb = async (columns, userId) => {
   if (error) console.error('Error saving columns:', error);
 };
 
-// --- 🔥 ПРИВЫЧКИ (GOD MODE) ---
+// --- 🔥 ПРИВЫЧКИ (ПОЛЕЗНЫЕ) ---
 export const fetchHabits = async (userId) => {
-  console.log(`📥 Загружаю привычки для user: ${userId}`);
   const { data, error } = await supabase
     .from('habits')
     .select('*')
     .eq('user_id', userId)
     .order('created_at', { ascending: false });
     
-  if (error) {
-    console.error("❌ Ошибка загрузки привычек:", error);
-    return [];
-  }
-
-  console.log(`✅ Найдено привычек в базе: ${data?.length}`);
-  if (data?.length > 0) console.log("Первая привычка:", data[0]);
+  if (error) return [];
 
   return (data || []).map(h => ({
     id: h.id,
     title: h.title,
     color: h.color,
-    icon: h.emoji,          // Берем из колонки emoji
+    icon: h.emoji,          // База (emoji) -> React (icon)
     frequency: h.frequency,
-    targetValue: h.targetValue, // Берем из колонки targetValue
+    targetValue: h.target_value, // База (target_value) -> React (targetValue)
     history: h.history || {}
   }));
 };
 
 export const saveHabitToDb = async (habit, userId) => {
-  console.log("📤 Сохраняю привычку:", habit);
-  
   const dbHabit = {
     id: habit.id,
     user_id: userId,
     title: habit.title,
     color: habit.color,
-    emoji: habit.icon,      // Кладем в emoji
+    emoji: habit.icon,      // React (icon) -> База (emoji)
     frequency: habit.frequency,
-    targetValue: habit.targetValue || 1, // Защита от пустоты
+    target_value: habit.targetValue, // React (targetValue) -> База (target_value)
     history: habit.history
   };
 
   const { error } = await supabase.from('habits').upsert(dbHabit);
   
   if (error) {
-    console.error("❌ CRITICAL ERROR SAVING HABIT:", error);
-    alert(`ОШИБКА СОХРАНЕНИЯ ПРИВЫЧКИ:\n${error.message}\n${error.details}`);
-  } else {
-    console.log("✅ Привычка успешно сохранена!");
+    console.error("Save Habit Error:", error);
+    // alert(`Ошибка: ${error.message}`); // Можно включить для отладки
   }
 };
 
@@ -117,22 +106,20 @@ export const deleteHabitFromDb = async (id) => {
   await supabase.from('habits').delete().eq('id', id);
 };
 
-// --- АНТИ-ПРИВЫЧКИ ---
+// --- ⛔ АНТИ-ПРИВЫЧКИ (ИСПРАВЛЕНО) ---
+// Используем таблицу 'antihabits' (слитно), как на скринах 3 и 4
 export const fetchAntiHabits = async (userId) => {
-  // Пробуем 'anti_habits' (как на скрине)
   const { data, error } = await supabase
-    .from('anti_habits') 
+    .from('antihabits') 
     .select('*')
     .eq('user_id', userId)
     .order('created_at', { ascending: false });
 
-  if (error) { 
-      console.error("Ошибка AntiHabits:", error); 
-      return []; 
-  }
+  if (error) { console.error("Fetch AntiHabits Error:", error); return []; }
   
   return (data || []).map(h => ({
     ...h,
+    // Маппинг из базы (snake_case) в React (camelCase)
     startDate: h.start_date,
     longestStreak: h.longest_streak,
     fileData: h.file_data,            
@@ -144,6 +131,8 @@ export const fetchAntiHabits = async (userId) => {
 export const saveAntiHabitToDb = async (habit, userId) => {
   const { startDate, longestStreak, fileData, coverPosition, coverIntensity, ...rest } = habit;
   
+  // Маппинг из React (camelCase) в базу (snake_case)
+  // Смотрим на твой скрин №4: там колонки cover_position и cover_intensity
   const dbHabit = {
     ...rest,
     start_date: startDate,
@@ -154,15 +143,16 @@ export const saveAntiHabitToDb = async (habit, userId) => {
     user_id: userId
   };
 
-  const { error } = await supabase.from('anti_habits').upsert(dbHabit);
+  const { error } = await supabase.from('antihabits').upsert(dbHabit);
+  
   if (error) {
-      console.error("Ошибка сохранения AntiHabit:", error);
-      alert("Ошибка сохранения Анти-привычки: " + error.message);
+      console.error("Save AntiHabit Error:", error);
+      alert("Ошибка сохранения вредной привычки: " + error.message);
   }
 };
 
 export const deleteAntiHabitFromDb = async (id) => {
-  await supabase.from('anti_habits').delete().eq('id', id);
+  await supabase.from('antihabits').delete().eq('id', id);
 };
 
 // --- ☁️ ЗАГРУЗКА ФАЙЛОВ ---
