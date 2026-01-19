@@ -61,13 +61,13 @@ export const saveColumnsToDb = async (columns, userId) => {
   if (error) console.error('Error saving columns:', error);
 };
 
-// --- 🔥 ПРИВЫЧКИ (ПОЛЕЗНЫЕ) ---
+// --- 🔥 ПРИВЫЧКИ (ПОЛНАЯ СИНХРОНИЗАЦИЯ СО СКРИНШОТАМИ) ---
 export const fetchHabits = async (userId) => {
   const { data, error } = await supabase
     .from('habits')
     .select('*')
     .eq('user_id', userId)
-    .order('position', { ascending: true })    // Сортировка по позиции
+    .order('position', { ascending: true })
     .order('created_at', { ascending: false });
     
   if (error) return [];
@@ -76,47 +76,53 @@ export const fetchHabits = async (userId) => {
     id: h.id,
     title: h.title,
     color: h.color,
-    icon: h.emoji, 
     frequency: h.frequency,
+    history: h.history || {},
+
+    // 👇 МАППИНГ ПО ТВОИМ СКРИНШОТАМ 👇
+    icon: h.emoji,                 // В базе 'emoji'
+    isMeasurable: h.isMeasurable,  // В базе 'isMeasurable' (CamelCase)
+    targetValue: Number(h.target_value) || 1, // В базе 'target_value' (Snake_case)
+    unit: h.unit || '',            // В базе 'unit'
+    position: h.position || 0,     // В базе 'position'
     
-    // 🔥 ВАЖНЕЙШИЙ ФИКС: Читаем флаг из базы
-    isMeasurable: h.isMeasurable, 
-    
-    targetValue: Number(h.target_value) || 1, 
-    unit: h.unit || '',   
-    position: h.position || 0,
-    
-    history: h.history || {}
+    fileData: h.file_data,           // В базе 'file_data'
+    coverPosition: h.cover_position, // В базе 'cover_position'
+    coverIntensity: h.cover_intensity // В базе 'cover_intensity'
   }));
 };
 
 export const saveHabitToDb = async (habit, userId) => {
+  // Формируем объект СТРОГО под твои колонки
   const dbHabit = {
     id: habit.id,
     user_id: userId,
     title: habit.title,
     color: habit.color,
-    emoji: habit.icon,      
     frequency: habit.frequency,
+    history: habit.history,
+
+    // 👇 МАППИНГ ПО ТВОИМ СКРИНШОТАМ 👇
+    emoji: habit.icon,                // React 'icon' -> База 'emoji'
+    isMeasurable: habit.isMeasurable, // React 'isMeasurable' -> База 'isMeasurable'
+    target_value: Number(habit.targetValue) || 1, // React 'targetValue' -> База 'target_value'
+    unit: habit.unit || '',           // React 'unit' -> База 'unit'
+    position: habit.position || 0,    // React 'position' -> База 'position'
     
-    // 🔥 СОХРАНЯЕМ ВАЖНЫЕ ПОЛЯ (Как на твоем скрине)
-    isMeasurable: habit.isMeasurable, // <-- Вот этого не хватало!
-    target_value: Number(habit.targetValue) || 1, 
-    unit: habit.unit || '', 
-    position: habit.position || 0,
-    
-    history: habit.history
+    file_data: habit.fileData,            // React 'fileData' -> База 'file_data'
+    cover_position: habit.coverPosition,  // React 'coverPosition' -> База 'cover_position'
+    cover_intensity: habit.coverIntensity // React 'coverIntensity' -> База 'cover_intensity'
   };
 
   const { error } = await supabase.from('habits').upsert(dbHabit);
   
   if (error) {
     console.error("Save Habit Error:", error);
-    alert(`ОШИБКА: ${error.message}`);
+    alert(`Ошибка сохранения: ${error.message}`);
   }
 };
 
-// Сохранение порядка привычек (Drag & Drop)
+// Сохранение порядка привычек
 export const saveHabitsOrderToDb = async (habits, userId) => {
   if (habits.length === 0) return;
   
@@ -124,15 +130,19 @@ export const saveHabitsOrderToDb = async (habits, userId) => {
     id: h.id,
     user_id: userId,
     title: h.title,
-    // При обновлении порядка нужно передать обязательные поля, чтобы не затереть их
-    // (upsert в supabase работает как обновление всей строки)
-    isMeasurable: h.isMeasurable, 
-    emoji: h.icon,
     color: h.color,
     frequency: h.frequency,
+    history: h.history,
+
+    // Те же самые поля, чтобы не потерять данные при сортировке
+    emoji: h.icon,
+    isMeasurable: h.isMeasurable,
     target_value: h.targetValue,
     unit: h.unit,
-    history: h.history,
+    
+    file_data: h.fileData,
+    cover_position: h.coverPosition,
+    cover_intensity: h.coverIntensity,
     
     position: index // Обновляем позицию
   }));
@@ -148,7 +158,7 @@ export const deleteHabitFromDb = async (id) => {
 // --- ⛔ АНТИ-ПРИВЫЧКИ ---
 export const fetchAntiHabits = async (userId) => {
   const { data, error } = await supabase
-    .from('antihabits') 
+    .from('antihabits') // Таблица 'antihabits' (слитно)
     .select('*')
     .eq('user_id', userId)
     .order('created_at', { ascending: false });
@@ -180,9 +190,7 @@ export const saveAntiHabitToDb = async (habit, userId) => {
 
   const { error } = await supabase.from('antihabits').upsert(dbHabit);
   
-  if (error) {
-      console.error("Save AntiHabit Error:", error);
-  }
+  if (error) console.error("Save AntiHabit Error:", error);
 };
 
 export const deleteAntiHabitFromDb = async (id) => {
