@@ -61,12 +61,13 @@ export const saveColumnsToDb = async (columns, userId) => {
   if (error) console.error('Error saving columns:', error);
 };
 
-// --- 🔥 ПРИВЫЧКИ (FIX: Принудительные числа) ---
+// --- 🔥 ПРИВЫЧКИ (ПОЛЕЗНЫЕ) ---
 export const fetchHabits = async (userId) => {
   const { data, error } = await supabase
     .from('habits')
     .select('*')
     .eq('user_id', userId)
+    .order('position', { ascending: true })    // Сортировка по позиции
     .order('created_at', { ascending: false });
     
   if (error) return [];
@@ -78,17 +79,18 @@ export const fetchHabits = async (userId) => {
     icon: h.emoji, 
     frequency: h.frequency,
     
-    // 🔥 ФИКС: Гарантируем, что это число. Если null -> будет 1.
+    // 🔥 ВАЖНЕЙШИЙ ФИКС: Читаем флаг из базы
+    isMeasurable: h.isMeasurable, 
+    
     targetValue: Number(h.target_value) || 1, 
+    unit: h.unit || '',   
+    position: h.position || 0,
     
     history: h.history || {}
   }));
 };
 
 export const saveHabitToDb = async (habit, userId) => {
-  // 🔥 ЛОГ: Посмотрим, что именно React пытается сохранить
-  console.log("Saving Habit:", habit.title, "Target:", habit.targetValue);
-
   const dbHabit = {
     id: habit.id,
     user_id: userId,
@@ -97,8 +99,11 @@ export const saveHabitToDb = async (habit, userId) => {
     emoji: habit.icon,      
     frequency: habit.frequency,
     
-    // 🔥 ФИКС: Принудительно сохраняем число
+    // 🔥 СОХРАНЯЕМ ВАЖНЫЕ ПОЛЯ (Как на твоем скрине)
+    isMeasurable: habit.isMeasurable, // <-- Вот этого не хватало!
     target_value: Number(habit.targetValue) || 1, 
+    unit: habit.unit || '', 
+    position: habit.position || 0,
     
     history: habit.history
   };
@@ -107,8 +112,33 @@ export const saveHabitToDb = async (habit, userId) => {
   
   if (error) {
     console.error("Save Habit Error:", error);
-    alert(`ОШИБКА СОХРАНЕНИЯ: ${error.message}`);
+    alert(`ОШИБКА: ${error.message}`);
   }
+};
+
+// Сохранение порядка привычек (Drag & Drop)
+export const saveHabitsOrderToDb = async (habits, userId) => {
+  if (habits.length === 0) return;
+  
+  const updates = habits.map((h, index) => ({
+    id: h.id,
+    user_id: userId,
+    title: h.title,
+    // При обновлении порядка нужно передать обязательные поля, чтобы не затереть их
+    // (upsert в supabase работает как обновление всей строки)
+    isMeasurable: h.isMeasurable, 
+    emoji: h.icon,
+    color: h.color,
+    frequency: h.frequency,
+    target_value: h.targetValue,
+    unit: h.unit,
+    history: h.history,
+    
+    position: index // Обновляем позицию
+  }));
+
+  const { error } = await supabase.from('habits').upsert(updates);
+  if (error) console.error('Error saving habits order:', error);
 };
 
 export const deleteHabitFromDb = async (id) => {
