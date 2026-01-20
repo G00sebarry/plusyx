@@ -8,11 +8,11 @@ import { HabitModal } from './components/HabitModal';
 import { AntiHabitModal } from './components/AntiHabitModal';
 import { Task, ViewType, Habit, Column, AntiHabit } from './types';
 
-// 🔥 ИМПОРТ ФУНКЦИЙ API
+// 🔥 ИМПОРТ НОВЫХ ФУНКЦИЙ API
 import { 
   fetchTasks, fetchColumns, saveTaskToDb, deleteTaskFromDb, saveColumnsToDb, saveTasksOrderToDb, deleteColumnFromDb,
-  fetchHabits, saveHabitToDb, deleteHabitFromDb,
-  fetchAntiHabits, saveAntiHabitToDb, deleteAntiHabitFromDb
+  fetchHabits, saveHabitToDb, deleteHabitFromDb, saveHabitsOrderToDb,
+  fetchAntiHabits, saveAntiHabitToDb, deleteAntiHabitFromDb, saveAntiHabitsOrderToDb
 } from './api';
 
 const toLocalDateString = (date: Date) => {
@@ -29,7 +29,7 @@ const DEFAULT_COLUMNS: Column[] = [
 ];
 
 const App: React.FC = () => {
-  // 🔥 1. ЗАГРУЖАЕМ ПОСЛЕДНЮЮ ВКЛАДКУ ИЗ ПАМЯТИ
+  // --- 1. ЗАГРУЖАЕМ ПОСЛЕДНЮЮ ВКЛАДКУ ---
   const [view, setView] = useState<ViewType>(() => {
     const savedView = localStorage.getItem('plusyx_current_view');
     return (savedView as ViewType) || 'kanban';
@@ -66,14 +66,13 @@ const App: React.FC = () => {
   const [taskToDelete, setTaskToDelete] = useState<string | null>(null);
   const [habitToDelete, setHabitToDelete] = useState<string | null>(null);
   
-  // --- SETTINGS (LOCAL) ---
+  // --- SETTINGS ---
   const [theme, setTheme] = useState<'light' | 'dark'>(() => (localStorage.getItem('plusyx_theme') as 'light' | 'dark') || 'light');
   const [wallpaper, setWallpaper] = useState<string>(() => localStorage.getItem('plusyx_wallpaper') || '');
   const [wallpaperOpacity, setWallpaperOpacity] = useState<number>(() => Number(localStorage.getItem('plusyx_wallpaper_opacity')) || 30);
   const [wallpaperPosition, setWallpaperPosition] = useState<number>(() => Number(localStorage.getItem('plusyx_wallpaper_position')) || 50);
   const wallpaperInputRef = useRef<HTMLInputElement>(null);
 
-  // 🔥 2. СОХРАНЯЕМ ТЕКУЩУЮ ВКЛАДКУ ПРИ ИЗМЕНЕНИИ
   useEffect(() => {
     localStorage.setItem('plusyx_current_view', view);
   }, [view]);
@@ -121,16 +120,14 @@ const App: React.FC = () => {
     }
   }, [view]);
 
-  // --- КОЛОНКИ ---
+  // --- ОБРАБОТЧИКИ ---
   const handleUpdateColumns = async (newColumns: Column[]) => {
     setColumns(newColumns);
     await saveColumnsToDb(newColumns, userId);
   };
 
-  // 🔥 НОВАЯ ФУНКЦИЯ УДАЛЕНИЯ КОЛОНКИ
   const handleDeleteColumn = async (columnId: string) => {
     setColumns(prev => prev.filter(c => c.id !== columnId));
-    // Сразу удаляем из БД
     await deleteColumnFromDb(columnId);
   };
 
@@ -207,9 +204,9 @@ const App: React.FC = () => {
     await saveTaskToDb(newTask, userId);
   };
 
-  // --- HABITS (ИСПРАВЛЕНО) ---
+  // --- HABITS (ПОЛЕЗНЫЕ) ---
   const handleAddHabit = async (habitData: Habit) => {
-    const newHabit = { ...habitData, id: Math.random().toString(36).substr(2, 9) };
+    const newHabit = { ...habitData, id: Math.random().toString(36).substr(2, 9), position: habits.length };
     setHabits(prev => [newHabit, ...prev]); 
     setIsHabitModalOpen(false);
     window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
@@ -225,29 +222,29 @@ const App: React.FC = () => {
 
   const handleToggleHabit = async (id: string, date: string, value: number | boolean) => {
     let updatedHabit: Habit | undefined;
-    
     setHabits(prev => prev.map(h => { 
         if (h.id === id) { 
-            // Создаем копию привычки с обновленной историей
-            updatedHabit = { 
-                ...h, 
-                history: { ...h.history, [date]: value } 
-            }; 
+            updatedHabit = { ...h, history: { ...h.history, [date]: value } }; 
             return updatedHabit; 
         } 
         return h; 
     }));
-    
     window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
-    
-    if (updatedHabit) {
-        await saveHabitToDb(updatedHabit, userId);
-    }
+    if (updatedHabit) await saveHabitToDb(updatedHabit, userId);
   };
 
-  // --- ANTI HABITS ---
+  // 🔥 СОХРАНЕНИЕ ПОРЯДКА ПОЛЕЗНЫХ ПРИВЫЧЕК
+  const handleReorderHabits = async (newHabits: Habit[]) => {
+      setHabits(newHabits);
+      // Обновляем позицию у каждого элемента локально и сохраняем
+      const updated = newHabits.map((h, idx) => ({ ...h, position: idx }));
+      setHabits(updated);
+      await saveHabitsOrderToDb(updated, userId);
+  };
+
+  // --- ANTI HABITS (ВРЕДНЫЕ) ---
   const handleAddAntiHabit = async (habit: AntiHabit) => {
-    const newHabit = { ...habit, id: Math.random().toString(36).substr(2, 9) };
+    const newHabit = { ...habit, id: Math.random().toString(36).substr(2, 9), position: antiHabits.length };
     setAntiHabits(prev => [newHabit, ...prev]); 
     setIsAntiHabitModalOpen(false);
     window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
@@ -274,6 +271,14 @@ const App: React.FC = () => {
     }));
     window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('warning');
     if (updatedHabit) await saveAntiHabitToDb(updatedHabit, userId);
+  };
+
+  // 🔥 СОХРАНЕНИЕ ПОРЯДКА ВРЕДНЫХ ПРИВЫЧЕК
+  const handleReorderAntiHabits = async (newHabits: AntiHabit[]) => {
+      setAntiHabits(newHabits);
+      const updated = newHabits.map((h, idx) => ({ ...h, position: idx }));
+      setAntiHabits(updated);
+      await saveAntiHabitsOrderToDb(updated, userId);
   };
 
   // --- DELETE ---
@@ -326,7 +331,7 @@ const App: React.FC = () => {
             tasks={tasks} 
             columns={columns} 
             onUpdateColumns={handleUpdateColumns} 
-            onDeleteColumn={handleDeleteColumn} // 🔥 ПЕРЕДАЕМ ФУНКЦИЮ УДАЛЕНИЯ
+            onDeleteColumn={handleDeleteColumn} 
             onMoveTask={handleMoveTask} 
             onEditTask={setEditingTask} 
             onDeleteTask={setTaskToDelete} 
@@ -336,7 +341,25 @@ const App: React.FC = () => {
           />
         )}
         {view === 'calendar' && <CalendarView tasks={tasks} habits={habits} onEditTask={(t) => { setEditingTask(t); setIsTaskModalOpen(true); }} />}
-        {view === 'tracker' && <HabitTracker habits={habits} antiHabits={antiHabits} onToggleHabit={handleToggleHabit} onEditHabit={(h) => { setEditingHabit(h); setIsHabitModalOpen(true); }} onDeleteHabit={(id) => setHabitToDelete(id)} onAddHabit={() => { setEditingHabit(undefined); setIsHabitModalOpen(true); }} onReorderHabits={setHabits} onAddAntiHabit={() => { setEditingAntiHabit(undefined); setIsAntiHabitModalOpen(true); }} onEditAntiHabit={(h) => { setEditingAntiHabit(h); setIsAntiHabitModalOpen(true); }} onDeleteAntiHabit={(id) => setHabitToDelete(id)} onRelapseAntiHabit={handleRelapse} />}
+        
+        {/* 🔥 TRACKER: ПЕРЕДАЕМ НОВЫЕ ФУНКЦИИ СОРТИРОВКИ */}
+        {view === 'tracker' && (
+          <HabitTracker 
+             habits={habits} 
+             antiHabits={antiHabits} 
+             onToggleHabit={handleToggleHabit} 
+             onEditHabit={(h) => { setEditingHabit(h); setIsHabitModalOpen(true); }} 
+             onDeleteHabit={(id) => setHabitToDelete(id)} 
+             onAddHabit={() => { setEditingHabit(undefined); setIsHabitModalOpen(true); }} 
+             onReorderHabits={handleReorderHabits} // Используем обновленный хендлер
+             
+             onAddAntiHabit={() => { setEditingAntiHabit(undefined); setIsAntiHabitModalOpen(true); }} 
+             onEditAntiHabit={(h) => { setEditingAntiHabit(h); setIsAntiHabitModalOpen(true); }} 
+             onDeleteAntiHabit={(id) => setHabitToDelete(id)} 
+             onRelapseAntiHabit={handleRelapse}
+             onReorderAntiHabits={handleReorderAntiHabits} // 🔥 Новый хендлер
+          />
+        )}
       </main>
       <BottomNav activeView={view} onViewChange={setView} />
       

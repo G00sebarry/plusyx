@@ -61,19 +61,18 @@ export const saveColumnsToDb = async (columns, userId) => {
   if (error) console.error('Error saving columns:', error);
 };
 
-// 🔥 НОВАЯ ФУНКЦИЯ ДЛЯ УДАЛЕНИЯ КОЛОНКИ
 export const deleteColumnFromDb = async (columnId) => {
   const { error } = await supabase.from('columns').delete().eq('id', columnId);
   if (error) console.error('Ошибка удаления колонки:', error);
 };
 
-// --- 🔥 ПРИВЫЧКИ (ПОЛНАЯ СИНХРОНИЗАЦИЯ СО СКРИНШОТАМИ) ---
+// --- ПРИВЫЧКИ (Habits) ---
 export const fetchHabits = async (userId) => {
   const { data, error } = await supabase
     .from('habits')
     .select('*')
     .eq('user_id', userId)
-    .order('position', { ascending: true })
+    .order('position', { ascending: true }) // 🔥 Сортировка по позиции
     .order('created_at', { ascending: false });
     
   if (error) return [];
@@ -85,21 +84,19 @@ export const fetchHabits = async (userId) => {
     frequency: h.frequency,
     history: h.history || {},
 
-    // 👇 МАППИНГ ПО ТВОИМ СКРИНШОТАМ 👇
-    icon: h.emoji,                 // В базе 'emoji'
-    isMeasurable: h.isMeasurable,  // В базе 'isMeasurable' (CamelCase)
-    targetValue: Number(h.target_value) || 1, // В базе 'target_value' (Snake_case)
-    unit: h.unit || '',            // В базе 'unit'
-    position: h.position || 0,     // В базе 'position'
+    icon: h.emoji,
+    isMeasurable: h.isMeasurable,
+    targetValue: Number(h.target_value) || 1,
+    unit: h.unit || '',
+    position: h.position || 0,
     
-    fileData: h.file_data,           // В базе 'file_data'
-    coverPosition: h.cover_position, // В базе 'cover_position'
-    coverIntensity: h.cover_intensity // В базе 'cover_intensity'
+    fileData: h.file_data,
+    coverPosition: h.cover_position,
+    coverIntensity: h.cover_intensity
   }));
 };
 
 export const saveHabitToDb = async (habit, userId) => {
-  // Формируем объект СТРОГО под твои колонки
   const dbHabit = {
     id: habit.id,
     user_id: userId,
@@ -108,27 +105,22 @@ export const saveHabitToDb = async (habit, userId) => {
     frequency: habit.frequency,
     history: habit.history,
 
-    // 👇 МАППИНГ ПО ТВОИМ СКРИНШОТАМ 👇
-    emoji: habit.icon,                // React 'icon' -> База 'emoji'
-    isMeasurable: habit.isMeasurable, // React 'isMeasurable' -> База 'isMeasurable'
-    target_value: Number(habit.targetValue) || 1, // React 'targetValue' -> База 'target_value'
-    unit: habit.unit || '',           // React 'unit' -> База 'unit'
-    position: habit.position || 0,    // React 'position' -> База 'position'
+    emoji: habit.icon,
+    isMeasurable: habit.isMeasurable,
+    target_value: Number(habit.targetValue) || 1,
+    unit: habit.unit || '',
+    position: habit.position || 0,
     
-    file_data: habit.fileData,            // React 'fileData' -> База 'file_data'
-    cover_position: habit.coverPosition,  // React 'coverPosition' -> База 'cover_position'
-    cover_intensity: habit.coverIntensity // React 'coverIntensity' -> База 'cover_intensity'
+    file_data: habit.fileData,
+    cover_position: habit.coverPosition,
+    cover_intensity: habit.coverIntensity
   };
 
   const { error } = await supabase.from('habits').upsert(dbHabit);
-  
-  if (error) {
-    console.error("Save Habit Error:", error);
-    alert(`Ошибка сохранения: ${error.message}`);
-  }
+  if (error) console.error("Save Habit Error:", error);
 };
 
-// Сохранение порядка привычек
+// 🔥 Сохранение порядка привычек
 export const saveHabitsOrderToDb = async (habits, userId) => {
   if (habits.length === 0) return;
   
@@ -136,21 +128,11 @@ export const saveHabitsOrderToDb = async (habits, userId) => {
     id: h.id,
     user_id: userId,
     title: h.title,
+    // Важные поля обязательны для upsert
+    frequency: h.frequency, 
     color: h.color,
-    frequency: h.frequency,
-    history: h.history,
-
-    // Те же самые поля, чтобы не потерять данные при сортировке
-    emoji: h.icon,
-    isMeasurable: h.isMeasurable,
-    target_value: h.targetValue,
-    unit: h.unit,
     
-    file_data: h.fileData,
-    cover_position: h.coverPosition,
-    cover_intensity: h.coverIntensity,
-    
-    position: index // Обновляем позицию
+    position: index // Обновляем позицию (0, 1, 2...)
   }));
 
   const { error } = await supabase.from('habits').upsert(updates);
@@ -164,9 +146,10 @@ export const deleteHabitFromDb = async (id) => {
 // --- ⛔ АНТИ-ПРИВЫЧКИ ---
 export const fetchAntiHabits = async (userId) => {
   const { data, error } = await supabase
-    .from('antihabits') // Таблица 'antihabits' (слитно)
+    .from('antihabits')
     .select('*')
     .eq('user_id', userId)
+    .order('position', { ascending: true }) // 🔥 Сортируем по позиции
     .order('created_at', { ascending: false });
 
   if (error) { console.error("Fetch AntiHabits Error:", error); return []; }
@@ -175,6 +158,7 @@ export const fetchAntiHabits = async (userId) => {
     ...h,
     startDate: h.start_date,
     longestStreak: h.longest_streak,
+    position: h.position || 0, // 🔥 Читаем позицию
     fileData: h.file_data,            
     coverPosition: h.cover_position,  
     coverIntensity: h.cover_intensity 
@@ -195,8 +179,28 @@ export const saveAntiHabitToDb = async (habit, userId) => {
   };
 
   const { error } = await supabase.from('antihabits').upsert(dbHabit);
-  
   if (error) console.error("Save AntiHabit Error:", error);
+};
+
+// 🔥 НОВАЯ ФУНКЦИЯ: Сохранение порядка Анти-Привычек
+export const saveAntiHabitsOrderToDb = async (habits, userId) => {
+    if (habits.length === 0) return;
+    
+    // Подготавливаем массив обновлений
+    const updates = habits.map((h, index) => ({
+      id: h.id,
+      user_id: userId,
+      title: h.title,
+      // Минимальный набор полей, чтобы Supabase не ругался
+      color: h.color,
+      start_date: h.startDate,
+      longest_streak: h.longestStreak,
+      
+      position: index // 👈 Главное обновление
+    }));
+  
+    const { error } = await supabase.from('antihabits').upsert(updates);
+    if (error) console.error('Error saving AntiHabits order:', error);
 };
 
 export const deleteAntiHabitFromDb = async (id) => {

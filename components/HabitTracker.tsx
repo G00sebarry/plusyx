@@ -18,6 +18,9 @@ interface HabitTrackerProps {
   onEditAntiHabit: (habit: AntiHabit) => void;
   onDeleteAntiHabit: (id: string) => void;
   onRelapseAntiHabit: (id: string) => void;
+  
+  // 🔥 НОВЫЙ ХЕНДЛЕР: Сортировка вредных
+  onReorderAntiHabits: (newHabits: AntiHabit[]) => void;
 }
 
 const WEEKDAYS = ['ВС', 'ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ'];
@@ -25,17 +28,19 @@ const WEEKDAYS = ['ВС', 'ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ'];
 export const HabitTracker: React.FC<HabitTrackerProps> = ({ 
   habits, antiHabits,
   onToggleHabit, onEditHabit, onDeleteHabit, onAddHabit, onReorderHabits,
-  onAddAntiHabit, onEditAntiHabit, onDeleteAntiHabit, onRelapseAntiHabit
+  onAddAntiHabit, onEditAntiHabit, onDeleteAntiHabit, onRelapseAntiHabit, onReorderAntiHabits
 }) => {
   // Состояние переключателя вкладок
   const [activeTab, setActiveTab] = useState<'build' | 'quit'>('build');
   
   const [editingValue, setEditingValue] = useState<{id: string, date: string} | null>(null);
   const [tempValue, setTempValue] = useState('');
+  
+  // ДЛЯ Drag & Drop
   const [draggedHabitId, setDraggedHabitId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
 
-  // --- ХЕЛПЕРЫ (Оставил без изменений) ---
+  // --- ХЕЛПЕРЫ ---
   const formatDate = (date: Date) => {
     const y = date.getFullYear();
     const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -126,7 +131,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     setEditingValue(null);
   };
 
-  // --- DRAG AND DROP (Оставил) ---
+  // --- DRAG AND DROP (УНИВЕРСАЛЬНЫЙ) ---
   const handleDragStart = (e: React.DragEvent, id: string) => {
     setDraggedHabitId(id);
     e.dataTransfer.setData('habitId', id);
@@ -136,16 +141,36 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     e.preventDefault();
     if (draggedHabitId !== id) { setDropTargetId(id); }
   };
+
+  // 🔥 ЛОГИКА СБРОСА ЗАВИСИТ ОТ ВКЛАДКИ
   const handleDrop = (e: React.DragEvent, targetId: string) => {
     e.preventDefault();
     const draggedId = e.dataTransfer.getData('habitId') || draggedHabitId;
+    
     if (draggedId && draggedId !== targetId) {
-      const newHabits = [...habits];
-      const draggedIdx = newHabits.findIndex(h => h.id === draggedId);
-      const targetIdx = newHabits.findIndex(h => h.id === targetId);
-      const [draggedItem] = newHabits.splice(draggedIdx, 1);
-      newHabits.splice(targetIdx, 0, draggedItem);
-      onReorderHabits(newHabits);
+        if (activeTab === 'build') {
+             // Сортировка полезных
+             const newHabits = [...habits];
+             const draggedIdx = newHabits.findIndex(h => h.id === draggedId);
+             const targetIdx = newHabits.findIndex(h => h.id === targetId);
+             
+             if (draggedIdx > -1 && targetIdx > -1) {
+                const [draggedItem] = newHabits.splice(draggedIdx, 1);
+                newHabits.splice(targetIdx, 0, draggedItem);
+                onReorderHabits(newHabits);
+             }
+        } else {
+             // Сортировка вредных
+             const newHabits = [...antiHabits];
+             const draggedIdx = newHabits.findIndex(h => h.id === draggedId);
+             const targetIdx = newHabits.findIndex(h => h.id === targetId);
+
+             if (draggedIdx > -1 && targetIdx > -1) {
+                const [draggedItem] = newHabits.splice(draggedIdx, 1);
+                newHabits.splice(targetIdx, 0, draggedItem);
+                onReorderAntiHabits(newHabits); // Вызываем новый проп
+             }
+        }
     }
     setDraggedHabitId(null);
     setDropTargetId(null);
@@ -154,14 +179,13 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
   return (
     <div className="p-4 flex flex-col gap-6 animate-in fade-in duration-300 h-full overflow-y-auto no-scrollbar">
       
-      {/* --- ШАПКА С ПЕРЕКЛЮЧАТЕЛЕМ --- */}
+      {/* --- ШАПКА --- */}
       <div className="flex justify-between items-center px-1">
         <div className="bg-black/10 p-1 rounded-xl flex gap-1 border border-white/5">
              <button onClick={() => setActiveTab('build')} className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'build' ? 'bg-[var(--tg-theme-button-color)] text-white shadow-md' : 'text-gray-400 hover:text-white'}`}>Создать</button>
              <button onClick={() => setActiveTab('quit')} className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'quit' ? 'bg-red-500 text-white shadow-md' : 'text-gray-400 hover:text-white'}`}>Бросить</button>
         </div>
         <button 
-            // Кнопка добавляет разное в зависимости от активной вкладки
             onClick={activeTab === 'build' ? onAddHabit : onAddAntiHabit} 
             className={`text-[11px] font-black uppercase tracking-widest ${activeTab === 'build' ? 'text-blue-500' : 'text-red-500'}`}
         >
@@ -250,20 +274,32 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
             </div>
           ) : (
              <div className="grid grid-cols-1 gap-4 pb-32">
-                 {antiHabits.map(h => (
-                     <AntiHabitCard 
-                        key={h.id} 
-                        habit={h} 
-                        onEdit={onEditAntiHabit} 
-                        onDelete={onDeleteAntiHabit} 
-                        onRelapse={onRelapseAntiHabit}
-                     />
-                 ))}
+                 {antiHabits.map(h => {
+                     const isTarget = dropTargetId === h.id;
+                     return (
+                        <div
+                            key={h.id}
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, h.id)}
+                            onDragOver={(e) => handleDragOver(e, h.id)}
+                            onDrop={(e) => handleDrop(e, h.id)}
+                            onDragEnd={() => { setDraggedHabitId(null); setDropTargetId(null); }}
+                            className={`transition-all duration-200 ${isTarget ? 'scale-105 opacity-50' : ''} ${draggedHabitId === h.id ? 'opacity-30' : ''}`}
+                        >
+                            <AntiHabitCard 
+                                habit={h} 
+                                onEdit={onEditAntiHabit} 
+                                onDelete={onDeleteAntiHabit} 
+                                onRelapse={onRelapseAntiHabit}
+                            />
+                        </div>
+                     );
+                 })}
              </div>
           )
       )}
 
-      {/* МОДАЛКА ВВОДА ЗНАЧЕНИЙ (ТОЛЬКО ДЛЯ ПОЛЕЗНЫХ) */}
+      {/* МОДАЛКА ВВОДА ЗНАЧЕНИЙ */}
       {editingValue && (
         <div className="fixed inset-0 z-[400] flex items-center justify-center p-6" onClick={(e) => e.stopPropagation()}>
             <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setEditingValue(null)} />

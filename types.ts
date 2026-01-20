@@ -25,15 +25,13 @@ export interface TaskComment {
   date: string;
 }
 
-// 🔥 ИСПРАВЛЕННЫЙ ИНТЕРФЕЙС ДЛЯ ФАЙЛА
-// Мы добавили url для облака и сделали data необязательным для совместимости
 export interface TaskFile {
   id: string;
   name: string;
-  url?: string;   // <-- Добавили для Supabase Storage
-  data?: string;  // <-- Сделали необязательным (Base64 для старых файлов)
-  type: string;   
-  size?: number;  // <-- Сделали необязательным
+  url?: string;
+  data?: string;
+  type: string;
+  size?: number;
 }
 
 export interface Task {
@@ -42,48 +40,40 @@ export interface Task {
   description: string;
   date: string;
   time?: string;
-  
-  isTimer?: boolean; // Включен ли режим таймера
-
+  isTimer?: boolean;
   status: TaskStatus;
-  columnId?: string; // Привязка к конкретной колонке
+  columnId?: string;
   color?: string;
-    // 🔥 ДОБАВИЛИ ЭТО ПОЛЕ
   position: number;
-  // Старые поля (оставляем, чтобы не крашилось при чтении старых задач)
   fileName?: string;
   fileData?: string;
-
-  // 🔥 НОВОЕ ПОЛЕ: Список файлов
   files?: TaskFile[];
-
   coverData?: string;
-  coverPosition?: number; // 0 to 100
-  coverIntensity?: number; // 0 to 100
+  coverPosition?: number;
+  coverIntensity?: number;
   checklists: Checklist[];
   comments?: TaskComment[];
 }
 
-// --- ПРИВЫЧКИ (СОЗДАТЬ) ---
+// --- ПРИВЫЧКИ ---
 export interface Habit {
   id: string;
   title: string;        
   description?: string; 
-  
   emoji?: string;       
   color: string;        
-
   isMeasurable: boolean;
   targetValue?: number; 
   unit?: string;        
-
   frequency: {
     type: 'daily' | 'specific' | 'flexible';
-    days: number[]; // 0 - Вс, 1 - Пн ... 6 - Сб
+    days: number[];
   };
-
   history: Record<string, boolean | number>;
   
+  // 🔥 Позиция для сортировки
+  position: number;
+
   reminderTime?: string;
   fileName?: string;
   fileData?: string;
@@ -91,25 +81,26 @@ export interface Habit {
   coverIntensity?: number;
 }
 
-// --- 🔥 ВРЕДНЫЕ ПРИВЫЧКИ (БРОСИТЬ) ---
+// --- АНТИ-ПРИВЫЧКИ ---
 export interface AntiHabit {
   id: string;
   title: string;
   emoji: string;
-  color: string; // Цвет кольца прогресса
+  color: string;
   
-  startDate: number;     // Дата начала (Timestamp), чтобы тикал таймер
-  longestStreak: number; // Рекорд в миллисекундах
-  goal?: number;         // Цель (если есть)
+  startDate: number;
+  longestStreak: number;
+  goal?: number;
   
-  history: { date: number; duration: number }[]; // История срывов
+  history: { date: number; duration: number }[];
   
-  // Кастомизация обложки
+  // 🔥 ДОБАВИЛИ ПОЗИЦИЮ СЮДА
+  position: number;
+
   fileData?: string;
   coverPosition?: number;
   coverIntensity?: number;
 }
-// -------------------------------------
 
 export type ViewType = 'kanban' | 'calendar' | 'tracker';
 
