@@ -4,22 +4,18 @@ import { AntiHabitCard } from './AntiHabitCard';
 
 interface HabitTrackerProps {
   habits: Habit[];
-  antiHabits: AntiHabit[]; // Новое: список вредных привычек
+  antiHabits: AntiHabit[];
   
-  // Старые хендлеры
   onToggleHabit: (id: string, date: string, value: number | boolean) => void;
   onEditHabit: (habit: Habit) => void;
   onDeleteHabit: (id: string) => void;
   onAddHabit: () => void;
   onReorderHabits: (newHabits: Habit[]) => void;
   
-  // Новые хендлеры
   onAddAntiHabit: () => void;
   onEditAntiHabit: (habit: AntiHabit) => void;
   onDeleteAntiHabit: (id: string) => void;
   onRelapseAntiHabit: (id: string) => void;
-  
-  // 🔥 НОВЫЙ ХЕНДЛЕР: Сортировка вредных
   onReorderAntiHabits: (newHabits: AntiHabit[]) => void;
 }
 
@@ -30,13 +26,11 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
   onToggleHabit, onEditHabit, onDeleteHabit, onAddHabit, onReorderHabits,
   onAddAntiHabit, onEditAntiHabit, onDeleteAntiHabit, onRelapseAntiHabit, onReorderAntiHabits
 }) => {
-  // Состояние переключателя вкладок
   const [activeTab, setActiveTab] = useState<'build' | 'quit'>('build');
-  
   const [editingValue, setEditingValue] = useState<{id: string, date: string} | null>(null);
   const [tempValue, setTempValue] = useState('');
   
-  // ДЛЯ Drag & Drop
+  // DRAG & DROP STATE
   const [draggedHabitId, setDraggedHabitId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
 
@@ -131,7 +125,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     setEditingValue(null);
   };
 
-  // --- DRAG AND DROP (УНИВЕРСАЛЬНЫЙ) ---
+  // --- DRAG AND DROP ---
   const handleDragStart = (e: React.DragEvent, id: string) => {
     setDraggedHabitId(id);
     e.dataTransfer.setData('habitId', id);
@@ -141,34 +135,27 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     e.preventDefault();
     if (draggedHabitId !== id) { setDropTargetId(id); }
   };
-
-  // 🔥 ЛОГИКА СБРОСА ЗАВИСИТ ОТ ВКЛАДКИ
   const handleDrop = (e: React.DragEvent, targetId: string) => {
     e.preventDefault();
     const draggedId = e.dataTransfer.getData('habitId') || draggedHabitId;
-    
     if (draggedId && draggedId !== targetId) {
         if (activeTab === 'build') {
-             // Сортировка полезных
              const newHabits = [...habits];
              const draggedIdx = newHabits.findIndex(h => h.id === draggedId);
              const targetIdx = newHabits.findIndex(h => h.id === targetId);
-             
              if (draggedIdx > -1 && targetIdx > -1) {
                 const [draggedItem] = newHabits.splice(draggedIdx, 1);
                 newHabits.splice(targetIdx, 0, draggedItem);
                 onReorderHabits(newHabits);
              }
         } else {
-             // Сортировка вредных
              const newHabits = [...antiHabits];
              const draggedIdx = newHabits.findIndex(h => h.id === draggedId);
              const targetIdx = newHabits.findIndex(h => h.id === targetId);
-
              if (draggedIdx > -1 && targetIdx > -1) {
                 const [draggedItem] = newHabits.splice(draggedIdx, 1);
                 newHabits.splice(targetIdx, 0, draggedItem);
-                onReorderAntiHabits(newHabits); // Вызываем новый проп
+                onReorderAntiHabits(newHabits);
              }
         }
     }
@@ -177,127 +164,163 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
   };
 
   return (
-    <div className="p-4 flex flex-col gap-6 animate-in fade-in duration-300 h-full overflow-y-auto no-scrollbar">
+    <div className="flex flex-col h-full overflow-y-auto no-scrollbar animate-in fade-in duration-300">
       
-      {/* --- ШАПКА --- */}
-      <div className="flex justify-between items-center px-1">
-        <div className="bg-black/10 p-1 rounded-xl flex gap-1 border border-white/5">
-             <button onClick={() => setActiveTab('build')} className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'build' ? 'bg-[var(--tg-theme-button-color)] text-white shadow-md' : 'text-gray-400 hover:text-white'}`}>Создать</button>
-             <button onClick={() => setActiveTab('quit')} className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'quit' ? 'bg-red-500 text-white shadow-md' : 'text-gray-400 hover:text-white'}`}>Бросить</button>
+      {/* --- 🔥 НОВАЯ ШАПКА (SEGMENTED CONTROL) --- */}
+      <div className="px-5 py-2 sticky top-0 z-20 backdrop-blur-md bg-gradient-to-b from-[var(--tg-theme-bg-color)] to-transparent">
+        <div className="bg-black/10 p-1.5 rounded-[20px] flex relative border border-white/5 shadow-inner">
+           {/* Фон активной вкладки (анимация) */}
+           <div className={`absolute top-1.5 bottom-1.5 w-[calc(50%-6px)] rounded-[16px] shadow-md transition-all duration-300 ease-out ${activeTab === 'build' ? 'left-1.5 bg-[#4cc3a1]' : 'left-[calc(50%+3px)] bg-red-500'}`} />
+           
+           <button 
+             onClick={() => setActiveTab('build')} 
+             className={`flex-1 relative z-10 py-2.5 text-[10px] font-black uppercase tracking-[0.2em] transition-colors duration-300 ${activeTab === 'build' ? 'text-white' : 'text-gray-400 hover:text-white'}`}
+           >
+             Создать
+           </button>
+           <button 
+             onClick={() => setActiveTab('quit')} 
+             className={`flex-1 relative z-10 py-2.5 text-[10px] font-black uppercase tracking-[0.2em] transition-colors duration-300 ${activeTab === 'quit' ? 'text-white' : 'text-gray-400 hover:text-white'}`}
+           >
+             Бросить
+           </button>
         </div>
-        <button 
-            onClick={activeTab === 'build' ? onAddHabit : onAddAntiHabit} 
-            className={`text-[11px] font-black uppercase tracking-widest ${activeTab === 'build' ? 'text-blue-500' : 'text-red-500'}`}
-        >
-            + Добавить
-        </button>
       </div>
 
-      {/* --- ВКЛАДКА "СОЗДАТЬ" (ПОЛЕЗНЫЕ) --- */}
-      {activeTab === 'build' && (
-          habits.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-[50vh] text-center opacity-40 gap-4">
-                <div className="text-6xl grayscale">🌱</div>
-                <div className="flex flex-col gap-1">
-                    <h3 className="text-sm font-black uppercase tracking-widest tg-text">Полезные привычки</h3>
-                    <p className="text-[10px] tg-hint">Создай то, что хочешь делать каждый день</p>
+      <div className="p-4 pb-24 flex-1 flex flex-col gap-4">
+          
+        {/* --- ВКЛАДКА "СОЗДАТЬ" --- */}
+        {activeTab === 'build' && (
+            habits.length === 0 ? (
+                // 🔥 НОВЫЙ EMPTY STATE (ПРОДАЮЩИЙ)
+                <div className="flex flex-col items-center justify-center flex-1 min-h-[50vh] text-center gap-6 animate-in zoom-in-95 duration-500">
+                    <div className="w-24 h-24 bg-[#4cc3a1]/10 rounded-[32px] flex items-center justify-center text-5xl shadow-[0_0_40px_-10px_rgba(76,195,161,0.3)] animate-pulse">
+                        🌱
+                    </div>
+                    <div className="flex flex-col gap-2 max-w-[250px]">
+                        <h3 className="text-lg font-black uppercase tracking-widest tg-text">Время расти</h3>
+                        <p className="text-xs tg-hint leading-relaxed">Маленькие шаги ведут к большим переменам. Заведи первую привычку прямо сейчас.</p>
+                    </div>
+                    <button 
+                        onClick={onAddHabit}
+                        className="py-4 px-8 bg-[#4cc3a1] text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl shadow-[#4cc3a1]/30 active:scale-95 transition-all"
+                    >
+                        Создать привычку
+                    </button>
                 </div>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-4 pb-32">
-                {habits.map(habit => {
-                    const progress = calculateProgress(habit);
-                    const radius = 10;
-                    const circ = 2 * Math.PI * radius;
-                    const offset = circ - (progress / 100) * circ;
-                    const isTarget = dropTargetId === habit.id;
-                    const hasCover = !!habit.fileData && habit.fileData.length > 0;
+            ) : (
+                <>
+                    {habits.map(habit => {
+                        const progress = calculateProgress(habit);
+                        const radius = 10;
+                        const circ = 2 * Math.PI * radius;
+                        const offset = circ - (progress / 100) * circ;
+                        const isTarget = dropTargetId === habit.id;
+                        const hasCover = !!habit.fileData && habit.fileData.length > 0;
 
-                    return (
-                        <div 
-                        key={habit.id} 
-                        draggable
-                        onDragStart={(e) => handleDragStart(e, habit.id)}
-                        onDragOver={(e) => handleDragOver(e, habit.id)}
-                        onDrop={(e) => handleDrop(e, habit.id)}
-                        onDragEnd={() => { setDraggedHabitId(null); setDropTargetId(null); }}
-                        className={`relative overflow-hidden rounded-[32px] shadow-sm p-5 flex flex-col gap-4 transition-all min-h-[140px] cursor-grab active:cursor-grabbing ${isTarget ? 'scale-[1.02] ring-2 ring-blue-500' : ''} ${draggedHabitId === habit.id ? 'opacity-40' : ''} ${!hasCover ? 'tg-secondary-bg border border-gray-400/5' : ''}`}
-                        style={hasCover ? {
-                            backgroundImage: `url(${habit.fileData})`,
-                            backgroundSize: 'cover',
-                            backgroundPosition: `50% ${habit.coverPosition ?? 50}%`
-                        } : {}}
-                        onClick={() => onEditHabit(habit)}
-                        >
-                            {hasCover && <div className="absolute inset-0 z-0" style={{ backgroundColor: `rgba(0,0,0,${(habit.coverIntensity ?? 60) / 100})` }} />}
+                        return (
+                            <div 
+                            key={habit.id} 
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, habit.id)}
+                            onDragOver={(e) => handleDragOver(e, habit.id)}
+                            onDrop={(e) => handleDrop(e, habit.id)}
+                            onDragEnd={() => { setDraggedHabitId(null); setDropTargetId(null); }}
+                            className={`relative overflow-hidden rounded-[32px] shadow-sm p-5 flex flex-col gap-4 transition-all min-h-[140px] cursor-grab active:cursor-grabbing ${isTarget ? 'scale-[1.02] ring-2 ring-blue-500' : ''} ${draggedHabitId === habit.id ? 'opacity-40' : ''} ${!hasCover ? 'tg-secondary-bg border border-gray-400/5' : ''}`}
+                            style={hasCover ? {
+                                backgroundImage: `url(${habit.fileData})`,
+                                backgroundSize: 'cover',
+                                backgroundPosition: `50% ${habit.coverPosition ?? 50}%`
+                            } : {}}
+                            onClick={() => onEditHabit(habit)}
+                            >
+                                {hasCover && <div className="absolute inset-0 z-0" style={{ backgroundColor: `rgba(0,0,0,${(habit.coverIntensity ?? 60) / 100})` }} />}
 
-                            <div className="relative z-10 flex justify-between items-start">
-                                <div className="flex items-center gap-3">
-                                    <div className={`w-12 h-12 rounded-2xl ${habit.color} flex items-center justify-center text-2xl shrink-0 shadow-sm border border-white/10`}>{habit.emoji || '🔥'}</div>
-                                    <div className="flex flex-col">
-                                        <span className={`text-sm font-black uppercase tracking-tight ${hasCover ? 'text-white drop-shadow-md' : 'tg-text'}`}>{habit.title}</span>
-                                        {habit.description && (<span className={`text-[10px] line-clamp-1 italic ${hasCover ? 'text-white/70' : 'tg-hint opacity-70'}`}>{habit.description}</span>)}
+                                <div className="relative z-10 flex justify-between items-start">
+                                    <div className="flex items-center gap-3">
+                                        <div className={`w-12 h-12 rounded-2xl ${habit.color} flex items-center justify-center text-2xl shrink-0 shadow-sm border border-white/10`}>{habit.emoji || '🔥'}</div>
+                                        <div className="flex flex-col">
+                                            <span className={`text-sm font-black uppercase tracking-tight ${hasCover ? 'text-white drop-shadow-md' : 'tg-text'}`}>{habit.title}</span>
+                                            {habit.description && (<span className={`text-[10px] line-clamp-1 italic ${hasCover ? 'text-white/70' : 'tg-hint opacity-70'}`}>{habit.description}</span>)}
+                                        </div>
                                     </div>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                    <button onClick={(e) => { e.stopPropagation(); onDeleteHabit(habit.id); }} className={`w-8 h-8 flex items-center justify-center rounded-xl transition-colors ${hasCover ? 'bg-white/10 text-white/60 hover:text-white' : 'bg-red-500/5 text-red-500/30 hover:text-red-500'}`}>
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-                                    </button>
-                                    <div className="flex items-center gap-2">
-                                        <span className={`text-[10px] font-black ${hasCover ? 'text-white/80' : 'tg-text opacity-40'}`}>{progress}%</span>
-                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${hasCover ? 'bg-white/10' : 'border border-gray-400/10 bg-black/5'}`}>
-                                            <svg className="w-full h-full -rotate-90" viewBox="0 0 24 24">
-                                                <circle cx="12" cy="12" r={radius} fill="none" stroke="currentColor" strokeWidth="2.5" className={hasCover ? "text-white/10" : "text-gray-400/10"} />
-                                                <circle cx="12" cy="12" r={radius} fill="none" stroke="currentColor" strokeWidth="2.5" strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round" className="text-green-500 transition-all duration-700" />
-                                            </svg>
+                                    <div className="flex items-center gap-3">
+                                        <button onClick={(e) => { e.stopPropagation(); onDeleteHabit(habit.id); }} className={`w-8 h-8 flex items-center justify-center rounded-xl transition-colors ${hasCover ? 'bg-white/10 text-white/60 hover:text-white' : 'bg-red-500/5 text-red-500/30 hover:text-red-500'}`}>
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                                        </button>
+                                        <div className="flex items-center gap-2">
+                                            <span className={`text-[10px] font-black ${hasCover ? 'text-white/80' : 'tg-text opacity-40'}`}>{progress}%</span>
+                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${hasCover ? 'bg-white/10' : 'border border-gray-400/10 bg-black/5'}`}>
+                                                <svg className="w-full h-full -rotate-90" viewBox="0 0 24 24">
+                                                    <circle cx="12" cy="12" r={radius} fill="none" stroke="currentColor" strokeWidth="2.5" className={hasCover ? "text-white/10" : "text-gray-400/10"} />
+                                                    <circle cx="12" cy="12" r={radius} fill="none" stroke="currentColor" strokeWidth="2.5" strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round" className="text-green-500 transition-all duration-700" />
+                                                </svg>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
+                                <div className="relative z-10 flex gap-2.5 overflow-x-auto no-scrollbar pb-1 px-0.5">{renderSlots(habit, hasCover)}</div>
                             </div>
-                            <div className="relative z-10 flex gap-2.5 overflow-x-auto no-scrollbar pb-1 px-0.5">{renderSlots(habit, hasCover)}</div>
-                        </div>
-                    );
-                })}
-            </div>
-          )
-      )}
+                        );
+                    })}
+                    <button onClick={onAddHabit} className="w-full py-4 rounded-2xl border border-dashed border-gray-400/20 tg-text opacity-50 text-[10px] font-black uppercase tracking-widest hover:opacity-100 hover:bg-black/5 transition-all">
+                        + Создать ещё
+                    </button>
+                </>
+            )
+        )}
 
-      {/* --- ВКЛАДКА "БРОСИТЬ" (ВРЕДНЫЕ) --- */}
-      {activeTab === 'quit' && (
-          antiHabits.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-[50vh] text-center opacity-40 gap-4">
-                <div className="text-6xl grayscale">⛔</div>
-                <div className="flex flex-col gap-1">
-                    <h3 className="text-sm font-black uppercase tracking-widest tg-text">Вредные привычки</h3>
-                    <p className="text-[10px] tg-hint">Избавься от того, что тянет тебя назад</p>
+        {/* --- ВКЛАДКА "БРОСИТЬ" --- */}
+        {activeTab === 'quit' && (
+            antiHabits.length === 0 ? (
+                // 🔥 НОВЫЙ EMPTY STATE (ПРОДАЮЩИЙ)
+                <div className="flex flex-col items-center justify-center flex-1 min-h-[50vh] text-center gap-6 animate-in zoom-in-95 duration-500">
+                    <div className="w-24 h-24 bg-red-500/10 rounded-[32px] flex items-center justify-center text-5xl shadow-[0_0_40px_-10px_rgba(239,68,68,0.3)] animate-pulse">
+                        ⛔
+                    </div>
+                    <div className="flex flex-col gap-2 max-w-[250px]">
+                        <h3 className="text-lg font-black uppercase tracking-widest tg-text">Сбрось лишнее</h3>
+                        <p className="text-xs tg-hint leading-relaxed">Освободись от того, что тянет тебя назад. Мы поможем считать дни свободы.</p>
+                    </div>
+                    <button 
+                        onClick={onAddAntiHabit}
+                        className="py-4 px-8 bg-red-500 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl shadow-red-500/30 active:scale-95 transition-all"
+                    >
+                        Бросить привычку
+                    </button>
                 </div>
-            </div>
-          ) : (
-             <div className="grid grid-cols-1 gap-4 pb-32">
-                 {antiHabits.map(h => {
-                     const isTarget = dropTargetId === h.id;
-                     return (
-                        <div
-                            key={h.id}
-                            draggable
-                            onDragStart={(e) => handleDragStart(e, h.id)}
-                            onDragOver={(e) => handleDragOver(e, h.id)}
-                            onDrop={(e) => handleDrop(e, h.id)}
-                            onDragEnd={() => { setDraggedHabitId(null); setDropTargetId(null); }}
-                            className={`transition-all duration-200 ${isTarget ? 'scale-105 opacity-50' : ''} ${draggedHabitId === h.id ? 'opacity-30' : ''}`}
-                        >
-                            <AntiHabitCard 
-                                habit={h} 
-                                onEdit={onEditAntiHabit} 
-                                onDelete={onDeleteAntiHabit} 
-                                onRelapse={onRelapseAntiHabit}
-                            />
-                        </div>
-                     );
-                 })}
-             </div>
-          )
-      )}
+            ) : (
+                <>
+                    <div className="grid grid-cols-1 gap-4">
+                        {antiHabits.map(h => {
+                            const isTarget = dropTargetId === h.id;
+                            return (
+                                <div
+                                    key={h.id}
+                                    draggable
+                                    onDragStart={(e) => handleDragStart(e, h.id)}
+                                    onDragOver={(e) => handleDragOver(e, h.id)}
+                                    onDrop={(e) => handleDrop(e, h.id)}
+                                    onDragEnd={() => { setDraggedHabitId(null); setDropTargetId(null); }}
+                                    className={`transition-all duration-200 ${isTarget ? 'scale-105 opacity-50' : ''} ${draggedHabitId === h.id ? 'opacity-30' : ''}`}
+                                >
+                                    <AntiHabitCard 
+                                        habit={h} 
+                                        onEdit={onEditAntiHabit} 
+                                        onDelete={onDeleteAntiHabit} 
+                                        onRelapse={onRelapseAntiHabit}
+                                    />
+                                </div>
+                            );
+                        })}
+                    </div>
+                    <button onClick={onAddAntiHabit} className="w-full py-4 rounded-2xl border border-dashed border-gray-400/20 tg-text opacity-50 text-[10px] font-black uppercase tracking-widest hover:opacity-100 hover:bg-black/5 transition-all">
+                        + Бросить что-то ещё
+                    </button>
+                </>
+            )
+        )}
+      </div>
 
       {/* МОДАЛКА ВВОДА ЗНАЧЕНИЙ */}
       {editingValue && (
