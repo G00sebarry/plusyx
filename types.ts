@@ -25,13 +25,15 @@ export interface TaskComment {
   date: string;
 }
 
-// 🔥 НОВЫЙ ИНТЕРФЕЙС ДЛЯ ФАЙЛА
+// 🔥 ИСПРАВЛЕННЫЙ ИНТЕРФЕЙС ДЛЯ ФАЙЛА
+// Мы добавили url для облака и сделали data необязательным для совместимости
 export interface TaskFile {
   id: string;
   name: string;
-  data: string; // Base64
-  type: string; // MIME type (например 'image/png', 'application/pdf')
-  size: number; // Размер в байтах
+  url?: string;   // <-- Добавили для Supabase Storage
+  data?: string;  // <-- Сделали необязательным (Base64 для старых файлов)
+  type: string;   
+  size?: number;  // <-- Сделали необязательным
 }
 
 export interface Task {

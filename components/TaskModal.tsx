@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Task, TaskStatus, TaskComment, Checklist, TaskFile, Column } from '../types';
+import { uploadImage } from '../api'; // 🔥 ИМПОРТ ФУНКЦИИ ЗАГРУЗКИ
 
 interface TaskModalProps {
   isOpen: boolean;
@@ -114,6 +115,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
 
   // Файлы
   const [files, setFiles] = useState<TaskFile[]>([]);
+  const [isUploadingFile, setIsUploadingFile] = useState(false);
   
   const [checklists, setChecklists] = useState<Checklist[]>([]);
   const [comments, setComments] = useState<TaskComment[]>([]);
@@ -130,6 +132,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const coverInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Инициализация
   useEffect(() => {
@@ -180,7 +183,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
         setSaveStatus('saved');
     }, 1000);
     return () => { if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current); };
-  }, [title, description, date, time, isTimer, status, columnId, color, coverData, coverPosition, coverIntensity, checklists, comments]);
+  }, [title, description, date, time, isTimer, status, columnId, color, coverData, coverPosition, coverIntensity, checklists, comments, files]);
 
   const handleManualSave = () => {
     onSave(getTaskData());
@@ -206,6 +209,44 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
         r.onload = ev => setCoverData(ev.target?.result as string);
         r.readAsDataURL(f);
     }
+  };
+
+  // 🔥 ОБРАБОТКА ЗАГРУЗКИ ФАЙЛОВ
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) { 
+        alert("Файл слишком большой (макс 5МБ)"); 
+        return; 
+    }
+
+    setIsUploadingFile(true);
+    try {
+        const publicUrl = await uploadImage(file); // Используем ту же функцию (bucket 'covers' пока)
+        if (publicUrl) {
+            const newFile: TaskFile = {
+                id: Math.random().toString(36).substr(2, 9),
+                name: file.name,
+                url: publicUrl,
+                type: 'file'
+            };
+            setFiles([...files, newFile]);
+            window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
+        } else {
+            alert("Ошибка загрузки");
+        }
+    } catch (err) {
+        console.error(err);
+        alert("Не удалось загрузить файл");
+    } finally {
+        setIsUploadingFile(false);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const deleteFile = (fileId: string) => {
+      setFiles(files.filter(f => f.id !== fileId));
   };
 
   // --- ЛОГИКА ЧЕК-ЛИСТОВ ---
@@ -475,17 +516,47 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
         return (
           <div className="flex flex-col gap-3">
              <label className="text-[10px] font-black tg-hint uppercase ml-1">Вложения</label>
-             <div className="w-full py-6 rounded-2xl bg-black/5 border border-dashed border-gray-400/10 flex flex-col items-center justify-center gap-2 text-center select-none">
-                 <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-500 mb-1">
-                     ☁️
-                 </div>
-                 <span className="text-xs font-bold tg-text">Облачное хранилище</span>
-                 <span className="text-[10px] tg-hint max-w-[200px] leading-relaxed">
-                     Загрузка файлов станет доступна после подключения Supabase.
-                     <br/>
-                     <span className="text-blue-500 font-black uppercase tracking-widest mt-2 block">* В разработке</span>
-                 </span>
-             </div>
+             <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" />
+             
+             {/* 🔥 СПИСОК ФАЙЛОВ */}
+             {files.length > 0 && (
+                <div className="flex flex-col gap-2">
+                    {files.map(file => (
+                        <div key={file.id} className="flex items-center gap-3 p-3 tg-secondary-bg rounded-2xl border border-white/5 group">
+                            <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-500 shrink-0">
+                                📎
+                            </div>
+                            <div className="flex flex-col flex-1 min-w-0">
+                                <a href={file.url} target="_blank" rel="noopener noreferrer" className="text-[11px] font-bold tg-text truncate hover:text-blue-500 transition-colors">
+                                    {file.name}
+                                </a>
+                                <span className="text-[9px] tg-hint uppercase">Файл</span>
+                            </div>
+                            <button onClick={() => deleteFile(file.id)} className="w-8 h-8 flex items-center justify-center text-red-500/30 hover:text-red-500 transition-colors">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                            </button>
+                        </div>
+                    ))}
+                </div>
+             )}
+
+             <button 
+                onClick={() => fileInputRef.current?.click()} 
+                disabled={isUploadingFile}
+                className="w-full py-4 rounded-2xl bg-black/5 border border-dashed border-gray-400/10 flex flex-col items-center justify-center gap-2 text-center hover:bg-black/10 transition-all active:scale-95"
+             >
+                 {isUploadingFile ? (
+                    <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"/>
+                        <span className="text-[10px] font-black uppercase tg-hint">Загрузка...</span>
+                    </div>
+                 ) : (
+                    <>
+                        <span className="text-xl">☁️</span>
+                        <span className="text-[10px] font-black uppercase tg-hint">Загрузить файл</span>
+                    </>
+                 )}
+             </button>
           </div>
         );
 

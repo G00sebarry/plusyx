@@ -10,7 +10,7 @@ import { Task, ViewType, Habit, Column, AntiHabit } from './types';
 
 // 🔥 ИМПОРТ ФУНКЦИЙ API
 import { 
-  fetchTasks, fetchColumns, saveTaskToDb, deleteTaskFromDb, saveColumnsToDb, saveTasksOrderToDb,
+  fetchTasks, fetchColumns, saveTaskToDb, deleteTaskFromDb, saveColumnsToDb, saveTasksOrderToDb, deleteColumnFromDb,
   fetchHabits, saveHabitToDb, deleteHabitFromDb,
   fetchAntiHabits, saveAntiHabitToDb, deleteAntiHabitFromDb
 } from './api';
@@ -125,6 +125,13 @@ const App: React.FC = () => {
   const handleUpdateColumns = async (newColumns: Column[]) => {
     setColumns(newColumns);
     await saveColumnsToDb(newColumns, userId);
+  };
+
+  // 🔥 НОВАЯ ФУНКЦИЯ УДАЛЕНИЯ КОЛОНКИ
+  const handleDeleteColumn = async (columnId: string) => {
+    setColumns(prev => prev.filter(c => c.id !== columnId));
+    // Сразу удаляем из БД
+    await deleteColumnFromDb(columnId);
   };
 
   // --- TASKS ---
@@ -314,7 +321,20 @@ const App: React.FC = () => {
       </header>
       {isCreateMenuOpen && <div className="fixed inset-0 z-[140]" onClick={() => setIsCreateMenuOpen(false)} />}
       <main className="flex-1 overflow-y-auto pb-24 relative z-10">
-        {view === 'kanban' && <KanbanBoard tasks={tasks} columns={columns} onUpdateColumns={handleUpdateColumns} onMoveTask={handleMoveTask} onEditTask={setEditingTask} onDeleteTask={setTaskToDelete} onCopyTask={handleCopyTask} onQuickAdd={(s, cId) => { setEditingTask({ id:'', title:'', description:'', date:toLocalDateString(new Date()), status:s, columnId: cId, checklists: [], comments: []} as Task); setIsTaskModalOpen(true); }} onDragEnd={() => {}} />}
+        {view === 'kanban' && (
+          <KanbanBoard 
+            tasks={tasks} 
+            columns={columns} 
+            onUpdateColumns={handleUpdateColumns} 
+            onDeleteColumn={handleDeleteColumn} // 🔥 ПЕРЕДАЕМ ФУНКЦИЮ УДАЛЕНИЯ
+            onMoveTask={handleMoveTask} 
+            onEditTask={setEditingTask} 
+            onDeleteTask={setTaskToDelete} 
+            onCopyTask={handleCopyTask} 
+            onQuickAdd={(s, cId) => { setEditingTask({ id:'', title:'', description:'', date:toLocalDateString(new Date()), status:s, columnId: cId, checklists: [], comments: []} as Task); setIsTaskModalOpen(true); }} 
+            onDragEnd={() => {}} 
+          />
+        )}
         {view === 'calendar' && <CalendarView tasks={tasks} habits={habits} onEditTask={(t) => { setEditingTask(t); setIsTaskModalOpen(true); }} />}
         {view === 'tracker' && <HabitTracker habits={habits} antiHabits={antiHabits} onToggleHabit={handleToggleHabit} onEditHabit={(h) => { setEditingHabit(h); setIsHabitModalOpen(true); }} onDeleteHabit={(id) => setHabitToDelete(id)} onAddHabit={() => { setEditingHabit(undefined); setIsHabitModalOpen(true); }} onReorderHabits={setHabits} onAddAntiHabit={() => { setEditingAntiHabit(undefined); setIsAntiHabitModalOpen(true); }} onEditAntiHabit={(h) => { setEditingAntiHabit(h); setIsAntiHabitModalOpen(true); }} onDeleteAntiHabit={(id) => setHabitToDelete(id)} onRelapseAntiHabit={handleRelapse} />}
       </main>
@@ -327,7 +347,6 @@ const App: React.FC = () => {
         initialTask={editingTask} 
         columns={columns} 
       />
-// Fixing deployment
       <HabitModal isOpen={isHabitModalOpen || (!!editingHabit && !!editingHabit.id)} onClose={() => { setIsHabitModalOpen(false); setEditingHabit(undefined); }} onSave={editingHabit?.id ? handleUpdateHabit : handleAddHabit} initialHabit={editingHabit} />
       <AntiHabitModal isOpen={isAntiHabitModalOpen || (!!editingAntiHabit && !!editingAntiHabit.id)} onClose={() => { setIsAntiHabitModalOpen(false); setEditingAntiHabit(undefined); }} onSave={editingAntiHabit?.id ? handleUpdateAntiHabit : handleAddAntiHabit} initialHabit={editingAntiHabit} />
       {(taskToDelete || habitToDelete) && (<div className="fixed inset-0 z-[300] flex items-center justify-center p-6"><div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => { setTaskToDelete(null); setHabitToDelete(null); }} /><div className="relative w-full max-w-xs tg-bg rounded-[32px] p-8 shadow-2xl flex flex-col gap-6 animate-in zoom-in duration-200"><div className="w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto mb-2"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg></div><h2 className="text-xl font-black tg-text text-center uppercase tracking-widest leading-tight">{taskToDelete ? 'Удалить задачу?' : 'Удалить?'}</h2><div className="flex flex-col gap-3"><button onClick={handleDeleteConfirm} className="w-full py-4 bg-red-500 text-white rounded-2xl font-bold shadow-lg shadow-red-500/20 active:scale-95 transition-all">Да, удалить</button><button onClick={() => { setTaskToDelete(null); setHabitToDelete(null); }} className="w-full py-4 tg-secondary-bg tg-text rounded-2xl font-bold active:scale-95 transition-all">Отмена</button></div></div></div>)}

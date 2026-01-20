@@ -5,6 +5,7 @@ interface KanbanBoardProps {
   tasks: Task[];
   columns: Column[];
   onUpdateColumns: (cols: Column[]) => void;
+  onDeleteColumn: (id: string) => void; // 🔥 НОВЫЙ ПРОП
   onMoveTask: (draggedId: string, targetColId: string, targetId?: string) => void;
   onEditTask: (task: Task) => void;
   onDeleteTask: (id: string) => void;
@@ -143,7 +144,7 @@ const NAV_COLORS_COVER: Record<TaskStatus, string> = {
 };
 
 export const KanbanBoard: React.FC<KanbanBoardProps> = ({ 
-  tasks, columns, onUpdateColumns, onMoveTask, onEditTask, onDeleteTask, onQuickAdd, onCopyTask 
+  tasks, columns, onUpdateColumns, onDeleteColumn, onMoveTask, onEditTask, onDeleteTask, onQuickAdd, onCopyTask 
 }) => {
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
@@ -198,7 +199,8 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
     if (hasTasks) {
       if (!confirm("В этой колонке есть задачи. Всё равно удалить?")) return;
     }
-    onUpdateColumns(columns.filter(c => c.id !== colId));
+    // 🔥 ТЕПЕРЬ ВЫЗЫВАЕМ СПЕЦИАЛЬНУЮ ФУНКЦИЮ ДЛЯ УДАЛЕНИЯ
+    onDeleteColumn(colId);
     setActiveMenuColId(null);
   };
 
