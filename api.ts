@@ -61,6 +61,12 @@ export const saveColumnsToDb = async (columns, userId) => {
   if (error) console.error('Error saving columns:', error);
 };
 
+// 🔥 НОВАЯ ФУНКЦИЯ ДЛЯ УДАЛЕНИЯ КОЛОНКИ
+export const deleteColumnFromDb = async (columnId) => {
+  const { error } = await supabase.from('columns').delete().eq('id', columnId);
+  if (error) console.error('Ошибка удаления колонки:', error);
+};
+
 // --- 🔥 ПРИВЫЧКИ (ПОЛНАЯ СИНХРОНИЗАЦИЯ СО СКРИНШОТАМИ) ---
 export const fetchHabits = async (userId) => {
   const { data, error } = await supabase
