@@ -199,7 +199,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
                     </div>
                     <div className="flex flex-col gap-2 max-w-[250px]">
                         <h3 className="text-lg font-black uppercase tracking-widest tg-text">Время расти</h3>
-                        <p className="text-xs tg-hint leading-relaxed">Маленькие шаги ведут к большим переменам. Заведи первую привычку прямо сейчас.</p>
+                        <p className="text-xs tg-hint leading-relaxed">Маленькие шаги ведут к большим переменам. Заведи полезную привычку прямо сейчас.</p>
                     </div>
                     <button 
                         onClick={onAddHabit}
