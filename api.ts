@@ -72,7 +72,7 @@ export const fetchHabits = async (userId) => {
     .from('habits')
     .select('*')
     .eq('user_id', userId)
-    .order('position', { ascending: true }) // 🔥 Сортировка по позиции
+    .order('position', { ascending: true }) 
     .order('created_at', { ascending: false });
     
   if (error) return [];
@@ -89,6 +89,12 @@ export const fetchHabits = async (userId) => {
     targetValue: Number(h.target_value) || 1,
     unit: h.unit || '',
     position: h.position || 0,
+    
+    // 🔥 НОВЫЕ ПОЛЯ (Маппинг из БД snake_case в JS camelCase)
+    identity: h.identity,
+    triggerEvent: h.trigger_event,
+    miniAction: h.mini_action,
+    reminderTime: h.reminder_time,
     
     fileData: h.file_data,
     coverPosition: h.cover_position,
@@ -111,6 +117,12 @@ export const saveHabitToDb = async (habit, userId) => {
     unit: habit.unit || '',
     position: habit.position || 0,
     
+    // 🔥 СОХРАНЕНИЕ НОВЫХ ПОЛЕЙ
+    identity: habit.identity,
+    trigger_event: habit.triggerEvent,
+    mini_action: habit.miniAction,
+    reminder_time: habit.reminderTime,
+    
     file_data: habit.fileData,
     cover_position: habit.coverPosition,
     cover_intensity: habit.coverIntensity
@@ -120,21 +132,17 @@ export const saveHabitToDb = async (habit, userId) => {
   if (error) console.error("Save Habit Error:", error);
 };
 
-// 🔥 Сохранение порядка привычек
+// 🔥 Сохранение порядка привычек (без изменений, но убедимся)
 export const saveHabitsOrderToDb = async (habits, userId) => {
   if (habits.length === 0) return;
-  
   const updates = habits.map((h, index) => ({
     id: h.id,
     user_id: userId,
     title: h.title,
-    // Важные поля обязательны для upsert
     frequency: h.frequency, 
     color: h.color,
-    
-    position: index // Обновляем позицию (0, 1, 2...)
+    position: index 
   }));
-
   const { error } = await supabase.from('habits').upsert(updates);
   if (error) console.error('Error saving habits order:', error);
 };
@@ -142,6 +150,7 @@ export const saveHabitsOrderToDb = async (habits, userId) => {
 export const deleteHabitFromDb = async (id) => {
   await supabase.from('habits').delete().eq('id', id);
 };
+
 
 // --- ⛔ АНТИ-ПРИВЫЧКИ ---
 export const fetchAntiHabits = async (userId) => {

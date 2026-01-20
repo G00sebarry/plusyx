@@ -55,26 +55,38 @@ export interface Task {
   comments?: TaskComment[];
 }
 
-// --- ПРИВЫЧКИ ---
+// --- ПРИВЫЧКИ (АТОМНЫЕ) ---
 export interface Habit {
   id: string;
   title: string;        
   description?: string; 
   emoji?: string;       
   color: string;        
+  
   isMeasurable: boolean;
   targetValue?: number; 
   unit?: string;        
+
   frequency: {
     type: 'daily' | 'specific' | 'flexible';
-    days: number[];
+    days: number[]; // 0 - Вс, 1 - Пн ... 6 - Сб
   };
-  history: Record<string, boolean | number>;
-  
-  // 🔥 Позиция для сортировки
-  position: number;
 
-  reminderTime?: string;
+  // 🔥 ОБНОВЛЕННАЯ ИСТОРИЯ
+  // value: 
+  // - number (прогресс)
+  // - true (выполнено Full)
+  // - 'mini' (выполнено Mini)
+  // - 'freeze' (заморожено)
+  history: Record<string, boolean | number | 'mini' | 'freeze'>;
+  
+  // 🔥 НОВЫЕ ПОЛЯ (МЕТОД КЛИРА)
+  identity?: string;     // "Я — Атлет"
+  triggerEvent?: string; // "После кофе"
+  miniAction?: string;   // "Хотя бы 2 отжимания"
+  reminderTime?: string; // "08:00" (Техническое время)
+
+  position: number;
   fileName?: string;
   fileData?: string;
   coverPosition?: number;
@@ -87,16 +99,11 @@ export interface AntiHabit {
   title: string;
   emoji: string;
   color: string;
-  
   startDate: number;
   longestStreak: number;
   goal?: number;
-  
   history: { date: number; duration: number }[];
-  
-  // 🔥 ДОБАВИЛИ ПОЗИЦИЮ СЮДА
   position: number;
-
   fileData?: string;
   coverPosition?: number;
   coverIntensity?: number;

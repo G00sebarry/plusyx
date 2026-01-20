@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Habit, AntiHabit } from '../types';
 import { AntiHabitCard } from './AntiHabitCard';
 
@@ -6,7 +6,7 @@ interface HabitTrackerProps {
   habits: Habit[];
   antiHabits: AntiHabit[];
   
-  onToggleHabit: (id: string, date: string, value: number | boolean) => void;
+  onToggleHabit: (id: string, date: string, value: number | boolean | 'mini' | 'freeze') => void;
   onEditHabit: (habit: Habit) => void;
   onDeleteHabit: (id: string) => void;
   onAddHabit: () => void;
@@ -30,9 +30,24 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
   const [editingValue, setEditingValue] = useState<{id: string, date: string} | null>(null);
   const [tempValue, setTempValue] = useState('');
   
+  // Контекстное меню для выбора статуса (Mini/Freeze)
+  const [contextMenu, setContextMenu] = useState<{ x: number, y: number, habitId: string, date: string } | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
   // DRAG & DROP STATE
   const [draggedHabitId, setDraggedHabitId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+
+  // Закрытие меню при клике вне
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setContextMenu(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // --- ХЕЛПЕРЫ ---
   const formatDate = (date: Date) => {
@@ -53,32 +68,65 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     let currentScore = 0;
     let maxPossibleScore = 0;
     const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    
     for (let d = 1; d <= daysInMonth; d++) {
       const date = new Date(now.getFullYear(), now.getMonth(), d);
       const dayOfWeek = date.getDay(); 
       const isScheduled = habit.frequency.days.includes(dayOfWeek);
+      
       if (isScheduled) {
         maxPossibleScore += goal;
         const dateStr = formatDate(date);
         const val = habit.history[dateStr];
+        
         let score = 0;
-        if (habit.isMeasurable) { score = Number(val || 0); } else { score = val ? goal : 0; }
+        if (val === 'freeze') {
+            // Заморозка не снижает процент, исключаем из подсчета? 
+            // Или считаем как выполненное? По Клиру лучше исключить из знаменателя.
+            maxPossibleScore -= goal; 
+        } else if (val === 'mini') {
+            score = goal * 0.5; // Мини версия дает 50% силы
+        } else if (habit.isMeasurable && typeof val === 'number') { 
+            score = val; 
+        } else if (val === true) { 
+            score = goal; 
+        }
+        
         currentScore += Math.min(score, goal);
       }
     }
-    if (maxPossibleScore === 0) return 0;
+    if (maxPossibleScore <= 0) return 0; // Защита от деления на 0
     return Math.min(100, Math.round((currentScore / maxPossibleScore) * 100));
   };
 
-  const getSlotColor = (val: number | boolean, goal: number, isMeasurable: boolean, hasCover: boolean) => {
-    const baseEmpty = hasCover ? 'bg-white/10 text-white/40 border border-white/10' : 'bg-black/20 text-white/40 border border-transparent';
-    if (!val || val === 0) return baseEmpty;
-    if (!isMeasurable) return 'bg-green-500 text-white shadow-lg border-transparent';
-    const num = Number(val);
-    const percent = (num / goal) * 100;
-    if (percent >= 100) return 'bg-green-500 text-white shadow-lg border-transparent';
-    if (percent >= 50) return 'bg-orange-500 text-white shadow-md border-transparent';
-    return 'bg-red-500 text-white shadow-sm border-transparent';
+  // 🔥 ОБНОВЛЕННАЯ ФУНКЦИЯ ЦВЕТОВ
+  const getSlotColor = (val: number | boolean | 'mini' | 'freeze' | undefined, goal: number, isMeasurable: boolean, hasCover: boolean) => {
+    const baseEmpty = hasCover ? 'bg-white/10 text-white/40 border-white/10' : 'bg-black/20 text-white/40 border-transparent';
+    const borderBase = hasCover ? 'border' : 'border';
+
+    if (val === undefined || val === 0 || val === false) return `${baseEmpty} ${borderBase}`;
+
+    // ❄️ ЗАМОРОЗКА (Ice Shield)
+    if (val === 'freeze') {
+        return 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50 shadow-[0_0_10px_rgba(6,182,212,0.2)]';
+    }
+
+    // 🍩 МИНИ-ВЕРСИЯ (Bagel/Donut)
+    if (val === 'mini') {
+        // Прозрачный фон, цветная обводка
+        return 'bg-transparent border-2 border-yellow-500 text-yellow-500 shadow-sm';
+    }
+
+    // ИЗМЕРИМЫЕ
+    if (isMeasurable && typeof val === 'number') {
+        const percent = (val / goal) * 100;
+        if (percent >= 100) return 'bg-green-500 text-white shadow-lg border-green-500';
+        if (percent >= 50) return 'bg-transparent border-2 border-orange-500 text-orange-500'; // Тоже как бублик, если половина
+        return 'bg-red-500 text-white shadow-sm border-red-500';
+    }
+
+    // ОБЫЧНОЕ ВЫПОЛНЕНИЕ (Full)
+    return 'bg-green-500 text-white shadow-lg border-green-500';
   };
 
   const renderSlots = (habit: Habit, hasCover: boolean) => {
@@ -86,23 +134,44 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     const goal = habit.targetValue || 1;
     const daysToRender: Date[] = [];
     const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    
     for (let d = 1; d <= lastDayOfMonth; d++) {
         const date = new Date(now.getFullYear(), now.getMonth(), d);
         const dayOfWeek = date.getDay();
         if (habit.frequency.days.includes(dayOfWeek)) { daysToRender.push(date); }
     }
+
     return daysToRender.map(date => {
       const ds = formatDate(date);
       const val = habit.history[ds];
       const isDone = !!val;
       const isToday = ds === formatDate(new Date());
       const bgColor = getSlotColor(val, goal, habit.isMeasurable, hasCover);
+      
       return (
-        <button key={ds} onClick={(e) => handleToggle(e, habit, ds)} className={`min-w-[56px] flex flex-col items-center gap-1 py-3 px-1 rounded-2xl transition-all active:scale-95 ${bgColor} ${isToday ? 'ring-2 ring-white/50' : ''}`}>
+        <button 
+            key={ds} 
+            onClick={(e) => handleToggle(e, habit, ds)}
+            onContextMenu={(e) => handleLongPress(e, habit, ds)} // Правый клик на ПК
+            // Для мобилок можно добавить touch-events, но пока оставим onClick
+            className={`min-w-[56px] flex flex-col items-center gap-1 py-3 px-1 rounded-2xl transition-all active:scale-95 border ${bgColor} ${isToday ? 'ring-2 ring-white/50' : ''}`}
+        >
           <span className="text-[10px] font-black">{formatShortDate(date)}</span>
           <span className={`text-[8px] font-bold ${isDone ? 'opacity-80' : 'opacity-40'}`}>{WEEKDAYS[date.getDay()]}</span>
-          <div className={`w-8 h-8 mt-1 rounded-xl flex items-center justify-center border-2 ${isDone ? 'border-white/30' : 'border-white/10'}`}>
-            {habit.isMeasurable ? (<span className="text-[10px] font-black">{val || ''}</span>) : (isDone && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4"><polyline points="20 6 9 17 4 12"/></svg>)}
+          
+          <div className={`w-8 h-8 mt-1 rounded-xl flex items-center justify-center`}>
+            {/* Иконки статусов */}
+            {val === 'freeze' && <span className="text-lg">❄️</span>}
+            {val === 'mini' && <div className="w-2 h-2 rounded-full bg-current opacity-80" />} {/* Точка внутри бублика */}
+            
+            {/* Стандартные значения */}
+            {val !== 'freeze' && val !== 'mini' && (
+                 habit.isMeasurable ? (
+                    <span className="text-[10px] font-black">{typeof val === 'number' ? val : ''}</span>
+                 ) : (
+                    isDone && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4"><polyline points="20 6 9 17 4 12"/></svg>
+                 )
+            )}
           </div>
         </button>
       );
@@ -112,10 +181,29 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
   const handleToggle = (e: React.MouseEvent, habit: Habit, dateStr: string) => {
     e.stopPropagation();
     if (habit.isMeasurable) {
-      const current = habit.history[dateStr] || 0;
+      const current = habit.history[dateStr];
+      const val = typeof current === 'number' ? current : 0;
       setEditingValue({ id: habit.id, date: dateStr });
-      setTempValue(current.toString());
-    } else { onToggleHabit(habit.id, dateStr, !habit.history[dateStr]); }
+      setTempValue(val.toString());
+    } else { 
+      // Если было Mini или Freeze, обычный клик сбрасывает или ставит Full?
+      // Сделаем просто: клик переключает между "Сделано" и "Пусто".
+      // Для спец статусов нужно меню.
+      const current = habit.history[dateStr];
+      const newValue = current ? false : true;
+      onToggleHabit(habit.id, dateStr, newValue); 
+    }
+  };
+
+  const handleLongPress = (e: React.MouseEvent, habit: Habit, dateStr: string) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setContextMenu({
+          x: e.clientX,
+          y: e.clientY,
+          habitId: habit.id,
+          date: dateStr
+      });
   };
 
   const handleSaveResult = () => {
@@ -123,6 +211,19 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     const val = tempValue === '' ? 0 : Number(tempValue);
     onToggleHabit(editingValue.id, editingValue.date, val || false);
     setEditingValue(null);
+  };
+
+  const setStatus = (status: 'mini' | 'freeze' | 'full' | 'reset') => {
+      if (!contextMenu) return;
+      let val: boolean | 'mini' | 'freeze' = false;
+      
+      if (status === 'full') val = true;
+      if (status === 'mini') val = 'mini';
+      if (status === 'freeze') val = 'freeze';
+      if (status === 'reset') val = false;
+
+      onToggleHabit(contextMenu.habitId, contextMenu.date, val);
+      setContextMenu(null);
   };
 
   // --- DRAG AND DROP ---
@@ -164,26 +265,14 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto no-scrollbar animate-in fade-in duration-300">
+    <div className="flex flex-col h-full overflow-y-auto no-scrollbar animate-in fade-in duration-300 relative">
       
-      {/* --- 🔥 НОВАЯ ШАПКА (SEGMENTED CONTROL) --- */}
+      {/* --- ШАПКА --- */}
       <div className="px-5 py-2 sticky top-0 z-20 backdrop-blur-md bg-gradient-to-b from-[var(--tg-theme-bg-color)] to-transparent">
         <div className="bg-black/10 p-1.5 rounded-[20px] flex relative border border-white/5 shadow-inner">
-           {/* Фон активной вкладки (анимация) */}
            <div className={`absolute top-1.5 bottom-1.5 w-[calc(50%-6px)] rounded-[16px] shadow-md transition-all duration-300 ease-out ${activeTab === 'build' ? 'left-1.5 bg-[#4cc3a1]' : 'left-[calc(50%+3px)] bg-red-500'}`} />
-           
-           <button 
-             onClick={() => setActiveTab('build')} 
-             className={`flex-1 relative z-10 py-2.5 text-[10px] font-black uppercase tracking-[0.2em] transition-colors duration-300 ${activeTab === 'build' ? 'text-white' : 'text-gray-400 hover:text-white'}`}
-           >
-             Создать
-           </button>
-           <button 
-             onClick={() => setActiveTab('quit')} 
-             className={`flex-1 relative z-10 py-2.5 text-[10px] font-black uppercase tracking-[0.2em] transition-colors duration-300 ${activeTab === 'quit' ? 'text-white' : 'text-gray-400 hover:text-white'}`}
-           >
-             Бросить
-           </button>
+           <button onClick={() => setActiveTab('build')} className={`flex-1 relative z-10 py-2.5 text-[10px] font-black uppercase tracking-[0.2em] transition-colors duration-300 ${activeTab === 'build' ? 'text-white' : 'text-gray-400 hover:text-white'}`}>Создать</button>
+           <button onClick={() => setActiveTab('quit')} className={`flex-1 relative z-10 py-2.5 text-[10px] font-black uppercase tracking-[0.2em] transition-colors duration-300 ${activeTab === 'quit' ? 'text-white' : 'text-gray-400 hover:text-white'}`}>Бросить</button>
         </div>
       </div>
 
@@ -192,21 +281,13 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
         {/* --- ВКЛАДКА "СОЗДАТЬ" --- */}
         {activeTab === 'build' && (
             habits.length === 0 ? (
-                // 🔥 НОВЫЙ EMPTY STATE (ПРОДАЮЩИЙ)
                 <div className="flex flex-col items-center justify-center flex-1 min-h-[50vh] text-center gap-6 animate-in zoom-in-95 duration-500">
-                    <div className="w-24 h-24 bg-[#4cc3a1]/10 rounded-[32px] flex items-center justify-center text-5xl shadow-[0_0_40px_-10px_rgba(76,195,161,0.3)] animate-pulse">
-                        🌱
-                    </div>
+                    <div className="w-24 h-24 bg-[#4cc3a1]/10 rounded-[32px] flex items-center justify-center text-5xl shadow-[0_0_40px_-10px_rgba(76,195,161,0.3)] animate-pulse">🌱</div>
                     <div className="flex flex-col gap-2 max-w-[250px]">
                         <h3 className="text-lg font-black uppercase tracking-widest tg-text">Время расти</h3>
-                        <p className="text-xs tg-hint leading-relaxed">Маленькие шаги ведут к большим переменам. Заведи полезную привычку прямо сейчас.</p>
+                        <p className="text-xs tg-hint leading-relaxed">Маленькие шаги ведут к большим переменам. Заведи первую привычку прямо сейчас.</p>
                     </div>
-                    <button 
-                        onClick={onAddHabit}
-                        className="py-4 px-8 bg-[#4cc3a1] text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl shadow-[#4cc3a1]/30 active:scale-95 transition-all"
-                    >
-                        Создать привычку
-                    </button>
+                    <button onClick={onAddHabit} className="py-4 px-8 bg-[#4cc3a1] text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl shadow-[#4cc3a1]/30 active:scale-95 transition-all">Создать привычку</button>
                 </div>
             ) : (
                 <>
@@ -227,11 +308,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
                             onDrop={(e) => handleDrop(e, habit.id)}
                             onDragEnd={() => { setDraggedHabitId(null); setDropTargetId(null); }}
                             className={`relative overflow-hidden rounded-[32px] shadow-sm p-5 flex flex-col gap-4 transition-all min-h-[140px] cursor-grab active:cursor-grabbing ${isTarget ? 'scale-[1.02] ring-2 ring-blue-500' : ''} ${draggedHabitId === habit.id ? 'opacity-40' : ''} ${!hasCover ? 'tg-secondary-bg border border-gray-400/5' : ''}`}
-                            style={hasCover ? {
-                                backgroundImage: `url(${habit.fileData})`,
-                                backgroundSize: 'cover',
-                                backgroundPosition: `50% ${habit.coverPosition ?? 50}%`
-                            } : {}}
+                            style={hasCover ? { backgroundImage: `url(${habit.fileData})`, backgroundSize: 'cover', backgroundPosition: `50% ${habit.coverPosition ?? 50}%` } : {}}
                             onClick={() => onEditHabit(habit)}
                             >
                                 {hasCover && <div className="absolute inset-0 z-0" style={{ backgroundColor: `rgba(0,0,0,${(habit.coverIntensity ?? 60) / 100})` }} />}
@@ -240,8 +317,22 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
                                     <div className="flex items-center gap-3">
                                         <div className={`w-12 h-12 rounded-2xl ${habit.color} flex items-center justify-center text-2xl shrink-0 shadow-sm border border-white/10`}>{habit.emoji || '🔥'}</div>
                                         <div className="flex flex-col">
+                                            {/* 🔥 ЛИЧНОСТЬ (IDENTITY LABEL) */}
+                                            {habit.identity && (
+                                                <div className="self-start px-2 py-0.5 rounded-md bg-white/20 backdrop-blur-sm text-[8px] font-black uppercase tracking-widest text-white mb-1 shadow-sm border border-white/10 w-fit">
+                                                    {habit.identity}
+                                                </div>
+                                            )}
                                             <span className={`text-sm font-black uppercase tracking-tight ${hasCover ? 'text-white drop-shadow-md' : 'tg-text'}`}>{habit.title}</span>
-                                            {habit.description && (<span className={`text-[10px] line-clamp-1 italic ${hasCover ? 'text-white/70' : 'tg-hint opacity-70'}`}>{habit.description}</span>)}
+                                            {/* 🔥 ТРИГГЕР ВМЕСТО ОПИСАНИЯ */}
+                                            {habit.triggerEvent ? (
+                                                <div className="flex items-center gap-1 mt-0.5">
+                                                    <span className="text-[10px]">🔗</span>
+                                                    <span className={`text-[10px] italic ${hasCover ? 'text-white/80' : 'tg-hint'}`}>{habit.triggerEvent}</span>
+                                                </div>
+                                            ) : (
+                                                habit.description && (<span className={`text-[10px] line-clamp-1 italic ${hasCover ? 'text-white/70' : 'tg-hint opacity-70'}`}>{habit.description}</span>)
+                                            )}
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-3">
@@ -263,9 +354,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
                             </div>
                         );
                     })}
-                    <button onClick={onAddHabit} className="w-full py-4 rounded-2xl border border-dashed border-gray-400/20 tg-text opacity-50 text-[10px] font-black uppercase tracking-widest hover:opacity-100 hover:bg-black/5 transition-all">
-                        + Создать ещё
-                    </button>
+                    <button onClick={onAddHabit} className="w-full py-4 rounded-2xl border border-dashed border-gray-400/20 tg-text opacity-50 text-[10px] font-black uppercase tracking-widest hover:opacity-100 hover:bg-black/5 transition-all">+ Создать ещё</button>
                 </>
             )
         )}
@@ -273,21 +362,13 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
         {/* --- ВКЛАДКА "БРОСИТЬ" --- */}
         {activeTab === 'quit' && (
             antiHabits.length === 0 ? (
-                // 🔥 НОВЫЙ EMPTY STATE (ПРОДАЮЩИЙ)
                 <div className="flex flex-col items-center justify-center flex-1 min-h-[50vh] text-center gap-6 animate-in zoom-in-95 duration-500">
-                    <div className="w-24 h-24 bg-red-500/10 rounded-[32px] flex items-center justify-center text-5xl shadow-[0_0_40px_-10px_rgba(239,68,68,0.3)] animate-pulse">
-                        ⛔
-                    </div>
+                    <div className="w-24 h-24 bg-red-500/10 rounded-[32px] flex items-center justify-center text-5xl shadow-[0_0_40px_-10px_rgba(239,68,68,0.3)] animate-pulse">⛔</div>
                     <div className="flex flex-col gap-2 max-w-[250px]">
                         <h3 className="text-lg font-black uppercase tracking-widest tg-text">Сбрось лишнее</h3>
                         <p className="text-xs tg-hint leading-relaxed">Освободись от того, что тянет тебя назад. Мы поможем считать дни свободы.</p>
                     </div>
-                    <button 
-                        onClick={onAddAntiHabit}
-                        className="py-4 px-8 bg-red-500 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl shadow-red-500/30 active:scale-95 transition-all"
-                    >
-                        Бросить привычку
-                    </button>
+                    <button onClick={onAddAntiHabit} className="py-4 px-8 bg-red-500 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl shadow-red-500/30 active:scale-95 transition-all">Бросить привычку</button>
                 </div>
             ) : (
                 <>
@@ -295,32 +376,40 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
                         {antiHabits.map(h => {
                             const isTarget = dropTargetId === h.id;
                             return (
-                                <div
-                                    key={h.id}
-                                    draggable
-                                    onDragStart={(e) => handleDragStart(e, h.id)}
-                                    onDragOver={(e) => handleDragOver(e, h.id)}
-                                    onDrop={(e) => handleDrop(e, h.id)}
-                                    onDragEnd={() => { setDraggedHabitId(null); setDropTargetId(null); }}
-                                    className={`transition-all duration-200 ${isTarget ? 'scale-105 opacity-50' : ''} ${draggedHabitId === h.id ? 'opacity-30' : ''}`}
-                                >
-                                    <AntiHabitCard 
-                                        habit={h} 
-                                        onEdit={onEditAntiHabit} 
-                                        onDelete={onDeleteAntiHabit} 
-                                        onRelapse={onRelapseAntiHabit}
-                                    />
+                                <div key={h.id} draggable onDragStart={(e) => handleDragStart(e, h.id)} onDragOver={(e) => handleDragOver(e, h.id)} onDrop={(e) => handleDrop(e, h.id)} onDragEnd={() => { setDraggedHabitId(null); setDropTargetId(null); }} className={`transition-all duration-200 ${isTarget ? 'scale-105 opacity-50' : ''} ${draggedHabitId === h.id ? 'opacity-30' : ''}`}>
+                                    <AntiHabitCard habit={h} onEdit={onEditAntiHabit} onDelete={onDeleteAntiHabit} onRelapse={onRelapseAntiHabit} />
                                 </div>
                             );
                         })}
                     </div>
-                    <button onClick={onAddAntiHabit} className="w-full py-4 rounded-2xl border border-dashed border-gray-400/20 tg-text opacity-50 text-[10px] font-black uppercase tracking-widest hover:opacity-100 hover:bg-black/5 transition-all">
-                        + Бросить что-то ещё
-                    </button>
+                    <button onClick={onAddAntiHabit} className="w-full py-4 rounded-2xl border border-dashed border-gray-400/20 tg-text opacity-50 text-[10px] font-black uppercase tracking-widest hover:opacity-100 hover:bg-black/5 transition-all">+ Бросить что-то ещё</button>
                 </>
             )
         )}
       </div>
+
+      {/* --- КОНТЕКСТНОЕ МЕНЮ (Long Press) --- */}
+      {contextMenu && (
+        <div 
+            ref={menuRef}
+            className="fixed z-[500] w-40 tg-secondary-bg rounded-2xl shadow-2xl border border-gray-400/10 flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+            style={{ top: contextMenu.y, left: Math.min(contextMenu.x, window.innerWidth - 170) }}
+        >
+            <button onClick={() => setStatus('full')} className="p-3 text-left hover:bg-black/5 flex items-center gap-2 text-[10px] font-bold tg-text">
+                <div className="w-3 h-3 rounded-full bg-green-500" /> Выполнено (100%)
+            </button>
+            <button onClick={() => setStatus('mini')} className="p-3 text-left hover:bg-black/5 flex items-center gap-2 text-[10px] font-bold tg-text">
+                <div className="w-3 h-3 rounded-full border-2 border-yellow-500" /> Мини-версия
+            </button>
+            <button onClick={() => setStatus('freeze')} className="p-3 text-left hover:bg-black/5 flex items-center gap-2 text-[10px] font-bold tg-text">
+                <span className="text-sm">❄️</span> Заморозка
+            </button>
+            <div className="h-[1px] bg-gray-400/10 mx-2" />
+            <button onClick={() => setStatus('reset')} className="p-3 text-left hover:bg-black/5 flex items-center gap-2 text-[10px] font-bold text-red-500">
+                Сбросить
+            </button>
+        </div>
+      )}
 
       {/* МОДАЛКА ВВОДА ЗНАЧЕНИЙ */}
       {editingValue && (
