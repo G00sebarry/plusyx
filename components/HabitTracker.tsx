@@ -18,6 +18,7 @@ interface HabitTrackerProps {
 }
 
 const WEEKDAYS = ['ВС', 'ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ'];
+const WEEKDAYS_SHORT = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
 
 export const HabitTracker: React.FC<HabitTrackerProps> = ({ 
   habits, antiHabits,
@@ -27,6 +28,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
   const [activeTab, setActiveTab] = useState<'build' | 'quit'>('build');
   const [editingValue, setEditingValue] = useState<{id: string, date: string} | null>(null);
   const [tempValue, setTempValue] = useState('');
+  const [expandedHeatmaps, setExpandedHeatmaps] = useState<Set<string>>(new Set());
   
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, habitId: string, date: string } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -44,7 +46,6 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // --- ХЕЛПЕРЫ ---
   const formatDate = (date: Date) => {
     const y = date.getFullYear();
     const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -55,6 +56,16 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     const day = date.getDate().toString().padStart(2, '0');
     const month = (date.getMonth() + 1).toString().padStart(2, '0');
     return `${day}.${month}`;
+  };
+
+  const toggleHeatmap = (habitId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setExpandedHeatmaps(prev => {
+      const next = new Set(prev);
+      if (next.has(habitId)) next.delete(habitId);
+      else next.add(habitId);
+      return next;
+    });
   };
   
   const calculateProgress = (habit: Habit) => {
@@ -84,7 +95,6 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     return Math.min(100, Math.round((currentScore / maxPossibleScore) * 100));
   };
 
-  // 🔥 ПОДСЧЁТ STREAK
   const calculateStreak = (habit: Habit): number => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -94,7 +104,6 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     for (let i = 0; i < 365; i++) {
       const dayOfWeek = checkDate.getDay();
       
-      // Пропускаем дни не по расписанию
       if (!habit.frequency.days.includes(dayOfWeek)) {
         checkDate.setDate(checkDate.getDate() - 1);
         continue;
@@ -103,18 +112,15 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
       const ds = formatDate(checkDate);
       const val = habit.history[ds];
       
-      // Freeze не ломает streak
       if (val === 'freeze') {
         checkDate.setDate(checkDate.getDate() - 1);
         continue;
       }
       
-      // Выполнено — +1
       if (val === true || val === 'mini' || (typeof val === 'number' && val > 0)) {
         streak++;
         checkDate.setDate(checkDate.getDate() - 1);
       } else {
-        // Сегодня может быть ещё не выполнено — даём шанс
         if (i === 0 && formatDate(checkDate) === formatDate(today)) {
           checkDate.setDate(checkDate.getDate() - 1);
           continue;
@@ -163,6 +169,117 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
         className: 'bg-green-500 text-white border border-green-400 shadow-[0_0_15px_rgba(34,197,94,0.5)]',
         type: 'full'
     };
+  };
+
+  // 📅 MINI HEATMAP
+  const renderMiniHeatmap = (habit: Habit, hasCover: boolean) => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    const startDayOfWeek = firstDay.getDay();
+    const goal = habit.targetValue || 1;
+    
+    const weeks: (Date | null)[][] = [];
+    let currentWeek: (Date | null)[] = [];
+    
+    for (let i = 0; i < startDayOfWeek; i++) {
+      currentWeek.push(null);
+    }
+    
+    for (let d = 1; d <= daysInMonth; d++) {
+      const date = new Date(year, month, d);
+      currentWeek.push(date);
+      if (currentWeek.length === 7) {
+        weeks.push(currentWeek);
+        currentWeek = [];
+      }
+    }
+    if (currentWeek.length > 0) {
+      while (currentWeek.length < 7) currentWeek.push(null);
+      weeks.push(currentWeek);
+    }
+
+    const getHeatmapColor = (date: Date | null) => {
+      if (!date) return 'bg-transparent';
+      const ds = formatDate(date);
+      const val = habit.history[ds];
+      const isScheduled = habit.frequency.days.includes(date.getDay());
+      
+      if (!isScheduled) return hasCover ? 'bg-white/5' : 'bg-gray-500/10';
+      if (!val) return hasCover ? 'bg-white/20' : 'bg-gray-500/30';
+      
+      if (val === 'freeze') return 'bg-cyan-400 shadow-[0_0_6px_cyan]';
+      if (val === 'mini') return 'bg-yellow-500 shadow-[0_0_4px_yellow]';
+      if (val === true) return 'bg-green-500 shadow-[0_0_6px_lime]';
+      if (typeof val === 'number') {
+        return val >= goal ? 'bg-green-500 shadow-[0_0_6px_lime]' : 'bg-orange-500 shadow-[0_0_4px_orange]';
+      }
+      return hasCover ? 'bg-white/20' : 'bg-gray-500/30';
+    };
+
+    const monthNames = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 
+                        'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+
+    return (
+      <div className={`mt-3 p-4 rounded-2xl ${hasCover ? 'bg-black/40 backdrop-blur-sm' : 'bg-black/10'} border border-white/10`}>
+        <div className="flex items-center justify-between mb-3">
+          <span className={`text-[10px] font-black uppercase tracking-wider ${hasCover ? 'text-white/70' : 'tg-hint'}`}>
+            {monthNames[month]} {year}
+          </span>
+          <div className="flex gap-2 items-center">
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-sm bg-green-500" />
+              <span className={`text-[8px] ${hasCover ? 'text-white/50' : 'tg-hint'}`}>✓</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-sm bg-yellow-500" />
+              <span className={`text-[8px] ${hasCover ? 'text-white/50' : 'tg-hint'}`}>Mini</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-sm bg-cyan-400" />
+              <span className={`text-[8px] ${hasCover ? 'text-white/50' : 'tg-hint'}`}>❄️</span>
+            </div>
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-7 gap-1 mb-1">
+          {WEEKDAYS_SHORT.map(day => (
+            <div key={day} className={`text-[8px] text-center font-bold ${hasCover ? 'text-white/40' : 'tg-hint opacity-50'}`}>
+              {day}
+            </div>
+          ))}
+        </div>
+        
+        <div className="grid gap-1">
+          {weeks.map((week, wi) => (
+            <div key={wi} className="grid grid-cols-7 gap-1">
+              {week.map((date, di) => {
+                const isToday = date && formatDate(date) === formatDate(new Date());
+                return (
+                  <div 
+                    key={di}
+                    className={`
+                      aspect-square rounded-[4px] transition-all flex items-center justify-center
+                      ${getHeatmapColor(date)}
+                      ${isToday ? 'ring-1 ring-white scale-110' : ''}
+                    `}
+                  >
+                    {date && (
+                      <span className={`text-[7px] font-bold ${hasCover ? 'text-white/60' : 'text-white/80'}`}>
+                        {date.getDate()}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
   };
 
   const renderSlots = (habit: Habit, hasCover: boolean) => {
@@ -332,6 +449,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
                         const isTarget = dropTargetId === habit.id;
                         const hasCover = !!habit.fileData;
                         const isAtomic = !!habit.identity || !!habit.triggerEvent;
+                        const isExpanded = expandedHeatmaps.has(habit.id);
 
                         return (
                             <div 
@@ -366,7 +484,6 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
                                     <div className="flex items-center gap-2">
                                         <button onClick={(e) => { e.stopPropagation(); onDeleteHabit(habit.id); }} className={`w-8 h-8 flex items-center justify-center rounded-xl transition-colors ${hasCover ? 'bg-white/10 text-white/60 hover:text-white' : 'bg-red-500/5 text-red-500/30 hover:text-red-500'}`}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg></button>
                                         
-                                        {/* 🔥 STREAK */}
                                         {streak > 0 && (
                                             <div className={`flex items-center gap-1 px-2 py-1 rounded-lg ${hasCover ? 'bg-orange-500/20' : 'bg-orange-500/10'}`}>
                                                 <span className="text-sm">🔥</span>
@@ -382,9 +499,26 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
                                         </div>
                                     </div>
                                 </div>
+                                
                                 <div className="relative z-10 flex overflow-x-auto no-scrollbar pb-2 pt-2 px-1 items-center">
                                     {renderSlots(habit, hasCover)}
                                 </div>
+
+                                {/* 📅 HEATMAP TOGGLE */}
+                                <button 
+                                  onClick={(e) => toggleHeatmap(habit.id, e)}
+                                  className={`relative z-10 self-center flex items-center gap-2 px-4 py-2 rounded-xl transition-all ${hasCover ? 'bg-white/10 text-white/70 hover:bg-white/20' : 'bg-black/5 tg-hint hover:bg-black/10'}`}
+                                >
+                                  <span className="text-sm">{isExpanded ? '🔼' : '📅'}</span>
+                                  <span className="text-[9px] font-bold uppercase tracking-wider">{isExpanded ? 'Скрыть' : 'Весь месяц'}</span>
+                                </button>
+
+                                {/* 📊 MINI HEATMAP */}
+                                {isExpanded && (
+                                  <div className="relative z-10 animate-in slide-in-from-top-2 duration-300">
+                                    {renderMiniHeatmap(habit, hasCover)}
+                                  </div>
+                                )}
                             </div>
                         );
                     })}
