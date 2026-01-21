@@ -182,19 +182,19 @@ export const saveAntiHabitToDb = async (habit, userId) => {
 };
 
 export const saveAntiHabitsOrderToDb = async (habits, userId) => {
-    if (habits.length === 0) return;
-    const updates = habits.map((h, index) => ({
-      id: h.id,
-      user_id: userId,
-      title: h.title,
-      color: h.color,
-      start_date: h.startDate,
-      longest_streak: h.longestStreak,
-      position: index
-    }));
-  
-    const { error } = await supabase.from('antihabits').upsert(updates);
-    if (error) console.error('Error saving AntiHabits order:', error);
+  if (habits.length === 0) return;
+  const updates = habits.map((h, index) => ({
+    id: h.id,
+    user_id: userId,
+    title: h.title,
+    color: h.color,
+    start_date: h.startDate,
+    longest_streak: h.longestStreak,
+    position: index
+  }));
+
+  const { error } = await supabase.from('antihabits').upsert(updates);
+  if (error) console.error('Error saving AntiHabits order:', error);
 };
 
 export const deleteAntiHabitFromDb = async (id) => {
@@ -223,7 +223,6 @@ export const uploadImage = async (file) => {
 // 🔐 АВТОРИЗАЦИЯ (Google OAuth)
 // ═══════════════════════════════════════════════════════════
 
-// Получить текущую сессию
 export const getCurrentSession = async () => {
   const { data: { session }, error } = await supabase.auth.getSession();
   if (error) {
@@ -233,7 +232,6 @@ export const getCurrentSession = async () => {
   return session;
 };
 
-// Получить текущего пользователя
 export const getCurrentUser = async () => {
   const { data: { user }, error } = await supabase.auth.getUser();
   if (error) {
@@ -243,12 +241,11 @@ export const getCurrentUser = async () => {
   return user;
 };
 
-// Войти через Google
 export const signInWithGoogle = async () => {
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
-      redirectTo: 'https://plusyx.ru'  // 👈 Явно указываем продакшн URL
+      redirectTo: 'https://plusyx.ru'
     }
   });
   
@@ -259,7 +256,6 @@ export const signInWithGoogle = async () => {
   return data;
 };
 
-// Выйти
 export const signOut = async () => {
   const { error } = await supabase.auth.signOut();
   if (error) {
@@ -267,9 +263,40 @@ export const signOut = async () => {
   }
 };
 
-// Подписка на изменения авторизации
 export const onAuthStateChange = (callback) => {
   return supabase.auth.onAuthStateChange((event, session) => {
     callback(event, session);
   });
 };
+
+// ═══════════════════════════════════════════════════════════
+// 🖼️ USER SETTINGS (WALLPAPER)
+// ═══════════════════════════════════════════════════════════
+
+export const fetchUserSettings = async (userId) => {
+  const { data, error } = await supabase
+    .from('user_settings')
+    .select('*')
+    .eq('user_id', userId)
+    .single();
+  
+  if (error && error.code !== 'PGRST116') {
+    console.error('Error fetching settings:', error);
+  }
+  return data;
+};
+
+export const saveUserSettings = async (settings) => {
+  const { data, error } = await supabase
+    .from('user_settings')
+    .upsert({
+      ...settings,
+      updated_at: new Date().toISOString()
+    }, { 
+      onConflict: 'user_id' 
+    });
+  
+  if (error) console.error('Error saving settings:', error);
+  return data;
+};
+  

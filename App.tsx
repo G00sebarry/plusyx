@@ -12,8 +12,8 @@ import {
   fetchTasks, fetchColumns, saveTaskToDb, deleteTaskFromDb, saveColumnsToDb, saveTasksOrderToDb, deleteColumnFromDb,
   fetchHabits, saveHabitToDb, deleteHabitFromDb, saveHabitsOrderToDb,
   fetchAntiHabits, saveAntiHabitToDb, deleteAntiHabitFromDb, saveAntiHabitsOrderToDb,
-  // 🔐 Новые функции авторизации
-  getCurrentSession, signInWithGoogle, signOut, onAuthStateChange
+  getCurrentSession, signInWithGoogle, signOut, onAuthStateChange,
+  fetchUserSettings, saveUserSettings
 } from './api';
 
 const toLocalDateString = (date: Date) => {
@@ -42,7 +42,6 @@ const LoginScreen: React.FC<{ onLogin: () => void }> = ({ onLogin }) => {
 
   return (
     <div className="h-screen w-screen tg-bg flex flex-col items-center justify-center p-8">
-      {/* Логотип */}
       <div className="mb-8 flex flex-col items-center">
         <div className="relative w-20 h-20 flex items-center justify-center mb-4">
           <svg width="80" height="80" viewBox="0 0 100 100">
@@ -58,7 +57,6 @@ const LoginScreen: React.FC<{ onLogin: () => void }> = ({ onLogin }) => {
         <p className="text-sm tg-hint mt-2 text-center">Таск-менеджер и трекер привычек</p>
       </div>
 
-      {/* Кнопка входа */}
       <button
         onClick={handleGoogleLogin}
         disabled={isLoading}
@@ -68,7 +66,6 @@ const LoginScreen: React.FC<{ onLogin: () => void }> = ({ onLogin }) => {
           <div className="w-5 h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
         ) : (
           <>
-            {/* Google иконка */}
             <svg width="20" height="20" viewBox="0 0 24 24">
               <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
               <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
@@ -129,6 +126,7 @@ const App: React.FC = () => {
   const [wallpaper, setWallpaper] = useState<string>(() => localStorage.getItem('plusyx_wallpaper') || '');
   const [wallpaperOpacity, setWallpaperOpacity] = useState<number>(() => Number(localStorage.getItem('plusyx_wallpaper_opacity')) || 30);
   const [wallpaperPosition, setWallpaperPosition] = useState<number>(() => Number(localStorage.getItem('plusyx_wallpaper_position')) || 50);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
   const wallpaperInputRef = useRef<HTMLInputElement>(null);
 
   // ═══════════════════════════════════════════════════════════
@@ -136,7 +134,6 @@ const App: React.FC = () => {
   // ═══════════════════════════════════════════════════════════
   useEffect(() => {
     const checkAuth = async () => {
-      // Сначала проверяем Telegram WebApp
       const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
       if (tgUser && tgUser.id) {
         setUserId(String(tgUser.id));
@@ -145,7 +142,6 @@ const App: React.FC = () => {
         return;
       }
 
-      // Если не Telegram — проверяем Supabase сессию
       const session = await getCurrentSession();
       if (session?.user) {
         setUserId(session.user.id);
@@ -157,14 +153,12 @@ const App: React.FC = () => {
 
     checkAuth();
 
-    // Слушаем изменения авторизации
     const { data: { subscription } } = onAuthStateChange((event, session) => {
       if (session?.user) {
         setUserId(session.user.id);
         setUserEmail(session.user.email || null);
         setUserName(session.user.user_metadata?.full_name || session.user.email || 'User');
       } else {
-        // Если вышел — не сбрасываем если в Telegram
         const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
         if (!tgUser) {
           setUserId(null);
@@ -189,16 +183,25 @@ const App: React.FC = () => {
     const initData = async () => {
       setIsLoading(true);
       try {
-        const [dbTasks, dbColumns, dbHabits, dbAntiHabits] = await Promise.all([
+        const [dbTasks, dbColumns, dbHabits, dbAntiHabits, dbSettings] = await Promise.all([
            fetchTasks(userId), 
            fetchColumns(userId), 
            fetchHabits(userId), 
-           fetchAntiHabits(userId)
+           fetchAntiHabits(userId),
+           fetchUserSettings(userId)
         ]);
         
         setTasks(dbTasks);
         setHabits(dbHabits);
         setAntiHabits(dbAntiHabits);
+        
+        // 🖼️ Загружаем настройки фона из БД
+        if (dbSettings) {
+          if (dbSettings.wallpaper) setWallpaper(dbSettings.wallpaper);
+          if (dbSettings.wallpaper_opacity !== null) setWallpaperOpacity(dbSettings.wallpaper_opacity);
+          if (dbSettings.wallpaper_position !== null) setWallpaperPosition(dbSettings.wallpaper_position);
+        }
+        setSettingsLoaded(true);
         
         if (dbColumns && dbColumns.length > 0) setColumns(dbColumns);
         else await saveColumnsToDb(DEFAULT_COLUMNS, userId);
@@ -215,12 +218,23 @@ const App: React.FC = () => {
     localStorage.setItem('plusyx_theme', theme); 
   }, [theme]);
 
-  // --- WALLPAPER ---
+  // --- 🖼️ WALLPAPER (СОХРАНЕНИЕ В БД) ---
   useEffect(() => {
+    // Сохраняем локально
     localStorage.setItem('plusyx_wallpaper', wallpaper);
     localStorage.setItem('plusyx_wallpaper_opacity', wallpaperOpacity.toString());
     localStorage.setItem('plusyx_wallpaper_position', wallpaperPosition.toString());
-  }, [wallpaper, wallpaperOpacity, wallpaperPosition]);
+    
+    // Сохраняем в БД только после загрузки настроек (чтобы не перезаписать пустыми)
+    if (userId && settingsLoaded) {
+      saveUserSettings({
+        user_id: userId,
+        wallpaper,
+        wallpaper_opacity: wallpaperOpacity,
+        wallpaper_position: wallpaperPosition
+      });
+    }
+  }, [wallpaper, wallpaperOpacity, wallpaperPosition, userId, settingsLoaded]);
 
   // --- TELEGRAM MAIN BUTTON ---
   useEffect(() => {
@@ -444,7 +458,6 @@ const App: React.FC = () => {
   // 🎨 РЕНДЕР
   // ═══════════════════════════════════════════════════════════
 
-  // Загрузка авторизации
   if (isAuthLoading) {
     return (
       <div className="h-screen w-screen tg-bg flex items-center justify-center flex-col gap-4">
@@ -453,12 +466,10 @@ const App: React.FC = () => {
     );
   }
 
-  // Экран входа (только для браузера, не для Telegram)
   if (!userId) {
     return <LoginScreen onLogin={() => {}} />;
   }
 
-  // Загрузка данных
   if (isLoading) {
     return (
       <div className="h-screen w-screen tg-bg flex items-center justify-center flex-col gap-4">
@@ -531,17 +542,14 @@ const App: React.FC = () => {
       <HabitModal isOpen={isHabitModalOpen || (!!editingHabit && !!editingHabit.id)} onClose={() => { setIsHabitModalOpen(false); setEditingHabit(undefined); }} onSave={editingHabit?.id ? handleUpdateHabit : handleAddHabit} initialHabit={editingHabit} />
       <AntiHabitModal isOpen={isAntiHabitModalOpen || (!!editingAntiHabit && !!editingAntiHabit.id)} onClose={() => { setIsAntiHabitModalOpen(false); setEditingAntiHabit(undefined); }} onSave={editingAntiHabit?.id ? handleUpdateAntiHabit : handleAddAntiHabit} initialHabit={editingAntiHabit} />
       
-      {/* DELETE MODAL */}
       {(taskToDelete || habitToDelete) && (<div className="fixed inset-0 z-[300] flex items-center justify-center p-6"><div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => { setTaskToDelete(null); setHabitToDelete(null); }} /><div className="relative w-full max-w-xs tg-bg rounded-[32px] p-8 shadow-2xl flex flex-col gap-6 animate-in zoom-in duration-200"><div className="w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto mb-2"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg></div><h2 className="text-xl font-black tg-text text-center uppercase tracking-widest leading-tight">{taskToDelete ? 'Удалить задачу?' : 'Удалить?'}</h2><div className="flex flex-col gap-3"><button onClick={handleDeleteConfirm} className="w-full py-4 bg-red-500 text-white rounded-2xl font-bold shadow-lg shadow-red-500/20 active:scale-95 transition-all">Да, удалить</button><button onClick={() => { setTaskToDelete(null); setHabitToDelete(null); }} className="w-full py-4 tg-secondary-bg tg-text rounded-2xl font-bold active:scale-95 transition-all">Отмена</button></div></div></div>)}
       
-      {/* SETTINGS MODAL - ОБНОВЛЁННЫЙ */}
       {isSettingsOpen && (
         <div className="fixed inset-0 z-[300] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={() => setIsSettingsOpen(false)} />
           <div className="relative w-[280px] tg-bg bg-opacity-80 backdrop-blur-xl rounded-[40px] p-6 shadow-2xl flex flex-col gap-5 animate-in zoom-in duration-200 border border-white/20">
             <h2 className="text-lg font-black tg-text text-center uppercase tracking-[0.2em]">Настройки</h2>
             
-            {/* 🔐 ПРОФИЛЬ */}
             {userName && (
               <div className="p-4 tg-secondary-bg rounded-[24px] border border-white/5 flex items-center gap-3">
                 <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold">
@@ -579,7 +587,6 @@ const App: React.FC = () => {
             
             <button onClick={() => setIsSettingsOpen(false)} className="w-full py-4 tg-button rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl active:scale-95 transition-all">Готово</button>
             
-            {/* 🔐 КНОПКА ВЫХОДА (только для Google авторизации) */}
             {userEmail && (
               <button onClick={handleSignOut} className="w-full py-3 bg-red-500/10 text-red-500 rounded-2xl font-bold uppercase text-[10px] tracking-widest border border-red-500/20 active:scale-95 transition-all">
                 Выйти из аккаунта
