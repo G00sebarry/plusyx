@@ -84,6 +84,47 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     return Math.min(100, Math.round((currentScore / maxPossibleScore) * 100));
   };
 
+  // 🔥 ПОДСЧЁТ STREAK
+  const calculateStreak = (habit: Habit): number => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    let streak = 0;
+    const checkDate = new Date(today);
+    
+    for (let i = 0; i < 365; i++) {
+      const dayOfWeek = checkDate.getDay();
+      
+      // Пропускаем дни не по расписанию
+      if (!habit.frequency.days.includes(dayOfWeek)) {
+        checkDate.setDate(checkDate.getDate() - 1);
+        continue;
+      }
+      
+      const ds = formatDate(checkDate);
+      const val = habit.history[ds];
+      
+      // Freeze не ломает streak
+      if (val === 'freeze') {
+        checkDate.setDate(checkDate.getDate() - 1);
+        continue;
+      }
+      
+      // Выполнено — +1
+      if (val === true || val === 'mini' || (typeof val === 'number' && val > 0)) {
+        streak++;
+        checkDate.setDate(checkDate.getDate() - 1);
+      } else {
+        // Сегодня может быть ещё не выполнено — даём шанс
+        if (i === 0 && formatDate(checkDate) === formatDate(today)) {
+          checkDate.setDate(checkDate.getDate() - 1);
+          continue;
+        }
+        break;
+      }
+    }
+    return streak;
+  };
+
   const getSlotStyle = (val: number | boolean | 'mini' | 'freeze' | undefined, goal: number, isMeasurable: boolean, hasCover: boolean) => {
     const emptyStyle = hasCover 
         ? 'bg-white/10 border border-white/10 text-white/40' 
@@ -284,6 +325,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
                 <>
                     {habits.map(habit => {
                         const progress = calculateProgress(habit);
+                        const streak = calculateStreak(habit);
                         const radius = 10;
                         const circ = 2 * Math.PI * radius;
                         const offset = circ - (progress / 100) * circ;
@@ -321,8 +363,17 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
                                             ) : (habit.description && <span className={`text-[10px] line-clamp-1 italic ${hasCover ? 'text-white/70' : 'tg-hint opacity-70'}`}>{habit.description}</span>)}
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-3">
+                                    <div className="flex items-center gap-2">
                                         <button onClick={(e) => { e.stopPropagation(); onDeleteHabit(habit.id); }} className={`w-8 h-8 flex items-center justify-center rounded-xl transition-colors ${hasCover ? 'bg-white/10 text-white/60 hover:text-white' : 'bg-red-500/5 text-red-500/30 hover:text-red-500'}`}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg></button>
+                                        
+                                        {/* 🔥 STREAK */}
+                                        {streak > 0 && (
+                                            <div className={`flex items-center gap-1 px-2 py-1 rounded-lg ${hasCover ? 'bg-orange-500/20' : 'bg-orange-500/10'}`}>
+                                                <span className="text-sm">🔥</span>
+                                                <span className={`text-[11px] font-black ${hasCover ? 'text-orange-300' : 'text-orange-500'}`}>{streak}</span>
+                                            </div>
+                                        )}
+                                        
                                         <div className="flex items-center gap-2">
                                             <span className={`text-[10px] font-black ${hasCover ? 'text-white/80' : 'tg-text opacity-40'}`}>{progress}%</span>
                                             <div className={`w-8 h-8 rounded-full flex items-center justify-center ${hasCover ? 'bg-white/10' : 'border border-gray-400/10 bg-black/5'}`}>
