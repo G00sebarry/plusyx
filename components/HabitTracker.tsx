@@ -171,7 +171,6 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     };
   };
 
-  // 📅 MINI HEATMAP
   const renderMiniHeatmap = (habit: Habit, hasCover: boolean) => {
     const now = new Date();
     const year = now.getFullYear();
@@ -224,51 +223,51 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
                         'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
 
     return (
-      <div className={`mt-3 p-4 rounded-2xl ${hasCover ? 'bg-black/40 backdrop-blur-sm' : 'bg-black/10'} border border-white/10`}>
-        <div className="flex items-center justify-between mb-3">
-          <span className={`text-[10px] font-black uppercase tracking-wider ${hasCover ? 'text-white/70' : 'tg-hint'}`}>
+      <div className={`mt-2 p-3 rounded-2xl ${hasCover ? 'bg-black/40 backdrop-blur-sm' : 'bg-black/10'} border border-white/10`}>
+        <div className="flex items-center justify-between mb-2">
+          <span className={`text-[9px] font-black uppercase tracking-wider ${hasCover ? 'text-white/70' : 'tg-hint'}`}>
             {monthNames[month]} {year}
           </span>
           <div className="flex gap-2 items-center">
             <div className="flex items-center gap-1">
-              <div className="w-2 h-2 rounded-sm bg-green-500" />
-              <span className={`text-[8px] ${hasCover ? 'text-white/50' : 'tg-hint'}`}>✓</span>
+              <div className="w-1.5 h-1.5 rounded-sm bg-green-500" />
+              <span className={`text-[7px] ${hasCover ? 'text-white/50' : 'tg-hint'}`}>✓</span>
             </div>
             <div className="flex items-center gap-1">
-              <div className="w-2 h-2 rounded-sm bg-yellow-500" />
-              <span className={`text-[8px] ${hasCover ? 'text-white/50' : 'tg-hint'}`}>Mini</span>
+              <div className="w-1.5 h-1.5 rounded-sm bg-yellow-500" />
+              <span className={`text-[7px] ${hasCover ? 'text-white/50' : 'tg-hint'}`}>Mini</span>
             </div>
             <div className="flex items-center gap-1">
-              <div className="w-2 h-2 rounded-sm bg-cyan-400" />
-              <span className={`text-[8px] ${hasCover ? 'text-white/50' : 'tg-hint'}`}>❄️</span>
+              <div className="w-1.5 h-1.5 rounded-sm bg-cyan-400" />
+              <span className={`text-[7px] ${hasCover ? 'text-white/50' : 'tg-hint'}`}>❄️</span>
             </div>
           </div>
         </div>
         
-        <div className="grid grid-cols-7 gap-1 mb-1">
+        <div className="grid grid-cols-7 gap-0.5 mb-1">
           {WEEKDAYS_SHORT.map(day => (
-            <div key={day} className={`text-[8px] text-center font-bold ${hasCover ? 'text-white/40' : 'tg-hint opacity-50'}`}>
+            <div key={day} className={`text-[7px] text-center font-bold ${hasCover ? 'text-white/40' : 'tg-hint opacity-50'}`}>
               {day}
             </div>
           ))}
         </div>
         
-        <div className="grid gap-1">
+        <div className="grid gap-0.5">
           {weeks.map((week, wi) => (
-            <div key={wi} className="grid grid-cols-7 gap-1">
+            <div key={wi} className="grid grid-cols-7 gap-0.5">
               {week.map((date, di) => {
                 const isToday = date && formatDate(date) === formatDate(new Date());
                 return (
                   <div 
                     key={di}
                     className={`
-                      aspect-square rounded-[4px] transition-all flex items-center justify-center
+                      aspect-square rounded-[3px] transition-all flex items-center justify-center
                       ${getHeatmapColor(date)}
                       ${isToday ? 'ring-1 ring-white scale-110' : ''}
                     `}
                   >
                     {date && (
-                      <span className={`text-[7px] font-bold ${hasCover ? 'text-white/60' : 'text-white/80'}`}>
+                      <span className={`text-[6px] font-bold ${hasCover ? 'text-white/60' : 'text-white/80'}`}>
                         {date.getDate()}
                       </span>
                     )}
@@ -443,7 +442,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
                     {habits.map(habit => {
                         const progress = calculateProgress(habit);
                         const streak = calculateStreak(habit);
-                        const radius = 10;
+                        const radius = 16;
                         const circ = 2 * Math.PI * radius;
                         const offset = circ - (progress / 100) * circ;
                         const isTarget = dropTargetId === habit.id;
@@ -459,7 +458,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
                             onDragOver={(e) => handleDragOver(e, habit.id)}
                             onDrop={(e) => handleDrop(e, habit.id)}
                             onDragEnd={() => { setDraggedHabitId(null); setDropTargetId(null); }}
-                            className={`relative overflow-hidden rounded-[32px] shadow-sm p-5 flex flex-col gap-4 transition-all min-h-[140px] cursor-grab active:cursor-grabbing ${isTarget ? 'scale-[1.02] ring-2 ring-blue-500' : ''} ${draggedHabitId === habit.id ? 'opacity-40' : ''} ${!hasCover ? 'tg-secondary-bg border border-gray-400/5' : ''}`}
+                            className={`relative overflow-hidden rounded-[28px] shadow-sm p-4 flex flex-col gap-3 transition-all min-h-[120px] cursor-grab active:cursor-grabbing ${isTarget ? 'scale-[1.02] ring-2 ring-blue-500' : ''} ${draggedHabitId === habit.id ? 'opacity-40' : ''} ${!hasCover ? 'tg-secondary-bg border border-gray-400/5' : ''}`}
                             style={hasCover ? { backgroundImage: `url(${habit.fileData})`, backgroundSize: 'cover', backgroundPosition: `50% ${habit.coverPosition ?? 50}%` } : {}}
                             onClick={() => onEditHabit(habit)}
                             >
@@ -467,53 +466,71 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
                                 
                                 {isAtomic && !hasCover && <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/5 to-orange-500/5 z-0 pointer-events-none" />}
 
+                                {/* HEADER */}
                                 <div className="relative z-10 flex justify-between items-start">
-                                    <div className="flex items-center gap-3">
-                                        <div className={`w-12 h-12 rounded-2xl ${habit.color} flex items-center justify-center text-2xl shrink-0 shadow-sm border border-white/10 relative`}>
+                                    <div className="flex items-center gap-2.5">
+                                        <div className={`w-10 h-10 rounded-xl ${habit.color} flex items-center justify-center text-xl shrink-0 shadow-sm border border-white/10 relative`}>
                                             {habit.emoji || '🔥'}
-                                            {isAtomic && <span className="absolute -top-1 -right-1 text-[10px]">⚡️</span>}
+                                            {isAtomic && <span className="absolute -top-1 -right-1 text-[8px]">⚡️</span>}
                                         </div>
                                         <div className="flex flex-col">
-                                            {habit.identity && <div className="self-start px-2 py-0.5 rounded-md bg-white/20 backdrop-blur-sm text-[8px] font-black uppercase tracking-widest text-white mb-1 shadow-sm border border-white/10 w-fit">{habit.identity}</div>}
-                                            <span className={`text-sm font-black uppercase tracking-tight ${hasCover ? 'text-white drop-shadow-md' : 'tg-text'}`}>{habit.title}</span>
+                                            {habit.identity && <div className="self-start px-1.5 py-0.5 rounded-md bg-white/20 backdrop-blur-sm text-[7px] font-black uppercase tracking-widest text-white mb-0.5 shadow-sm border border-white/10 w-fit">{habit.identity}</div>}
+                                            <span className={`text-xs font-black uppercase tracking-tight ${hasCover ? 'text-white drop-shadow-md' : 'tg-text'}`}>{habit.title}</span>
                                             {habit.triggerEvent ? (
-                                                <div className="flex items-center gap-1 mt-0.5"><span className="text-[10px]">🔗</span><span className={`text-[10px] italic ${hasCover ? 'text-white/80' : 'tg-hint'}`}>{habit.triggerEvent}</span></div>
-                                            ) : (habit.description && <span className={`text-[10px] line-clamp-1 italic ${hasCover ? 'text-white/70' : 'tg-hint opacity-70'}`}>{habit.description}</span>)}
+                                                <div className="flex items-center gap-1 mt-0.5"><span className="text-[8px]">🔗</span><span className={`text-[9px] italic ${hasCover ? 'text-white/80' : 'tg-hint'}`}>{habit.triggerEvent}</span></div>
+                                            ) : (habit.description && <span className={`text-[9px] line-clamp-1 italic ${hasCover ? 'text-white/70' : 'tg-hint opacity-70'}`}>{habit.description}</span>)}
                                         </div>
                                     </div>
+                                    
+                                    {/* STREAK + PROGRESS CIRCLE */}
                                     <div className="flex items-center gap-2">
-                                        <button onClick={(e) => { e.stopPropagation(); onDeleteHabit(habit.id); }} className={`w-8 h-8 flex items-center justify-center rounded-xl transition-colors ${hasCover ? 'bg-white/10 text-white/60 hover:text-white' : 'bg-red-500/5 text-red-500/30 hover:text-red-500'}`}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg></button>
-                                        
                                         {streak > 0 && (
-                                            <div className={`flex items-center gap-1 px-2 py-1 rounded-lg ${hasCover ? 'bg-orange-500/20' : 'bg-orange-500/10'}`}>
-                                                <span className="text-sm">🔥</span>
-                                                <span className={`text-[11px] font-black ${hasCover ? 'text-orange-300' : 'text-orange-500'}`}>{streak}</span>
+                                            <div className={`flex items-center gap-0.5 ${hasCover ? 'text-orange-300' : 'text-orange-500'}`}>
+                                                <span className="text-xs">🔥</span>
+                                                <span className="text-[10px] font-black">{streak}</span>
                                             </div>
                                         )}
                                         
-                                        <div className="flex items-center gap-2">
-                                            <span className={`text-[10px] font-black ${hasCover ? 'text-white/80' : 'tg-text opacity-40'}`}>{progress}%</span>
-                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${hasCover ? 'bg-white/10' : 'border border-gray-400/10 bg-black/5'}`}>
-                                                <svg className="w-full h-full -rotate-90" viewBox="0 0 24 24"><circle cx="12" cy="12" r={radius} fill="none" stroke="currentColor" strokeWidth="2.5" className={hasCover ? "text-white/10" : "text-gray-400/10"} /><circle cx="12" cy="12" r={radius} fill="none" stroke="currentColor" strokeWidth="2.5" strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round" className="text-green-500 transition-all duration-700" /></svg>
+                                        {/* КРУГ С ПРОЦЕНТАМИ ВНУТРИ */}
+                                        <div className="relative w-10 h-10">
+                                            <svg className="w-full h-full -rotate-90" viewBox="0 0 40 40">
+                                                <circle cx="20" cy="20" r={radius} fill="none" stroke="currentColor" strokeWidth="3" className={hasCover ? "text-white/10" : "text-gray-400/10"} />
+                                                <circle cx="20" cy="20" r={radius} fill="none" stroke="currentColor" strokeWidth="3" strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round" className="text-green-500 transition-all duration-700" />
+                                            </svg>
+                                            <div className="absolute inset-0 flex items-center justify-center">
+                                                <span className={`text-[9px] font-black ${hasCover ? 'text-white' : 'tg-text'}`}>{progress}%</span>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
                                 
-                                <div className="relative z-10 flex overflow-x-auto no-scrollbar pb-2 pt-2 px-1 items-center">
+                                {/* SLOTS */}
+                                <div className="relative z-10 flex overflow-x-auto no-scrollbar pb-1 pt-1 px-1 items-center">
                                     {renderSlots(habit, hasCover)}
                                 </div>
 
-                                {/* 📅 HEATMAP TOGGLE */}
-                                <button 
-                                  onClick={(e) => toggleHeatmap(habit.id, e)}
-                                  className={`relative z-10 self-center flex items-center gap-2 px-4 py-2 rounded-xl transition-all ${hasCover ? 'bg-white/10 text-white/70 hover:bg-white/20' : 'bg-black/5 tg-hint hover:bg-black/10'}`}
-                                >
-                                  <span className="text-sm">{isExpanded ? '🔼' : '📅'}</span>
-                                  <span className="text-[9px] font-bold uppercase tracking-wider">{isExpanded ? 'Скрыть' : 'Весь месяц'}</span>
-                                </button>
+                                {/* FOOTER: HEATMAP TOGGLE + DELETE */}
+                                <div className="relative z-10 flex items-center justify-between">
+                                    <button 
+                                      onClick={(e) => toggleHeatmap(habit.id, e)}
+                                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all text-[8px] font-bold uppercase tracking-wider ${hasCover ? 'bg-white/10 text-white/60 hover:bg-white/20' : 'bg-black/5 tg-hint hover:bg-black/10'}`}
+                                    >
+                                      <span className="text-xs">{isExpanded ? '▲' : '📅'}</span>
+                                      <span>{isExpanded ? 'Скрыть' : 'Месяц'}</span>
+                                    </button>
+                                    
+                                    {/* КОРЗИНА В УГЛУ */}
+                                    <button 
+                                      onClick={(e) => { e.stopPropagation(); onDeleteHabit(habit.id); }} 
+                                      className={`w-7 h-7 flex items-center justify-center rounded-lg transition-all ${hasCover ? 'bg-white/10 text-white/40 hover:text-red-400 hover:bg-red-500/20' : 'bg-red-500/5 text-red-500/30 hover:text-red-500 hover:bg-red-500/10'}`}
+                                    >
+                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                        <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+                                      </svg>
+                                    </button>
+                                </div>
 
-                                {/* 📊 MINI HEATMAP */}
+                                {/* MINI HEATMAP */}
                                 {isExpanded && (
                                   <div className="relative z-10 animate-in slide-in-from-top-2 duration-300">
                                     {renderMiniHeatmap(habit, hasCover)}
