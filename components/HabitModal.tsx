@@ -198,7 +198,7 @@ export const HabitModal: React.FC<HabitModalProps> = ({ isOpen, onClose, onSave,
             {/* 🔥 ПЕРЕКЛЮЧАТЕЛЬ РЕЖИМА (АТОМНЫЙ) */}
             <div className="flex bg-black/20 p-1 rounded-xl mb-4 border border-white/5">
                 <button onClick={() => setIsAtomicMode(false)} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${!isAtomicMode ? 'bg-white text-black shadow-md' : 'text-gray-400 hover:text-white'}`}>
-                    ⚡️ Обычная
+                    📋 Обычная
                 </button>
                 <button onClick={() => setIsAtomicMode(true)} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all flex items-center justify-center gap-1.5 ${isAtomicMode ? 'bg-indigo-500 text-white shadow-md' : 'text-gray-400 hover:text-white'}`}>
                     <span>⚛️</span> Атомная
