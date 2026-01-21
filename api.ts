@@ -83,19 +83,15 @@ export const fetchHabits = async (userId) => {
     color: h.color,
     frequency: h.frequency,
     history: h.history || {},
-
-    icon: h.emoji,
+    emoji: h.emoji,
     isMeasurable: h.isMeasurable,
     targetValue: Number(h.target_value) || 1,
     unit: h.unit || '',
     position: h.position || 0,
-    
-    // 🔥 НОВЫЕ ПОЛЯ (Маппинг из БД snake_case в JS camelCase)
     identity: h.identity,
     triggerEvent: h.trigger_event,
     miniAction: h.mini_action,
     reminderTime: h.reminder_time,
-    
     fileData: h.file_data,
     coverPosition: h.cover_position,
     coverIntensity: h.cover_intensity
@@ -110,19 +106,15 @@ export const saveHabitToDb = async (habit, userId) => {
     color: habit.color,
     frequency: habit.frequency,
     history: habit.history,
-
-    emoji: habit.icon,
+    emoji: habit.emoji,
     isMeasurable: habit.isMeasurable,
     target_value: Number(habit.targetValue) || 1,
     unit: habit.unit || '',
     position: habit.position || 0,
-    
-    // 🔥 СОХРАНЕНИЕ НОВЫХ ПОЛЕЙ
     identity: habit.identity,
     trigger_event: habit.triggerEvent,
     mini_action: habit.miniAction,
     reminder_time: habit.reminderTime,
-    
     file_data: habit.fileData,
     cover_position: habit.coverPosition,
     cover_intensity: habit.coverIntensity
@@ -132,7 +124,6 @@ export const saveHabitToDb = async (habit, userId) => {
   if (error) console.error("Save Habit Error:", error);
 };
 
-// 🔥 Сохранение порядка привычек (без изменений, но убедимся)
 export const saveHabitsOrderToDb = async (habits, userId) => {
   if (habits.length === 0) return;
   const updates = habits.map((h, index) => ({
@@ -151,14 +142,13 @@ export const deleteHabitFromDb = async (id) => {
   await supabase.from('habits').delete().eq('id', id);
 };
 
-
 // --- ⛔ АНТИ-ПРИВЫЧКИ ---
 export const fetchAntiHabits = async (userId) => {
   const { data, error } = await supabase
     .from('antihabits')
     .select('*')
     .eq('user_id', userId)
-    .order('position', { ascending: true }) // 🔥 Сортируем по позиции
+    .order('position', { ascending: true })
     .order('created_at', { ascending: false });
 
   if (error) { console.error("Fetch AntiHabits Error:", error); return []; }
@@ -167,7 +157,7 @@ export const fetchAntiHabits = async (userId) => {
     ...h,
     startDate: h.start_date,
     longestStreak: h.longest_streak,
-    position: h.position || 0, // 🔥 Читаем позицию
+    position: h.position || 0,
     fileData: h.file_data,            
     coverPosition: h.cover_position,  
     coverIntensity: h.cover_intensity 
@@ -191,21 +181,16 @@ export const saveAntiHabitToDb = async (habit, userId) => {
   if (error) console.error("Save AntiHabit Error:", error);
 };
 
-// 🔥 НОВАЯ ФУНКЦИЯ: Сохранение порядка Анти-Привычек
 export const saveAntiHabitsOrderToDb = async (habits, userId) => {
     if (habits.length === 0) return;
-    
-    // Подготавливаем массив обновлений
     const updates = habits.map((h, index) => ({
       id: h.id,
       user_id: userId,
       title: h.title,
-      // Минимальный набор полей, чтобы Supabase не ругался
       color: h.color,
       start_date: h.startDate,
       longest_streak: h.longestStreak,
-      
-      position: index // 👈 Главное обновление
+      position: index
     }));
   
     const { error } = await supabase.from('antihabits').upsert(updates);
@@ -232,4 +217,59 @@ export const uploadImage = async (file) => {
     console.error('Ошибка загрузки файла:', error);
     return null;
   }
+};
+
+// ═══════════════════════════════════════════════════════════
+// 🔐 АВТОРИЗАЦИЯ (Google OAuth)
+// ═══════════════════════════════════════════════════════════
+
+// Получить текущую сессию
+export const getCurrentSession = async () => {
+  const { data: { session }, error } = await supabase.auth.getSession();
+  if (error) {
+    console.error('Error getting session:', error);
+    return null;
+  }
+  return session;
+};
+
+// Получить текущего пользователя
+export const getCurrentUser = async () => {
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error) {
+    console.error('Error getting user:', error);
+    return null;
+  }
+  return user;
+};
+
+// Войти через Google
+export const signInWithGoogle = async () => {
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: window.location.origin
+    }
+  });
+  
+  if (error) {
+    console.error('Error signing in with Google:', error);
+    return null;
+  }
+  return data;
+};
+
+// Выйти
+export const signOut = async () => {
+  const { error } = await supabase.auth.signOut();
+  if (error) {
+    console.error('Error signing out:', error);
+  }
+};
+
+// Подписка на изменения авторизации
+export const onAuthStateChange = (callback) => {
+  return supabase.auth.onAuthStateChange((event, session) => {
+    callback(event, session);
+  });
 };

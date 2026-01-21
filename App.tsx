@@ -8,11 +8,12 @@ import { HabitModal } from './components/HabitModal';
 import { AntiHabitModal } from './components/AntiHabitModal';
 import { Task, ViewType, Habit, Column, AntiHabit } from './types';
 
-// 🔥 ИМПОРТ НОВЫХ ФУНКЦИЙ API
 import { 
   fetchTasks, fetchColumns, saveTaskToDb, deleteTaskFromDb, saveColumnsToDb, saveTasksOrderToDb, deleteColumnFromDb,
   fetchHabits, saveHabitToDb, deleteHabitFromDb, saveHabitsOrderToDb,
-  fetchAntiHabits, saveAntiHabitToDb, deleteAntiHabitFromDb, saveAntiHabitsOrderToDb
+  fetchAntiHabits, saveAntiHabitToDb, deleteAntiHabitFromDb, saveAntiHabitsOrderToDb,
+  // 🔐 Новые функции авторизации
+  getCurrentSession, signInWithGoogle, signOut, onAuthStateChange
 } from './api';
 
 const toLocalDateString = (date: Date) => {
@@ -28,23 +29,80 @@ const DEFAULT_COLUMNS: Column[] = [
   { id: 'col-done', title: 'Готово', type: 'done' }
 ];
 
+// ═══════════════════════════════════════════════════════════
+// 🔐 ЭКРАН ВХОДА
+// ═══════════════════════════════════════════════════════════
+const LoginScreen: React.FC<{ onLogin: () => void }> = ({ onLogin }) => {
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleGoogleLogin = async () => {
+    setIsLoading(true);
+    await signInWithGoogle();
+  };
+
+  return (
+    <div className="h-screen w-screen tg-bg flex flex-col items-center justify-center p-8">
+      {/* Логотип */}
+      <div className="mb-8 flex flex-col items-center">
+        <div className="relative w-20 h-20 flex items-center justify-center mb-4">
+          <svg width="80" height="80" viewBox="0 0 100 100">
+            <rect x="15" y="15" width="50" height="70" fill="#9d73d2" rx="4" />
+            <circle cx="40" cy="40" r="12" fill="white" opacity="0.2" />
+            <g style={{ transformOrigin: 'center' }}>
+              <rect x="50" y="45" width="40" height="40" fill="#4cc3a1" rx="4" />
+              <path d="M70 55 V75 M60 65 H80" stroke="white" strokeWidth="6" strokeLinecap="round" />
+            </g>
+          </svg>
+        </div>
+        <h1 className="text-3xl font-black tg-text">Plusyx</h1>
+        <p className="text-sm tg-hint mt-2 text-center">Таск-менеджер и трекер привычек</p>
+      </div>
+
+      {/* Кнопка входа */}
+      <button
+        onClick={handleGoogleLogin}
+        disabled={isLoading}
+        className="w-full max-w-xs py-4 px-6 bg-white text-gray-700 rounded-2xl font-bold shadow-lg flex items-center justify-center gap-3 active:scale-95 transition-all disabled:opacity-50 border border-gray-200"
+      >
+        {isLoading ? (
+          <div className="w-5 h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+        ) : (
+          <>
+            {/* Google иконка */}
+            <svg width="20" height="20" viewBox="0 0 24 24">
+              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+            </svg>
+            Войти через Google
+          </>
+        )}
+      </button>
+
+      <p className="text-xs tg-hint mt-6 text-center max-w-xs">
+        Войдите, чтобы синхронизировать данные между устройствами
+      </p>
+    </div>
+  );
+};
+
+// ═══════════════════════════════════════════════════════════
+// 🚀 ГЛАВНОЕ ПРИЛОЖЕНИЕ
+// ═══════════════════════════════════════════════════════════
 const App: React.FC = () => {
-  // --- 1. ЗАГРУЖАЕМ ПОСЛЕДНЮЮ ВКЛАДКУ ---
+  // --- 🔐 АВТОРИЗАЦИЯ ---
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [userName, setUserName] = useState<string | null>(null);
+
+  // --- UI ---
   const [view, setView] = useState<ViewType>(() => {
     const savedView = localStorage.getItem('plusyx_current_view');
     return (savedView as ViewType) || 'kanban';
   });
-
   const [isLoading, setIsLoading] = useState(true);
-
-  // --- 🆔 АВТОРИЗАЦИЯ ---
-  const [userId] = useState<string>(() => {
-    const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
-    if (tgUser && tgUser.id) {
-        return String(tgUser.id);
-    }
-    return 'test-browser-user';
-  });
 
   // --- ДАННЫЕ ---
   const [columns, setColumns] = useState<Column[]>(DEFAULT_COLUMNS);
@@ -52,7 +110,7 @@ const App: React.FC = () => {
   const [habits, setHabits] = useState<Habit[]>([]);
   const [antiHabits, setAntiHabits] = useState<AntiHabit[]>([]);
   
-  // --- UI ---
+  // --- UI MODALS ---
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [isHabitModalOpen, setIsHabitModalOpen] = useState(false);
   const [isAntiHabitModalOpen, setIsAntiHabitModalOpen] = useState(false);
@@ -73,12 +131,61 @@ const App: React.FC = () => {
   const [wallpaperPosition, setWallpaperPosition] = useState<number>(() => Number(localStorage.getItem('plusyx_wallpaper_position')) || 50);
   const wallpaperInputRef = useRef<HTMLInputElement>(null);
 
+  // ═══════════════════════════════════════════════════════════
+  // 🔐 ПРОВЕРКА АВТОРИЗАЦИИ
+  // ═══════════════════════════════════════════════════════════
+  useEffect(() => {
+    const checkAuth = async () => {
+      // Сначала проверяем Telegram WebApp
+      const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
+      if (tgUser && tgUser.id) {
+        setUserId(String(tgUser.id));
+        setUserName(tgUser.first_name || 'Telegram User');
+        setIsAuthLoading(false);
+        return;
+      }
+
+      // Если не Telegram — проверяем Supabase сессию
+      const session = await getCurrentSession();
+      if (session?.user) {
+        setUserId(session.user.id);
+        setUserEmail(session.user.email || null);
+        setUserName(session.user.user_metadata?.full_name || session.user.email || 'User');
+      }
+      setIsAuthLoading(false);
+    };
+
+    checkAuth();
+
+    // Слушаем изменения авторизации
+    const { data: { subscription } } = onAuthStateChange((event, session) => {
+      if (session?.user) {
+        setUserId(session.user.id);
+        setUserEmail(session.user.email || null);
+        setUserName(session.user.user_metadata?.full_name || session.user.email || 'User');
+      } else {
+        // Если вышел — не сбрасываем если в Telegram
+        const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
+        if (!tgUser) {
+          setUserId(null);
+          setUserEmail(null);
+          setUserName(null);
+        }
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // --- SAVE VIEW ---
   useEffect(() => {
     localStorage.setItem('plusyx_current_view', view);
   }, [view]);
 
-  // --- 🔥 ЗАГРУЗКА ---
+  // --- 🔥 ЗАГРУЗКА ДАННЫХ ---
   useEffect(() => {
+    if (!userId) return;
+
     const initData = async () => {
       setIsLoading(true);
       try {
@@ -102,13 +209,20 @@ const App: React.FC = () => {
     initData();
   }, [userId]);
 
-  useEffect(() => { document.body.classList.toggle('dark', theme === 'dark'); localStorage.setItem('plusyx_theme', theme); }, [theme]);
+  // --- THEME ---
+  useEffect(() => { 
+    document.body.classList.toggle('dark', theme === 'dark'); 
+    localStorage.setItem('plusyx_theme', theme); 
+  }, [theme]);
+
+  // --- WALLPAPER ---
   useEffect(() => {
     localStorage.setItem('plusyx_wallpaper', wallpaper);
     localStorage.setItem('plusyx_wallpaper_opacity', wallpaperOpacity.toString());
     localStorage.setItem('plusyx_wallpaper_position', wallpaperPosition.toString());
   }, [wallpaper, wallpaperOpacity, wallpaperPosition]);
 
+  // --- TELEGRAM MAIN BUTTON ---
   useEffect(() => {
     const tg = window.Telegram?.WebApp;
     if (tg) {
@@ -120,8 +234,18 @@ const App: React.FC = () => {
     }
   }, [view]);
 
+  // --- SIGN OUT ---
+  const handleSignOut = async () => {
+    await signOut();
+    setUserId(null);
+    setUserEmail(null);
+    setUserName(null);
+    setIsSettingsOpen(false);
+  };
+
   // --- ОБРАБОТЧИКИ ---
   const handleUpdateColumns = async (newColumns: Column[]) => {
+    if (!userId) return;
     setColumns(newColumns);
     await saveColumnsToDb(newColumns, userId);
   };
@@ -133,6 +257,7 @@ const App: React.FC = () => {
 
   // --- TASKS ---
   const handleAddTask = async (taskData: Omit<Task, 'id'>) => {
+    if (!userId) return;
     let cId = taskData.columnId;
     if (!cId) { const col = columns.find(c => c.type === taskData.status) || columns[0]; cId = col?.id || 'col-todo'; }
     
@@ -153,11 +278,13 @@ const App: React.FC = () => {
   };
 
   const handleUpdateTask = async (updatedTask: Task) => {
+    if (!userId) return;
     setTasks(prev => prev.map(t => t.id === updatedTask.id ? updatedTask : t));
     await saveTaskToDb(updatedTask, userId);
   };
 
   const handleMoveTask = async (id: string, targetColId: string, targetId?: string) => {
+    if (!userId) return;
     const targetCol = columns.find(c => c.id === targetColId);
     if (!targetCol) return;
 
@@ -186,6 +313,7 @@ const App: React.FC = () => {
   };
 
   const handleCopyTask = async (originalTaskId: string, newTitle: string) => {
+    if (!userId) return;
     const originalTask = tasks.find(t => t.id === originalTaskId);
     if (!originalTask) return;
     const newChecklists = originalTask.checklists.map(list => ({...list, id: Math.random().toString(36).substr(2, 9), items: list.items.map(item => ({...item, id: Math.random().toString(36).substr(2, 9)}))}));
@@ -204,8 +332,9 @@ const App: React.FC = () => {
     await saveTaskToDb(newTask, userId);
   };
 
-  // --- HABITS (ПОЛЕЗНЫЕ) ---
+  // --- HABITS ---
   const handleAddHabit = async (habitData: Habit) => {
+    if (!userId) return;
     const newHabit = { ...habitData, id: Math.random().toString(36).substr(2, 9), position: habits.length };
     setHabits(prev => [newHabit, ...prev]); 
     setIsHabitModalOpen(false);
@@ -214,6 +343,7 @@ const App: React.FC = () => {
   };
 
   const handleUpdateHabit = async (updatedHabit: Habit) => {
+    if (!userId) return;
     setHabits(prev => prev.map(h => h.id === updatedHabit.id ? updatedHabit : h));
     setIsHabitModalOpen(false); 
     setEditingHabit(undefined);
@@ -221,6 +351,7 @@ const App: React.FC = () => {
   };
 
   const handleToggleHabit = async (id: string, date: string, value: number | boolean) => {
+    if (!userId) return;
     let updatedHabit: Habit | undefined;
     setHabits(prev => prev.map(h => { 
         if (h.id === id) { 
@@ -233,17 +364,17 @@ const App: React.FC = () => {
     if (updatedHabit) await saveHabitToDb(updatedHabit, userId);
   };
 
-  // 🔥 СОХРАНЕНИЕ ПОРЯДКА ПОЛЕЗНЫХ ПРИВЫЧЕК
   const handleReorderHabits = async (newHabits: Habit[]) => {
-      setHabits(newHabits);
-      // Обновляем позицию у каждого элемента локально и сохраняем
-      const updated = newHabits.map((h, idx) => ({ ...h, position: idx }));
-      setHabits(updated);
-      await saveHabitsOrderToDb(updated, userId);
+    if (!userId) return;
+    setHabits(newHabits);
+    const updated = newHabits.map((h, idx) => ({ ...h, position: idx }));
+    setHabits(updated);
+    await saveHabitsOrderToDb(updated, userId);
   };
 
-  // --- ANTI HABITS (ВРЕДНЫЕ) ---
+  // --- ANTI HABITS ---
   const handleAddAntiHabit = async (habit: AntiHabit) => {
+    if (!userId) return;
     const newHabit = { ...habit, id: Math.random().toString(36).substr(2, 9), position: antiHabits.length };
     setAntiHabits(prev => [newHabit, ...prev]); 
     setIsAntiHabitModalOpen(false);
@@ -252,6 +383,7 @@ const App: React.FC = () => {
   };
 
   const handleUpdateAntiHabit = async (habit: AntiHabit) => {
+    if (!userId) return;
     setAntiHabits(prev => prev.map(h => h.id === habit.id ? habit : h));
     setIsAntiHabitModalOpen(false); 
     setEditingAntiHabit(undefined);
@@ -259,6 +391,7 @@ const App: React.FC = () => {
   };
 
   const handleRelapse = async (id: string) => {
+    if (!userId) return;
     let updatedHabit: AntiHabit | undefined;
     setAntiHabits(prev => prev.map(h => {
         if (h.id === id) {
@@ -273,12 +406,12 @@ const App: React.FC = () => {
     if (updatedHabit) await saveAntiHabitToDb(updatedHabit, userId);
   };
 
-  // 🔥 СОХРАНЕНИЕ ПОРЯДКА ВРЕДНЫХ ПРИВЫЧЕК
   const handleReorderAntiHabits = async (newHabits: AntiHabit[]) => {
-      setAntiHabits(newHabits);
-      const updated = newHabits.map((h, idx) => ({ ...h, position: idx }));
-      setAntiHabits(updated);
-      await saveAntiHabitsOrderToDb(updated, userId);
+    if (!userId) return;
+    setAntiHabits(newHabits);
+    const updated = newHabits.map((h, idx) => ({ ...h, position: idx }));
+    setAntiHabits(updated);
+    await saveAntiHabitsOrderToDb(updated, userId);
   };
 
   // --- DELETE ---
@@ -307,7 +440,33 @@ const App: React.FC = () => {
     const reader = new FileReader(); reader.onload = (ev) => setWallpaper(ev.target?.result as string); reader.readAsDataURL(file);
   };
 
-  if (isLoading) return <div className="h-screen w-screen tg-bg flex items-center justify-center flex-col gap-4"><div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div><div className="text-sm font-bold tg-text opacity-50 animate-pulse">Загрузка профиля...</div></div>;
+  // ═══════════════════════════════════════════════════════════
+  // 🎨 РЕНДЕР
+  // ═══════════════════════════════════════════════════════════
+
+  // Загрузка авторизации
+  if (isAuthLoading) {
+    return (
+      <div className="h-screen w-screen tg-bg flex items-center justify-center flex-col gap-4">
+        <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  // Экран входа (только для браузера, не для Telegram)
+  if (!userId) {
+    return <LoginScreen onLogin={() => {}} />;
+  }
+
+  // Загрузка данных
+  if (isLoading) {
+    return (
+      <div className="h-screen w-screen tg-bg flex items-center justify-center flex-col gap-4">
+        <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+        <div className="text-sm font-bold tg-text opacity-50 animate-pulse">Загрузка профиля...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-screen overflow-hidden tg-bg select-none relative">
@@ -342,7 +501,6 @@ const App: React.FC = () => {
         )}
         {view === 'calendar' && <CalendarView tasks={tasks} habits={habits} onEditTask={(t) => { setEditingTask(t); setIsTaskModalOpen(true); }} />}
         
-        {/* 🔥 TRACKER: ПЕРЕДАЕМ НОВЫЕ ФУНКЦИИ СОРТИРОВКИ */}
         {view === 'tracker' && (
           <HabitTracker 
              habits={habits} 
@@ -351,13 +509,13 @@ const App: React.FC = () => {
              onEditHabit={(h) => { setEditingHabit(h); setIsHabitModalOpen(true); }} 
              onDeleteHabit={(id) => setHabitToDelete(id)} 
              onAddHabit={() => { setEditingHabit(undefined); setIsHabitModalOpen(true); }} 
-             onReorderHabits={handleReorderHabits} // Используем обновленный хендлер
+             onReorderHabits={handleReorderHabits}
              
              onAddAntiHabit={() => { setEditingAntiHabit(undefined); setIsAntiHabitModalOpen(true); }} 
              onEditAntiHabit={(h) => { setEditingAntiHabit(h); setIsAntiHabitModalOpen(true); }} 
              onDeleteAntiHabit={(id) => setHabitToDelete(id)} 
              onRelapseAntiHabit={handleRelapse}
-             onReorderAntiHabits={handleReorderAntiHabits} // 🔥 Новый хендлер
+             onReorderAntiHabits={handleReorderAntiHabits}
           />
         )}
       </main>
@@ -372,8 +530,64 @@ const App: React.FC = () => {
       />
       <HabitModal isOpen={isHabitModalOpen || (!!editingHabit && !!editingHabit.id)} onClose={() => { setIsHabitModalOpen(false); setEditingHabit(undefined); }} onSave={editingHabit?.id ? handleUpdateHabit : handleAddHabit} initialHabit={editingHabit} />
       <AntiHabitModal isOpen={isAntiHabitModalOpen || (!!editingAntiHabit && !!editingAntiHabit.id)} onClose={() => { setIsAntiHabitModalOpen(false); setEditingAntiHabit(undefined); }} onSave={editingAntiHabit?.id ? handleUpdateAntiHabit : handleAddAntiHabit} initialHabit={editingAntiHabit} />
+      
+      {/* DELETE MODAL */}
       {(taskToDelete || habitToDelete) && (<div className="fixed inset-0 z-[300] flex items-center justify-center p-6"><div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => { setTaskToDelete(null); setHabitToDelete(null); }} /><div className="relative w-full max-w-xs tg-bg rounded-[32px] p-8 shadow-2xl flex flex-col gap-6 animate-in zoom-in duration-200"><div className="w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto mb-2"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg></div><h2 className="text-xl font-black tg-text text-center uppercase tracking-widest leading-tight">{taskToDelete ? 'Удалить задачу?' : 'Удалить?'}</h2><div className="flex flex-col gap-3"><button onClick={handleDeleteConfirm} className="w-full py-4 bg-red-500 text-white rounded-2xl font-bold shadow-lg shadow-red-500/20 active:scale-95 transition-all">Да, удалить</button><button onClick={() => { setTaskToDelete(null); setHabitToDelete(null); }} className="w-full py-4 tg-secondary-bg tg-text rounded-2xl font-bold active:scale-95 transition-all">Отмена</button></div></div></div>)}
-      {isSettingsOpen && (<div className="fixed inset-0 z-[300] flex items-center justify-center p-4"><div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={() => setIsSettingsOpen(false)} /><div className="relative w-[280px] tg-bg bg-opacity-80 backdrop-blur-xl rounded-[40px] p-6 shadow-2xl flex flex-col gap-5 animate-in zoom-in duration-200 border border-white/20"><h2 className="text-lg font-black tg-text text-center uppercase tracking-[0.2em]">Настройки</h2><button onClick={() => window.location.reload()} className="w-full py-3 bg-blue-500/10 text-blue-500 rounded-2xl font-bold uppercase text-[10px] tracking-widest border border-blue-500/20 active:scale-95 transition-all flex items-center justify-center gap-2">🔄 Синхронизировать</button><div className="flex flex-col gap-4 overflow-y-auto max-h-[55vh] no-scrollbar"><div className="flex items-center justify-between p-4 tg-secondary-bg rounded-[24px] border border-white/5"><div className="flex flex-col"><span className="font-bold text-[11px] tg-text uppercase tracking-tight">Тёмная тема</span></div><button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} className={`w-10 h-5 rounded-full transition-all relative ${theme === 'dark' ? 'bg-green-500' : 'bg-gray-400'}`}><div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${theme === 'dark' ? 'right-0.5' : 'left-0.5'}`} /></button></div><div className="flex flex-col gap-3 p-4 tg-secondary-bg rounded-[24px] border border-white/5"><div className="flex justify-between items-center mb-1"><span className="font-bold text-[11px] tg-text uppercase tracking-tight">Фон приложения</span>{wallpaper && (<button onClick={() => setWallpaper('')} className="text-[9px] font-black text-red-500 uppercase">Удалить</button>)}</div><input type="file" ref={wallpaperInputRef} accept="image/*" className="hidden" onChange={handleWallpaperChange} />{!wallpaper ? (<button onClick={() => wallpaperInputRef.current?.click()} className="w-full py-3 rounded-xl border border-dashed border-gray-400/30 tg-text text-[9px] font-black uppercase tracking-widest hover:bg-black/5 transition-all">📁 Загрузить фон</button>) : (<div className="flex flex-col gap-4"><div className="flex flex-col gap-1.5"><div className="flex justify-between px-1"><span className="text-[8px] font-black tg-hint uppercase">Яркость</span><span className="text-[8px] font-black tg-text">{wallpaperOpacity}%</span></div><input type="range" min="5" max="100" value={wallpaperOpacity} onChange={e => setWallpaperOpacity(Number(e.target.value))} className="w-full h-1 bg-black/10 rounded-full accent-blue-500 appearance-none" /></div><div className="flex flex-col gap-1.5"><div className="flex justify-between px-1"><span className="text-[8px] font-black tg-hint uppercase">Позиция</span><span className="text-[8px] font-black tg-text">{wallpaperPosition}%</span></div><input type="range" min="0" max="100" value={wallpaperPosition} onChange={e => setWallpaperPosition(Number(e.target.value))} className="w-full h-1 bg-black/10 rounded-full accent-orange-500 appearance-none" /></div><button onClick={() => wallpaperInputRef.current?.click()} className="w-full py-2 rounded-lg bg-black/5 tg-text text-[8px] font-black uppercase tracking-widest">Сменить фото</button></div>)}</div></div><button onClick={() => setIsSettingsOpen(false)} className="w-full py-4 tg-button rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl active:scale-95 transition-all">Готово</button></div></div>)}
+      
+      {/* SETTINGS MODAL - ОБНОВЛЁННЫЙ */}
+      {isSettingsOpen && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={() => setIsSettingsOpen(false)} />
+          <div className="relative w-[280px] tg-bg bg-opacity-80 backdrop-blur-xl rounded-[40px] p-6 shadow-2xl flex flex-col gap-5 animate-in zoom-in duration-200 border border-white/20">
+            <h2 className="text-lg font-black tg-text text-center uppercase tracking-[0.2em]">Настройки</h2>
+            
+            {/* 🔐 ПРОФИЛЬ */}
+            {userName && (
+              <div className="p-4 tg-secondary-bg rounded-[24px] border border-white/5 flex items-center gap-3">
+                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold">
+                  {userName.charAt(0).toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-bold text-sm tg-text truncate">{userName}</div>
+                  {userEmail && <div className="text-[10px] tg-hint truncate">{userEmail}</div>}
+                </div>
+              </div>
+            )}
+            
+            <button onClick={() => window.location.reload()} className="w-full py-3 bg-blue-500/10 text-blue-500 rounded-2xl font-bold uppercase text-[10px] tracking-widest border border-blue-500/20 active:scale-95 transition-all flex items-center justify-center gap-2">🔄 Синхронизировать</button>
+            
+            <div className="flex flex-col gap-4 overflow-y-auto max-h-[40vh] no-scrollbar">
+              <div className="flex items-center justify-between p-4 tg-secondary-bg rounded-[24px] border border-white/5">
+                <div className="flex flex-col"><span className="font-bold text-[11px] tg-text uppercase tracking-tight">Тёмная тема</span></div>
+                <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} className={`w-10 h-5 rounded-full transition-all relative ${theme === 'dark' ? 'bg-green-500' : 'bg-gray-400'}`}><div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${theme === 'dark' ? 'right-0.5' : 'left-0.5'}`} /></button>
+              </div>
+              
+              <div className="flex flex-col gap-3 p-4 tg-secondary-bg rounded-[24px] border border-white/5">
+                <div className="flex justify-between items-center mb-1"><span className="font-bold text-[11px] tg-text uppercase tracking-tight">Фон приложения</span>{wallpaper && (<button onClick={() => setWallpaper('')} className="text-[9px] font-black text-red-500 uppercase">Удалить</button>)}</div>
+                <input type="file" ref={wallpaperInputRef} accept="image/*" className="hidden" onChange={handleWallpaperChange} />
+                {!wallpaper ? (
+                  <button onClick={() => wallpaperInputRef.current?.click()} className="w-full py-3 rounded-xl border border-dashed border-gray-400/30 tg-text text-[9px] font-black uppercase tracking-widest hover:bg-black/5 transition-all">📁 Загрузить фон</button>
+                ) : (
+                  <div className="flex flex-col gap-4">
+                    <div className="flex flex-col gap-1.5"><div className="flex justify-between px-1"><span className="text-[8px] font-black tg-hint uppercase">Яркость</span><span className="text-[8px] font-black tg-text">{wallpaperOpacity}%</span></div><input type="range" min="5" max="100" value={wallpaperOpacity} onChange={e => setWallpaperOpacity(Number(e.target.value))} className="w-full h-1 bg-black/10 rounded-full accent-blue-500 appearance-none" /></div>
+                    <div className="flex flex-col gap-1.5"><div className="flex justify-between px-1"><span className="text-[8px] font-black tg-hint uppercase">Позиция</span><span className="text-[8px] font-black tg-text">{wallpaperPosition}%</span></div><input type="range" min="0" max="100" value={wallpaperPosition} onChange={e => setWallpaperPosition(Number(e.target.value))} className="w-full h-1 bg-black/10 rounded-full accent-orange-500 appearance-none" /></div>
+                    <button onClick={() => wallpaperInputRef.current?.click()} className="w-full py-2 rounded-lg bg-black/5 tg-text text-[8px] font-black uppercase tracking-widest">Сменить фото</button>
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            <button onClick={() => setIsSettingsOpen(false)} className="w-full py-4 tg-button rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl active:scale-95 transition-all">Готово</button>
+            
+            {/* 🔐 КНОПКА ВЫХОДА (только для Google авторизации) */}
+            {userEmail && (
+              <button onClick={handleSignOut} className="w-full py-3 bg-red-500/10 text-red-500 rounded-2xl font-bold uppercase text-[10px] tracking-widest border border-red-500/20 active:scale-95 transition-all">
+                Выйти из аккаунта
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
