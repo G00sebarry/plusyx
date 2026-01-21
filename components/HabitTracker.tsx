@@ -545,14 +545,27 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
         )}
         {activeTab === 'quit' && (
             <div className="grid grid-cols-1 gap-4">
-                {antiHabits.length === 0 && <div className="text-center py-20 opacity-50">Здесь пусто. Добавь вредную привычку.</div>}
-                {antiHabits.map(h => (
-                    <div key={h.id} draggable onDragStart={(e) => handleDragStart(e, h.id)} onDragOver={(e) => handleDragOver(e, h.id)} onDrop={(e) => handleDrop(e, h.id)} onDragEnd={() => { setDraggedHabitId(null); setDropTargetId(null); }}>
-                        <AntiHabitCard habit={h} onEdit={onEditAntiHabit} onDelete={onDeleteAntiHabit} onRelapse={onRelapseAntiHabit} />
-                    </div>
-                ))}
-                {antiHabits.length > 0 && <button onClick={onAddAntiHabit} className="w-full py-4 rounded-2xl border border-dashed border-gray-400/20 tg-text opacity-50 text-[10px] font-black uppercase tracking-widest hover:opacity-100">+ Бросить ещё</button>}
+    {antiHabits.length === 0 ? (
+        <div className="flex flex-col items-center justify-center min-h-[50vh] text-center gap-6">
+            <div className="w-24 h-24 bg-red-500/10 rounded-[32px] flex items-center justify-center text-5xl animate-pulse">🚫</div>
+            <div className="flex flex-col gap-2 max-w-[250px]">
+                <h3 className="text-lg font-black uppercase tg-text">Без иллюзий</h3>
+                <p className="text-xs tg-hint">Этот счётчик не для мотивации. Это доказательство.</p>
             </div>
+            <button onClick={onAddAntiHabit} className="py-4 px-8 bg-red-500 text-white rounded-2xl font-black uppercase text-xs">Бросить</button>
+        </div>
+    ) : (
+        <>
+            {antiHabits.map(h => (
+                <div key={h.id} draggable onDragStart={(e) => handleDragStart(e, h.id)} onDragOver={(e) => handleDragOver(e, h.id)} onDrop={(e) => handleDrop(e, h.id)} onDragEnd={() => { setDraggedHabitId(null); setDropTargetId(null); }}>
+                    <AntiHabitCard habit={h} onEdit={onEditAntiHabit} onDelete={onDeleteAntiHabit} onRelapse={onRelapseAntiHabit} />
+                </div>
+            ))}
+            <button onClick={onAddAntiHabit} className="w-full py-4 rounded-2xl border border-dashed border-gray-400/20 tg-text opacity-50 text-[10px] font-black uppercase tracking-widest hover:opacity-100">+ Бросить ещё</button>
+        </>
+    )}
+</div>
+
         )}
       </div>
 
