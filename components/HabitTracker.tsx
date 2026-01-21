@@ -69,7 +69,6 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
       const dayOfWeek = date.getDay(); 
       if (habit.frequency.days.includes(dayOfWeek)) {
         const val = habit.history[formatDate(date)];
-        // Заморозка исключается из знаменателя (легальный пропуск)
         if (val === 'freeze') continue;
         
         maxPossibleScore += goal;
@@ -85,16 +84,13 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     return Math.min(100, Math.round((currentScore / maxPossibleScore) * 100));
   };
 
-  // 🔥 NEON COLORS & SHAPES
   const getSlotStyle = (val: number | boolean | 'mini' | 'freeze' | undefined, goal: number, isMeasurable: boolean, hasCover: boolean) => {
-    // Базовый пустой стиль
     const emptyStyle = hasCover 
         ? 'bg-white/10 border border-white/10 text-white/40' 
         : 'bg-black/20 border border-transparent text-white/30';
 
     if (!val) return { className: emptyStyle, type: 'empty' };
 
-    // ❄️ FREEZE (Ice Crystal)
     if (val === 'freeze') {
         return { 
             className: 'bg-cyan-500/20 border border-cyan-400 text-cyan-300 shadow-[0_0_15px_rgba(34,211,238,0.3)]',
@@ -102,7 +98,6 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
         };
     }
 
-    // 🍩 MINI (Bagel)
     if (val === 'mini') {
         return {
             className: 'bg-yellow-500/10 border-2 border-yellow-500 text-yellow-500 shadow-[0_0_10px_rgba(234,179,8,0.2)]',
@@ -110,7 +105,6 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
         };
     }
 
-    // 🟢 FULL / MEASURABLE
     let isFull = true;
     if (isMeasurable && typeof val === 'number') {
         const percent = (val / goal) * 100;
@@ -118,21 +112,18 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     }
 
     if (!isFull) {
-         // Неполная измеримая (как Mini)
          return {
             className: 'bg-orange-500/10 border-2 border-orange-500 text-orange-500 shadow-[0_0_10px_rgba(249,115,22,0.2)]',
             type: 'mini'
          };
     }
 
-    // Full Success
     return {
         className: 'bg-green-500 text-white border border-green-400 shadow-[0_0_15px_rgba(34,197,94,0.5)]',
         type: 'full'
     };
   };
 
-  // --- RENDERING DAYS + BRIDGES ---
   const renderSlots = (habit: Habit, hasCover: boolean) => {
     const now = new Date();
     const goal = habit.targetValue || 1;
@@ -150,23 +141,19 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
       const { className, type } = getSlotStyle(val, goal, habit.isMeasurable, hasCover);
       const isToday = ds === formatDate(new Date());
 
-      // --- ЛОГИКА МОСТА (BRIDGE) ---
       let showBridge = false;
       let bridgeColor = '';
 
-      // Смотрим на следующий слот
       if (index < daysToRender.length - 1) {
           const nextDate = daysToRender[index + 1];
           const nextDs = formatDate(nextDate);
           const nextVal = habit.history[nextDs];
           
-          // Проверяем, что дни идут ПОДРЯД (разница 1 день)
           const diffTime = Math.abs(nextDate.getTime() - date.getTime());
           const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
 
           if (diffDays === 1 && val && nextVal) {
               showBridge = true;
-              // Цвет моста зависит от текущего статуса
               if (val === 'freeze' || nextVal === 'freeze') bridgeColor = 'bg-cyan-400 shadow-[0_0_10px_cyan]';
               else if (val === 'mini' || nextVal === 'mini') bridgeColor = 'bg-yellow-500/50 shadow-[0_0_5px_yellow]';
               else bridgeColor = 'bg-green-500 shadow-[0_0_10px_lime]';
@@ -181,12 +168,9 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
                 className={`
                     min-w-[50px] h-[70px] flex flex-col items-center justify-between py-2 px-1 rounded-2xl transition-all relative z-10
                     ${className} ${isToday ? 'ring-2 ring-white scale-105 z-20' : ''}
-                    ${type === 'freeze' ? 'rotate-45 scale-75 mx-1' : ''} /* Кристалл */
                 `}
-                style={type === 'freeze' ? { borderRadius: '4px' } : {}}
             >
-                {/* Вращаем контент обратно для кристалла */}
-                <div className={`flex flex-col items-center gap-1 w-full h-full ${type === 'freeze' ? '-rotate-45 scale-125' : ''}`}>
+                <div className="flex flex-col items-center gap-1 w-full h-full">
                     <span className="text-[10px] font-black">{formatShortDate(date)}</span>
                     <span className="text-[8px] font-bold opacity-60">{WEEKDAYS[date.getDay()]}</span>
                     
@@ -194,9 +178,8 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
                         {val === 'freeze' && <span className="text-lg drop-shadow-md">❄️</span>}
                         {val === 'mini' && <div className="w-2 h-2 rounded-full bg-current opacity-80" />} 
                         {habit.isMeasurable && typeof val === 'number' && val > 0 && (
-    <span className="text-[9px] font-black">{val}</span>
-)}
-
+                            <span className="text-[9px] font-black">{val}</span>
+                        )}
                         {type === 'full' && !habit.isMeasurable && (
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" className="drop-shadow-sm"><polyline points="20 6 9 17 4 12"/></svg>
                         )}
@@ -204,11 +187,10 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
                 </div>
             </button>
             
-            {/* 🌉 NEON BRIDGE */}
             {showBridge && (
                 <div className={`h-[4px] w-[10px] -mx-1 z-0 relative rounded-full ${bridgeColor} animate-pulse`} />
             )}
-            {!showBridge && <div className="w-1.5" />} {/* Отступ если нет моста */}
+            {!showBridge && <div className="w-1.5" />}
         </div>
       );
     });
@@ -242,7 +224,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
 
   const setStatus = (status: 'mini' | 'freeze' | 'full' | 'reset') => {
       if (!contextMenu) return;
-      let val: any = false;
+      let val: number | boolean | 'mini' | 'freeze' = false;
       if (status === 'full') val = true;
       if (status === 'mini') val = 'mini';
       if (status === 'freeze') val = 'freeze';
@@ -250,7 +232,6 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
       setContextMenu(null);
   };
 
-  // --- DRAG AND DROP ---
   const handleDragStart = (e: React.DragEvent, id: string) => { setDraggedHabitId(id); e.dataTransfer.setData('habitId', id); };
   const handleDragOver = (e: React.DragEvent, id: string) => { e.preventDefault(); if (draggedHabitId !== id) setDropTargetId(id); };
   const handleDrop = (e: React.DragEvent, targetId: string) => {
@@ -283,7 +264,6 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
   return (
     <div className="flex flex-col h-full overflow-y-auto no-scrollbar animate-in fade-in duration-300 relative pb-20">
       
-      {/* SHAPKA */}
       <div className="px-5 py-2 sticky top-0 z-30 backdrop-blur-md bg-gradient-to-b from-[var(--tg-theme-bg-color)] to-transparent">
         <div className="bg-black/10 p-1.5 rounded-[20px] flex relative border border-white/5 shadow-inner">
            <div className={`absolute top-1.5 bottom-1.5 w-[calc(50%-6px)] rounded-[16px] shadow-md transition-all duration-300 ease-out ${activeTab === 'build' ? 'left-1.5 bg-[#4cc3a1]' : 'left-[calc(50%+3px)] bg-red-500'}`} />
@@ -325,14 +305,13 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
                             >
                                 {hasCover && <div className="absolute inset-0 z-0" style={{ backgroundColor: `rgba(0,0,0,${(habit.coverIntensity ?? 60) / 100})` }} />}
                                 
-                                {/* ATOMIC GLOW */}
-                                {isAtomic && !hasCover && <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-purple-500/5 z-0 pointer-events-none" />}
+                                {isAtomic && !hasCover && <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/5 to-orange-500/5 z-0 pointer-events-none" />}
 
                                 <div className="relative z-10 flex justify-between items-start">
                                     <div className="flex items-center gap-3">
                                         <div className={`w-12 h-12 rounded-2xl ${habit.color} flex items-center justify-center text-2xl shrink-0 shadow-sm border border-white/10 relative`}>
                                             {habit.emoji || '🔥'}
-                                            {isAtomic && <span className="absolute -top-1 -right-1 text-[10px] animate-pulse">⚛️</span>}
+                                            {isAtomic && <span className="absolute -top-1 -right-1 text-[10px]">⚡️</span>}
                                         </div>
                                         <div className="flex flex-col">
                                             {habit.identity && <div className="self-start px-2 py-0.5 rounded-md bg-white/20 backdrop-blur-sm text-[8px] font-black uppercase tracking-widest text-white mb-1 shadow-sm border border-white/10 w-fit">{habit.identity}</div>}
@@ -375,7 +354,6 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
         )}
       </div>
 
-      {/* CONTEXT MENU */}
       {contextMenu && (
         <div ref={menuRef} className="fixed z-[500] w-40 bg-[#1c1c1e] rounded-2xl shadow-2xl border border-white/10 flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200" style={{ top: contextMenu.y, left: Math.min(contextMenu.x, window.innerWidth - 170) }}>
             <button onClick={() => setStatus('full')} className="p-3 text-left hover:bg-white/5 flex items-center gap-2 text-[10px] font-bold text-white"><div className="w-3 h-3 rounded-full bg-green-500" /> Выполнено</button>
@@ -386,7 +364,6 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
         </div>
       )}
 
-      {/* EDIT VALUE MODAL */}
       {editingValue && (
         <div className="fixed inset-0 z-[400] flex items-center justify-center p-6" onClick={(e) => e.stopPropagation()}>
             <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setEditingValue(null)} />
