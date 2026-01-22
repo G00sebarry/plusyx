@@ -509,7 +509,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
                                     {renderSlots(habit, hasCover)}
                                 </div>
 
-                                {/* FOOTER: HEATMAP TOGGLE + DELETE */}
+                                {/* FOOTER: HEATMAP TOGGLE + REMINDER + DELETE */}
                                 <div className="relative z-10 flex items-center justify-between">
                                     <button 
                                       onClick={(e) => toggleHeatmap(habit.id, e)}
@@ -519,15 +519,29 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
                                       <span>{isExpanded ? 'Скрыть' : 'Месяц'}</span>
                                     </button>
                                     
-                                    {/* КОРЗИНА В УГЛУ */}
-                                    <button 
-                                      onClick={(e) => { e.stopPropagation(); onDeleteHabit(habit.id); }} 
-                                      className={`w-7 h-7 flex items-center justify-center rounded-lg transition-all ${hasCover ? 'bg-white/10 text-white/40 hover:text-red-400 hover:bg-red-500/20' : 'bg-red-500/5 text-red-500/30 hover:text-red-500 hover:bg-red-500/10'}`}
-                                    >
-                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                        <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
-                                      </svg>
-                                    </button>
+                                    {/* ⏰ ВРЕМЯ НАПОМИНАНИЯ + КОРЗИНА */}
+                                    <div className="flex items-center gap-2">
+                                        {/* ⏰ Время напоминания (НОВОЕ) */}
+                                        {habit.reminderEnabled && habit.reminderTime && (
+                                            <div 
+                                              className={`flex items-center gap-1 px-2 py-1 rounded-lg ${hasCover ? 'bg-blue-500/20 text-blue-300' : 'bg-blue-500/10 text-blue-500'}`}
+                                              onClick={(e) => e.stopPropagation()}
+                                            >
+                                                <span className="text-[10px]">🔔</span>
+                                                <span className="text-[9px] font-bold">{habit.reminderTime}</span>
+                                            </div>
+                                        )}
+                                        
+                                        {/* КОРЗИНА */}
+                                        <button 
+                                          onClick={(e) => { e.stopPropagation(); onDeleteHabit(habit.id); }} 
+                                          className={`w-7 h-7 flex items-center justify-center rounded-lg transition-all ${hasCover ? 'bg-white/10 text-white/40 hover:text-red-400 hover:bg-red-500/20' : 'bg-red-500/5 text-red-500/30 hover:text-red-500 hover:bg-red-500/10'}`}
+                                        >
+                                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                            <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+                                          </svg>
+                                        </button>
+                                    </div>
                                 </div>
 
                                 {/* MINI HEATMAP */}
