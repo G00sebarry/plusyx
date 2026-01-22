@@ -26,14 +26,15 @@ function getMoscowTime() {
   const moscowTime = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Moscow' }));
   const hours = moscowTime.getHours().toString().padStart(2, '0');
   const minutes = moscowTime.getMinutes().toString().padStart(2, '0');
-  return `${hours}:${minutes}`;
+  const dayOfWeek = moscowTime.getDay(); // 0=Вс, 1=Пн, 2=Вт...
+  return { time: `${hours}:${minutes}`, day: dayOfWeek };
 }
 
 export default async function handler(req, res) {
   try {
-    const currentTime = getMoscowTime(); // Московское время!
+    const { time: currentTime, day: currentDay } = getMoscowTime();
 
-    console.log(`Checking reminders for ${currentTime} (Moscow)`);
+    console.log(`Checking reminders for ${currentTime}, day ${currentDay} (Moscow)`);
 
     // Получаем все связки Telegram
     const { data: links } = await supabase
@@ -45,29 +46,55 @@ export default async function handler(req, res) {
     }
 
     let sentCount = 0;
+    let checked = 0;
 
     for (const link of links) {
-      // Получаем задачи пользователя с напоминаниями на текущее время
+      // ========== ПРИВЫЧКИ ==========
+      const { data: habits } = await supabase
+        .from('habits')
+        .select('*')
+        .eq('user_id', link.user_id)
+        .eq('reminder_time', currentTime)
+        .eq('reminder_enabled', true);
+
+      if (habits && habits.length > 0) {
+        for (const habit of habits) {
+          checked++;
+          
+          // Проверяем день недели
+          let frequency = habit.frequency;
+          if (typeof frequency === 'string') {
+            try {
+              frequency = JSON.parse(frequency);
+            } catch (e) {
+              frequency = { days: [1,2,3,4,5,6,0] }; // все дни по умолчанию
+            }
+          }
+          
+          const days = frequency?.days || [1,2,3,4,5,6,0];
+          
+          if (days.includes(currentDay)) {
+            const emoji = habit.emoji || '🔔';
+            const message = `${emoji} <b>Напоминание о привычке!</b>\n\n📌 ${habit.title}`;
+            await sendTelegramMessage(link.chat_id, message);
+            sentCount++;
+          }
+        }
+      }
+
+      // ========== ЗАДАЧИ ==========
       const { data: tasks } = await supabase
         .from('tasks')
         .select('*')
         .eq('user_id', link.user_id)
         .eq('time', currentTime)
         .eq('isTimer', true)
-        .eq('is_reminder_sent', false)
         .neq('status', 'done');
 
       if (tasks && tasks.length > 0) {
         for (const task of tasks) {
-          const message = `🔔 <b>Напоминание!</b>\n\n📌 ${task.title}`;
+          const message = `🔔 <b>Напоминание о задаче!</b>\n\n📌 ${task.title}`;
           await sendTelegramMessage(link.chat_id, message);
-          
-          // Помечаем что напоминание отправлено
-          await supabase
-            .from('tasks')
-            .update({ is_reminder_sent: true })
-            .eq('id', task.id);
-          
           sentCount++;
         }
       }
@@ -76,7 +103,9 @@ export default async function handler(req, res) {
     return res.status(200).json({ 
       ok: true, 
       time: currentTime,
+      day: currentDay,
       timezone: 'Europe/Moscow',
+      checked: checked,
       sent: sentCount 
     });
 
