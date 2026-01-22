@@ -1,7 +1,17 @@
 // api/telegram-webhook.js
 
 export default async function handler(req, res) {
-  // Для GET запросов — просто показываем статус (для проверки)
+  // Разрешаем CORS
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  // OPTIONS запрос (preflight)
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
+  // GET — проверка статуса
   if (req.method === 'GET') {
     return res.status(200).json({
       status: "ok",
@@ -12,18 +22,16 @@ export default async function handler(req, res) {
     });
   }
 
-  // Для POST — обработка webhook от Telegram (добавим позже)
+  // POST — webhook от Telegram
   if (req.method === 'POST') {
     try {
       const update = req.body;
-      
-      // Пока просто логируем что пришло
       console.log('Telegram update:', JSON.stringify(update));
       
       return res.status(200).json({ ok: true });
     } catch (error) {
       console.error('Webhook error:', error);
-      return res.status(200).json({ ok: true }); // Telegram требует 200
+      return res.status(200).json({ ok: true });
     }
   }
 
