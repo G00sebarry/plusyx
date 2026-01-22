@@ -286,7 +286,13 @@ export const fetchUserSettings = async (userId) => {
   return data;
 };
 
-export const saveUserSettings = async (settings) => {
+export const saveUserSettings = async (settings: {
+  user_id: string;
+  wallpaper?: string;
+  wallpaper_opacity?: number;
+  wallpaper_position?: number;
+  theme?: string;
+}) => {
   const { data, error } = await supabase
     .from('user_settings')
     .upsert({
@@ -299,4 +305,4 @@ export const saveUserSettings = async (settings) => {
   if (error) console.error('Error saving settings:', error);
   return data;
 };
-  
+

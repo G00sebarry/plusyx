@@ -195,11 +195,12 @@ const App: React.FC = () => {
         setHabits(dbHabits);
         setAntiHabits(dbAntiHabits);
         
-        // 🖼️ Загружаем настройки фона из БД
+        // 🖼️ Загружаем настройки из БД (включая тему!)
         if (dbSettings) {
           if (dbSettings.wallpaper) setWallpaper(dbSettings.wallpaper);
           if (dbSettings.wallpaper_opacity !== null) setWallpaperOpacity(dbSettings.wallpaper_opacity);
           if (dbSettings.wallpaper_position !== null) setWallpaperPosition(dbSettings.wallpaper_position);
+          if (dbSettings.theme) setTheme(dbSettings.theme as 'light' | 'dark');
         }
         setSettingsLoaded(true);
         
@@ -212,29 +213,30 @@ const App: React.FC = () => {
     initData();
   }, [userId]);
 
-  // --- THEME ---
+  // --- THEME (только применение класса) ---
   useEffect(() => { 
     document.body.classList.toggle('dark', theme === 'dark'); 
-    localStorage.setItem('plusyx_theme', theme); 
   }, [theme]);
 
-  // --- 🖼️ WALLPAPER (СОХРАНЕНИЕ В БД) ---
+  // --- 🖼️ SETTINGS (СОХРАНЕНИЕ В БД) ---
   useEffect(() => {
     // Сохраняем локально
     localStorage.setItem('plusyx_wallpaper', wallpaper);
     localStorage.setItem('plusyx_wallpaper_opacity', wallpaperOpacity.toString());
     localStorage.setItem('plusyx_wallpaper_position', wallpaperPosition.toString());
+    localStorage.setItem('plusyx_theme', theme);
     
-    // Сохраняем в БД только после загрузки настроек (чтобы не перезаписать пустыми)
+    // Сохраняем в БД только после загрузки настроек
     if (userId && settingsLoaded) {
       saveUserSettings({
         user_id: userId,
         wallpaper,
         wallpaper_opacity: wallpaperOpacity,
-        wallpaper_position: wallpaperPosition
+        wallpaper_position: wallpaperPosition,
+        theme
       });
     }
-  }, [wallpaper, wallpaperOpacity, wallpaperPosition, userId, settingsLoaded]);
+  }, [wallpaper, wallpaperOpacity, wallpaperPosition, theme, userId, settingsLoaded]);
 
   // --- TELEGRAM MAIN BUTTON ---
   useEffect(() => {
