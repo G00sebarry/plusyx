@@ -20,12 +20,20 @@ async function sendTelegramMessage(chatId, text) {
   });
 }
 
+// Получаем московское время
+function getMoscowTime() {
+  const now = new Date();
+  const moscowTime = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Moscow' }));
+  const hours = moscowTime.getHours().toString().padStart(2, '0');
+  const minutes = moscowTime.getMinutes().toString().padStart(2, '0');
+  return `${hours}:${minutes}`;
+}
+
 export default async function handler(req, res) {
   try {
-    const now = new Date();
-    const currentTime = now.toTimeString().slice(0, 5); // "HH:MM"
+    const currentTime = getMoscowTime(); // Московское время!
 
-    console.log(`Checking reminders for ${currentTime}`);
+    console.log(`Checking reminders for ${currentTime} (Moscow)`);
 
     // Получаем все связки Telegram
     const { data: links } = await supabase
@@ -44,10 +52,10 @@ export default async function handler(req, res) {
         .from('tasks')
         .select('*')
         .eq('user_id', link.user_id)
-        .eq('time', currentTime)           // Колонка time
-        .eq('isTimer', true)               // Напоминание включено
-        .eq('is_reminder_sent', false)     // Ещё не отправлено
-        .neq('status', 'done');            // Не выполнено
+        .eq('time', currentTime)
+        .eq('isTimer', true)
+        .eq('is_reminder_sent', false)
+        .neq('status', 'done');
 
       if (tasks && tasks.length > 0) {
         for (const task of tasks) {
@@ -68,6 +76,7 @@ export default async function handler(req, res) {
     return res.status(200).json({ 
       ok: true, 
       time: currentTime,
+      timezone: 'Europe/Moscow',
       sent: sentCount 
     });
 
