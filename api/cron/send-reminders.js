@@ -21,19 +21,11 @@ async function sendTelegramMessage(chatId, text) {
 }
 
 export default async function handler(req, res) {
-  // Защита: только GET или Vercel Cron
-  const authHeader = req.headers.authorization;
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    // Разрешаем без авторизации для тестов
-    // return res.status(401).json({ error: 'Unauthorized' });
-  }
-
   try {
     const now = new Date();
     const currentTime = now.toTimeString().slice(0, 5); // "HH:MM"
-    const currentDay = now.getDay(); // 0-6 (Вс-Сб)
 
-    console.log(`Checking reminders for ${currentTime}, day ${currentDay}`);
+    console.log(`Checking reminders for ${currentTime}`);
 
     // Получаем все связки Telegram
     const { data: links } = await supabase
@@ -41,7 +33,7 @@ export default async function handler(req, res) {
       .select('user_id, chat_id');
 
     if (!links || links.length === 0) {
-      return res.status(200).json({ message: 'No telegram links' });
+      return res.status(200).json({ message: 'No telegram links', time: currentTime });
     }
 
     let sentCount = 0;
@@ -52,13 +44,22 @@ export default async function handler(req, res) {
         .from('tasks')
         .select('*')
         .eq('user_id', link.user_id)
-        .eq('reminder_time', currentTime)
-        .eq('completed', false);
+        .eq('time', currentTime)           // Колонка time
+        .eq('isTimer', true)               // Напоминание включено
+        .eq('is_reminder_sent', false)     // Ещё не отправлено
+        .neq('status', 'done');            // Не выполнено
 
       if (tasks && tasks.length > 0) {
         for (const task of tasks) {
           const message = `🔔 <b>Напоминание!</b>\n\n📌 ${task.title}`;
           await sendTelegramMessage(link.chat_id, message);
+          
+          // Помечаем что напоминание отправлено
+          await supabase
+            .from('tasks')
+            .update({ is_reminder_sent: true })
+            .eq('id', task.id);
+          
           sentCount++;
         }
       }
