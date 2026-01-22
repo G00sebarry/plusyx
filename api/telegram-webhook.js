@@ -55,11 +55,12 @@ export default async function handler(req, res) {
         
         if (userId && userId.length > 10) {
           // Проверяем существует ли пользователь
-          const { data: user } = await supabase
-            .from('profiles')
-            .select('id')
-            .eq('id', userId)
-            .single();
+const { data: user } = await supabase
+  .from('user_settings')
+  .select('user_id')
+  .eq('user_id', userId)
+  .single();
+
 
           if (user) {
             // Удаляем старую связку если есть
