@@ -307,3 +307,48 @@ export const saveUserSettings = async (settings: {
   if (error) console.error('Error saving settings:', error);
   return data;
 };
+// ═══════════════════════════════════════════════════════════
+// 📲 TELEGRAM LINKS (для Google-пользователей)
+// ═══════════════════════════════════════════════════════════
+
+export const fetchTelegramLink = async (userId: string) => {
+  const { data, error } = await supabase
+    .from('telegram_links')
+    .select('*')
+    .eq('user_id', userId)
+    .single();
+  
+  if (error && error.code !== 'PGRST116') {
+    console.error('Error fetching telegram link:', error);
+  }
+  return data;
+};
+
+export const saveTelegramLink = async (userId: string, chatId: string, username?: string) => {
+  const { data, error } = await supabase
+    .from('telegram_links')
+    .upsert({
+      user_id: userId,
+      chat_id: chatId,
+      username: username || null
+    }, { onConflict: 'user_id' });
+  
+  if (error) console.error('Error saving telegram link:', error);
+  return data;
+};
+
+// ═══════════════════════════════════════════════════════════
+// 💬 HABIT QUOTES (цитаты для уведомлений)
+// ═══════════════════════════════════════════════════════════
+
+export const fetchRandomQuote = async () => {
+  const { data, error } = await supabase
+    .from('habit_quotes')
+    .select('*');
+  
+  if (error || !data || data.length === 0) return null;
+  
+  // Возвращаем случайную цитату
+  const randomIndex = Math.floor(Math.random() * data.length);
+  return data[randomIndex];
+};

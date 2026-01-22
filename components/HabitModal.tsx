@@ -1,11 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Habit } from '../types';
+import { fetchTelegramLink } from '../api';
 
 interface HabitModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (habit: Habit) => void;
   initialHabit?: Habit;
+  userId?: string;        // ← НОВОЕ
+  isTelegramUser?: boolean; // ← НОВОЕ
 }
 
 // Популярные шаблоны
@@ -20,7 +23,14 @@ const TEMPLATES = [
 const COLORS = ['bg-slate-500', 'bg-red-500', 'bg-orange-500', 'bg-green-500', 'bg-emerald-500', 'bg-blue-500', 'bg-purple-500', 'bg-pink-500'];
 const EMOJI_PRESETS = ['🔥', '💧', '🏃', '📚', '🧘', '💊', '💰', '🥗', '💤', '🧠', '🎸', '✈️'];
 
-export const HabitModal: React.FC<HabitModalProps> = ({ isOpen, onClose, onSave, initialHabit }) => {
+export const HabitModal: React.FC<HabitModalProps> = ({ 
+  isOpen, 
+  onClose, 
+  onSave, 
+  initialHabit,
+  userId,
+  isTelegramUser = false
+}) => {
   // --- БАЗОВЫЕ ПОЛЯ ---
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -40,9 +50,14 @@ export const HabitModal: React.FC<HabitModalProps> = ({ isOpen, onClose, onSave,
   const [triggerEvent, setTriggerEvent] = useState('');
   const [miniAction, setMiniAction] = useState('');
   
-  // --- 🔔 УВЕДОМЛЕНИЯ (НОВОЕ) ---
-  const [reminderEnabled, setReminderEnabled] = useState(false); // ← НОВОЕ
+  // --- 🔔 УВЕДОМЛЕНИЯ ---
+  const [reminderEnabled, setReminderEnabled] = useState(false);
   const [reminderTime, setReminderTime] = useState('');
+  
+  // --- 📲 TELEGRAM LINK (для Google юзеров) ---
+  const [telegramLinked, setTelegramLinked] = useState(false);
+  const [telegramUsername, setTelegramUsername] = useState<string | null>(null);
+  const [isCheckingLink, setIsCheckingLink] = useState(false);
   
   // Состояние для тултипов
   const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
@@ -52,6 +67,34 @@ export const HabitModal: React.FC<HabitModalProps> = ({ isOpen, onClose, onSave,
   const [coverPosition, setCoverPosition] = useState<number>(50);
   const [coverIntensity, setCoverIntensity] = useState<number>(60);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // 📲 Проверяем связку с Telegram при открытии (только для Google)
+  useEffect(() => {
+    const checkTelegramLink = async () => {
+      if (!userId || isTelegramUser) {
+        setTelegramLinked(isTelegramUser); // Telegram юзеры автоматически связаны
+        return;
+      }
+      
+      setIsCheckingLink(true);
+      try {
+        const link = await fetchTelegramLink(userId);
+        if (link) {
+          setTelegramLinked(true);
+          setTelegramUsername(link.username);
+        } else {
+          setTelegramLinked(false);
+        }
+      } catch (e) {
+        console.error('Error checking telegram link:', e);
+      }
+      setIsCheckingLink(false);
+    };
+    
+    if (isOpen) {
+      checkTelegramLink();
+    }
+  }, [isOpen, userId, isTelegramUser]);
 
   useEffect(() => {
     if (initialHabit) {
@@ -79,7 +122,7 @@ export const HabitModal: React.FC<HabitModalProps> = ({ isOpen, onClose, onSave,
       setTriggerEvent(initialHabit.triggerEvent || '');
       setMiniAction(initialHabit.miniAction || '');
       
-      // 🔔 Восстанавливаем уведомления (НОВОЕ)
+      // 🔔 Восстанавливаем уведомления
       setReminderEnabled(initialHabit.reminderEnabled || false);
       setReminderTime(initialHabit.reminderTime || '');
       
@@ -97,7 +140,7 @@ export const HabitModal: React.FC<HabitModalProps> = ({ isOpen, onClose, onSave,
     setIsMeasurable(false); setGoal(1); setUnit(''); setSelectedDays([1, 2, 3, 4, 5, 6, 0]);
     setFileData(''); setCoverPosition(50); setCoverIntensity(60);
     setIdentity(''); setTriggerEvent(''); setMiniAction('');
-    setReminderEnabled(false); setReminderTime(''); // ← НОВОЕ
+    setReminderEnabled(false); setReminderTime('');
     setIsAtomicMode(false);
   };
 
@@ -152,8 +195,8 @@ export const HabitModal: React.FC<HabitModalProps> = ({ isOpen, onClose, onSave,
       triggerEvent: isAtomicMode ? triggerEvent : '',
       miniAction: isAtomicMode ? miniAction : '',
       
-      // 🔔 Уведомления (НОВОЕ) — сохраняем независимо от режима
-      reminderEnabled: reminderEnabled && !!reminderTime, // включено только если есть время
+      // 🔔 Уведомления — сохраняем только если Telegram подключён
+      reminderEnabled: reminderEnabled && !!reminderTime && (isTelegramUser || telegramLinked),
       reminderTime: reminderTime || null,
       
       position: initialHabit?.position || 0
@@ -165,6 +208,14 @@ export const HabitModal: React.FC<HabitModalProps> = ({ isOpen, onClose, onSave,
     if (selectedDays.length === 7) return 'Каждый день';
     if (selectedDays.length === 5 && !selectedDays.includes(0) && !selectedDays.includes(6)) return 'По будням';
     return 'Выбранные дни';
+  };
+
+  // 📲 Открыть бота для подключения
+  const handleConnectTelegram = () => {
+    const botUsername = 'plusyxbot'; // Твой бот
+    const startParam = userId; // Передаём user_id как параметр
+    const url = `https://t.me/${botUsername}?start=${startParam}`;
+    window.open(url, '_blank');
   };
 
   // Компонент подсказки (Tooltip)
@@ -314,7 +365,7 @@ export const HabitModal: React.FC<HabitModalProps> = ({ isOpen, onClose, onSave,
                 </div>
             )}
 
-            {/* 🔔 УВЕДОМЛЕНИЯ В TELEGRAM (НОВЫЙ БЛОК) */}
+            {/* 🔔 УВЕДОМЛЕНИЯ В TELEGRAM */}
             <div className="flex flex-col gap-3 p-4 rounded-3xl bg-gradient-to-br from-blue-500/10 to-purple-500/10 border border-white/5">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -333,21 +384,69 @@ export const HabitModal: React.FC<HabitModalProps> = ({ isOpen, onClose, onSave,
                     </button>
                 </div>
                 
-                {/* Время (показываем только если включено) */}
+                {/* Контент уведомлений */}
                 {reminderEnabled && (
-                    <div className="flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
-                        <span className="text-[10px] font-bold text-gray-400">⏰ Время:</span>
-                        <input 
-                            type="time" 
-                            value={reminderTime} 
-                            onChange={e => setReminderTime(e.target.value)} 
-                            className="flex-1 bg-black/20 text-white text-sm font-bold rounded-xl px-4 py-2 outline-none border border-white/10 focus:border-blue-500 transition-colors"
-                        />
+                    <div className="flex flex-col gap-3 animate-in fade-in slide-in-from-top-2">
+                        
+                        {/* 📲 Статус подключения Telegram */}
+                        {isCheckingLink ? (
+                            <div className="flex items-center gap-2 p-3 bg-black/20 rounded-xl">
+                                <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                                <span className="text-[10px] text-gray-400">Проверяем Telegram...</span>
+                            </div>
+                        ) : isTelegramUser || telegramLinked ? (
+                            /* ✅ Telegram подключён */
+                            <div className="flex items-center gap-2 p-3 bg-green-500/10 border border-green-500/20 rounded-xl">
+                                <span className="text-lg">✅</span>
+                                <div className="flex-1">
+                                    <span className="text-[10px] font-bold text-green-400">Telegram подключён</span>
+                                    {telegramUsername && (
+                                        <p className="text-[9px] text-green-300/60">@{telegramUsername}</p>
+                                    )}
+                                </div>
+                            </div>
+                        ) : (
+                            /* ❌ Telegram не подключён — показываем кнопку */
+                            <div className="flex flex-col gap-2 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-xl">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-lg">⚠️</span>
+                                    <span className="text-[10px] font-bold text-yellow-400">Telegram не подключён</span>
+                                </div>
+                                <p className="text-[9px] text-yellow-300/60 leading-relaxed">
+                                    Чтобы получать напоминания, подключи свой Telegram
+                                </p>
+                                <button 
+                                    onClick={handleConnectTelegram}
+                                    className="w-full py-3 bg-[#0088cc] hover:bg-[#0099dd] text-white rounded-xl font-bold text-[10px] uppercase tracking-wider flex items-center justify-center gap-2 active:scale-95 transition-all shadow-lg shadow-blue-500/20"
+                                >
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
+                                    </svg>
+                                    Подключить Telegram
+                                </button>
+                                <p className="text-[8px] text-gray-500 text-center">
+                                    Откроется бот — нажми Start и готово!
+                                </p>
+                            </div>
+                        )}
+                        
+                        {/* ⏰ Время (показываем только если Telegram подключён) */}
+                        {(isTelegramUser || telegramLinked) && (
+                            <div className="flex items-center gap-3">
+                                <span className="text-[10px] font-bold text-gray-400">⏰ Время:</span>
+                                <input 
+                                    type="time" 
+                                    value={reminderTime} 
+                                    onChange={e => setReminderTime(e.target.value)} 
+                                    className="flex-1 bg-black/20 text-white text-sm font-bold rounded-xl px-4 py-2 outline-none border border-white/10 focus:border-blue-500 transition-colors"
+                                />
+                            </div>
+                        )}
+                        
+                        {(isTelegramUser || telegramLinked) && !reminderTime && (
+                            <p className="text-[9px] text-yellow-500 font-medium">⚠️ Укажи время для напоминания</p>
+                        )}
                     </div>
-                )}
-                
-                {reminderEnabled && !reminderTime && (
-                    <p className="text-[9px] text-yellow-500 font-medium">⚠️ Укажи время для напоминания</p>
                 )}
             </div>
 
