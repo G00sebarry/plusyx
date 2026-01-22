@@ -34,12 +34,15 @@ export const HabitModal: React.FC<HabitModalProps> = ({ isOpen, onClose, onSave,
   const [selectedDays, setSelectedDays] = useState<number[]>([1, 2, 3, 4, 5, 6, 0]);
   const [isCustomEmoji, setIsCustomEmoji] = useState(false);
 
-  // --- ⚛️ АТОМНЫЕ ПОЛЯ (НОВЫЕ) ---
-  const [isAtomicMode, setIsAtomicMode] = useState(false); // Переключатель режима
+  // --- ⚛️ АТОМНЫЕ ПОЛЯ ---
+  const [isAtomicMode, setIsAtomicMode] = useState(false);
   const [identity, setIdentity] = useState('');
   const [triggerEvent, setTriggerEvent] = useState('');
-  const [reminderTime, setReminderTime] = useState('');
   const [miniAction, setMiniAction] = useState('');
+  
+  // --- 🔔 УВЕДОМЛЕНИЯ (НОВОЕ) ---
+  const [reminderEnabled, setReminderEnabled] = useState(false); // ← НОВОЕ
+  const [reminderTime, setReminderTime] = useState('');
   
   // Состояние для тултипов
   const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
@@ -74,8 +77,11 @@ export const HabitModal: React.FC<HabitModalProps> = ({ isOpen, onClose, onSave,
       // Восстанавливаем атомные поля
       setIdentity(initialHabit.identity || '');
       setTriggerEvent(initialHabit.triggerEvent || '');
-      setReminderTime(initialHabit.reminderTime || '');
       setMiniAction(initialHabit.miniAction || '');
+      
+      // 🔔 Восстанавливаем уведомления (НОВОЕ)
+      setReminderEnabled(initialHabit.reminderEnabled || false);
+      setReminderTime(initialHabit.reminderTime || '');
       
       // Если хоть одно атомное поле заполнено, включаем режим
       if (initialHabit.identity || initialHabit.triggerEvent || initialHabit.miniAction) {
@@ -90,7 +96,8 @@ export const HabitModal: React.FC<HabitModalProps> = ({ isOpen, onClose, onSave,
     setTitle(''); setDescription(''); setColor('bg-blue-500'); setEmoji('🔥');
     setIsMeasurable(false); setGoal(1); setUnit(''); setSelectedDays([1, 2, 3, 4, 5, 6, 0]);
     setFileData(''); setCoverPosition(50); setCoverIntensity(60);
-    setIdentity(''); setTriggerEvent(''); setReminderTime(''); setMiniAction('');
+    setIdentity(''); setTriggerEvent(''); setMiniAction('');
+    setReminderEnabled(false); setReminderTime(''); // ← НОВОЕ
     setIsAtomicMode(false);
   };
 
@@ -121,7 +128,6 @@ export const HabitModal: React.FC<HabitModalProps> = ({ isOpen, onClose, onSave,
     if (!title.trim()) return;
     const isEveryDay = selectedDays.length === 7;
     
-    // Собираем объект, сохраняя все старые поля + новые
     const newHabit: any = {
       id: initialHabit?.id || Math.random().toString(36).substr(2, 9),
       title,
@@ -141,13 +147,15 @@ export const HabitModal: React.FC<HabitModalProps> = ({ isOpen, onClose, onSave,
       coverPosition,
       coverIntensity,
       
-      // ⚛️ Атомные поля (даже если режим выключен, сохраняем пустые строки, чтобы затереть старое)
+      // ⚛️ Атомные поля
       identity: isAtomicMode ? identity : '',
       triggerEvent: isAtomicMode ? triggerEvent : '',
       miniAction: isAtomicMode ? miniAction : '',
-      reminderTime: isAtomicMode ? reminderTime : '',
       
-      // Сохраняем позицию, чтобы не ломать сортировку
+      // 🔔 Уведомления (НОВОЕ) — сохраняем независимо от режима
+      reminderEnabled: reminderEnabled && !!reminderTime, // включено только если есть время
+      reminderTime: reminderTime || null,
+      
       position: initialHabit?.position || 0
     };
     onSave(newHabit);
@@ -259,7 +267,7 @@ export const HabitModal: React.FC<HabitModalProps> = ({ isOpen, onClose, onSave,
                 </div>
             )}
 
-            {/* ИЗМЕРИМОСТЬ (Старый добрый UI) */}
+            {/* ИЗМЕРИМОСТЬ */}
             <div className="bg-black/5 p-1 rounded-[18px] flex relative border border-white/5">
                 <div className="absolute top-1 bottom-1 w-[48%] bg-[var(--tg-theme-button-color)] rounded-[14px] transition-all duration-300 shadow-md" style={{ left: isMeasurable ? '51%' : '1%' }} />
                 <button onClick={() => setIsMeasurable(false)} className={`flex-1 py-3 text-[10px] font-black uppercase relative z-10 text-center transition-colors ${!isMeasurable ? 'text-white' : 'tg-text opacity-50'}`}>Простая</button>
@@ -283,17 +291,12 @@ export const HabitModal: React.FC<HabitModalProps> = ({ isOpen, onClose, onSave,
             {isAtomicMode && (
                 <div className="flex flex-col gap-4 animate-in fade-in slide-in-from-top-4 p-4 rounded-3xl bg-black/20 border border-white/5">
                     
-                    {/* Триггер + Время */}
+                    {/* Триггер */}
                     <div className="flex flex-col gap-2">
                         <label className="text-[10px] font-black tg-hint uppercase flex justify-between items-center">
                             <span>Триггер (Контекст) <Tooltip id="trigger" text="Привяжи привычку к событию: 'После кофе', 'Придя домой'. Это работает лучше, чем просто время." /></span>
                         </label>
                         <input value={triggerEvent} onChange={e => setTriggerEvent(e.target.value)} placeholder="Когда я..." className="w-full bg-black/20 border-b border-white/10 p-2 font-medium text-sm text-white outline-none focus:border-indigo-500 transition-colors placeholder:text-white/20" />
-                        
-                        <div className="flex justify-between items-center mt-2">
-                            <span className="text-[9px] font-bold text-gray-500">⏰ Напоминание в Telegram</span>
-                            <input type="time" value={reminderTime} onChange={e => setReminderTime(e.target.value)} className="bg-white/10 text-white text-xs font-bold rounded-lg px-2 py-1 outline-none border border-transparent focus:border-indigo-500" />
-                        </div>
                     </div>
 
                     <div className="h-[1px] bg-white/5 w-full" />
@@ -310,6 +313,43 @@ export const HabitModal: React.FC<HabitModalProps> = ({ isOpen, onClose, onSave,
                     </div>
                 </div>
             )}
+
+            {/* 🔔 УВЕДОМЛЕНИЯ В TELEGRAM (НОВЫЙ БЛОК) */}
+            <div className="flex flex-col gap-3 p-4 rounded-3xl bg-gradient-to-br from-blue-500/10 to-purple-500/10 border border-white/5">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <span className="text-xl">🔔</span>
+                        <div>
+                            <span className="text-[11px] font-black tg-text uppercase">Напоминание</span>
+                            <p className="text-[9px] text-gray-400">Пришлём в Telegram</p>
+                        </div>
+                    </div>
+                    {/* Переключатель */}
+                    <button 
+                        onClick={() => setReminderEnabled(!reminderEnabled)}
+                        className={`relative w-12 h-7 rounded-full transition-all duration-300 ${reminderEnabled ? 'bg-green-500' : 'bg-white/10'}`}
+                    >
+                        <div className={`absolute top-1 w-5 h-5 bg-white rounded-full shadow-md transition-all duration-300 ${reminderEnabled ? 'left-6' : 'left-1'}`} />
+                    </button>
+                </div>
+                
+                {/* Время (показываем только если включено) */}
+                {reminderEnabled && (
+                    <div className="flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
+                        <span className="text-[10px] font-bold text-gray-400">⏰ Время:</span>
+                        <input 
+                            type="time" 
+                            value={reminderTime} 
+                            onChange={e => setReminderTime(e.target.value)} 
+                            className="flex-1 bg-black/20 text-white text-sm font-bold rounded-xl px-4 py-2 outline-none border border-white/10 focus:border-blue-500 transition-colors"
+                        />
+                    </div>
+                )}
+                
+                {reminderEnabled && !reminderTime && (
+                    <p className="text-[9px] text-yellow-500 font-medium">⚠️ Укажи время для напоминания</p>
+                )}
+            </div>
 
             {/* ДНИ НЕДЕЛИ */}
             <div className="flex flex-col gap-2">
@@ -358,7 +398,7 @@ export const HabitModal: React.FC<HabitModalProps> = ({ isOpen, onClose, onSave,
                 <input type="file" ref={fileInputRef} accept="image/*" onChange={handleFileChange} className="hidden" />
             </div>
 
-            {/* МОТИВАЦИЯ (Обычная) */}
+            {/* МОТИВАЦИЯ */}
             <div className="flex flex-col gap-2">
                 <label className="text-[10px] font-black tg-hint uppercase ml-1">Описание / Мотивация</label>
                 <textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Зачем мне это нужно?" rows={2} className="w-full bg-black/5 border border-white/5 rounded-2xl p-4 text-xs font-medium tg-text outline-none resize-none placeholder:opacity-30 focus:border-blue-500/30 transition-colors" />

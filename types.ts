@@ -72,7 +72,7 @@ export interface Habit {
     days: number[]; // 0 - Вс, 1 - Пн ... 6 - Сб
   };
 
-  // 🔥 ОБНОВЛЕННАЯ ИСТОРИЯ
+  // 🔥 ИСТОРИЯ
   // value: 
   // - number (прогресс)
   // - true (выполнено Full)
@@ -80,11 +80,14 @@ export interface Habit {
   // - 'freeze' (заморожено)
   history: Record<string, boolean | number | 'mini' | 'freeze'>;
   
-  // 🔥 НОВЫЕ ПОЛЯ (МЕТОД КЛИРА)
+  // ⚛️ АТОМНЫЕ ПОЛЯ (МЕТОД КЛИРА)
   identity?: string;     // "Я — Атлет"
   triggerEvent?: string; // "После кофе"
   miniAction?: string;   // "Хотя бы 2 отжимания"
-  reminderTime?: string; // "08:00" (Техническое время)
+  
+  // 🔔 УВЕДОМЛЕНИЯ (НОВОЕ)
+  reminderEnabled?: boolean; // ← НОВОЕ: включены ли уведомления
+  reminderTime?: string;     // "08:00" (время напоминания)
 
   position: number;
   fileName?: string;

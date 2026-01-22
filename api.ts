@@ -91,6 +91,7 @@ export const fetchHabits = async (userId) => {
     identity: h.identity,
     triggerEvent: h.trigger_event,
     miniAction: h.mini_action,
+    reminderEnabled: h.reminder_enabled,  // ← НОВОЕ
     reminderTime: h.reminder_time,
     fileData: h.file_data,
     coverPosition: h.cover_position,
@@ -114,6 +115,7 @@ export const saveHabitToDb = async (habit, userId) => {
     identity: habit.identity,
     trigger_event: habit.triggerEvent,
     mini_action: habit.miniAction,
+    reminder_enabled: habit.reminderEnabled,  // ← НОВОЕ
     reminder_time: habit.reminderTime,
     file_data: habit.fileData,
     cover_position: habit.coverPosition,
@@ -305,4 +307,3 @@ export const saveUserSettings = async (settings: {
   if (error) console.error('Error saving settings:', error);
   return data;
 };
-
