@@ -42,19 +42,26 @@ async function sendTelegramMessage(chatId, text, buttons = null) {
   });
 }
 
-// Получаем московское время
-function getMoscowTime() {
+// Получаем московское время и дату
+function getMoscowDateTime() {
   const now = new Date();
   const moscowTime = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Moscow' }));
+  
   const hours = moscowTime.getHours().toString().padStart(2, '0');
   const minutes = moscowTime.getMinutes().toString().padStart(2, '0');
   const dayOfWeek = moscowTime.getDay();
-  return { time: `${hours}:${minutes}`, day: dayOfWeek };
+  
+  const year = moscowTime.getFullYear();
+  const month = (moscowTime.getMonth() + 1).toString().padStart(2, '0');
+  const day = moscowTime.getDate().toString().padStart(2, '0');
+  const date = `${year}-${month}-${day}`;
+  
+  return { time: `${hours}:${minutes}`, day: dayOfWeek, date: date };
 }
 
 export default async function handler(req, res) {
   try {
-    const { time: currentTime, day: currentDay } = getMoscowTime();
+    const { time: currentTime, day: currentDay, date: currentDate } = getMoscowDateTime();
 
     const { data: links } = await supabase
       .from('telegram_links')
@@ -126,22 +133,15 @@ export default async function handler(req, res) {
         .from('tasks')
         .select('*')
         .eq('user_id', link.user_id)
+        .eq('date', currentDate)  // ✅ ПРОВЕРЯЕМ ДАТУ
         .eq('time', currentTime)
         .eq('isTimer', true)
         .neq('status', 'done');
 
       if (tasks && tasks.length > 0) {
         for (const task of tasks) {
-          const quote = await getRandomQuote();
-          
-          let message = `📋 <b>${task.title}</b>\n\n`;
-          
-          if (quote) {
-            message += `💬 "${quote.text}"\n`;
-            if (quote.author) {
-              message += `— <i>${quote.author}</i>`;
-            }
-          }
+          let message = `📋 <b>${task.title}</b>\n`;
+          message += `📅 Задача на сегодня`;
           
           await sendTelegramMessage(link.chat_id, message);
           sentCount++;
@@ -153,6 +153,7 @@ export default async function handler(req, res) {
       ok: true, 
       time: currentTime,
       day: currentDay,
+      date: currentDate,
       sent: sentCount 
     });
 
