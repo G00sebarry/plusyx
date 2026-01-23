@@ -69,32 +69,41 @@ export const HabitModal: React.FC<HabitModalProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 📲 Проверяем связку с Telegram при открытии (только для Google)
-  useEffect(() => {
-    const checkTelegramLink = async () => {
-      if (!userId || isTelegramUser) {
-        setTelegramLinked(isTelegramUser); // Telegram юзеры автоматически связаны
-        return;
-      }
-      
-      setIsCheckingLink(true);
-      try {
-        const link = await fetchTelegramLink(userId);
-        if (link) {
-          setTelegramLinked(true);
-          setTelegramUsername(link.username);
-        } else {
-          setTelegramLinked(false);
-        }
-      } catch (e) {
-        console.error('Error checking telegram link:', e);
-      }
-      setIsCheckingLink(false);
-    };
+useEffect(() => {
+  const checkTelegramLink = async () => {
+    if (!userId) return;
     
-    if (isOpen) {
-      checkTelegramLink();
+    setIsCheckingLink(true);
+    try {
+      const link = await fetchTelegramLink(userId);
+      if (link) {
+        setTelegramLinked(true);
+        setTelegramUsername(link.username);
+      } else if (isTelegramUser) {
+        // TG-юзер, но записи в telegram_links нет — всё равно подключён
+        setTelegramLinked(true);
+        // Username берём из Telegram WebApp
+        const tg = (window as any).Telegram?.WebApp;
+        if (tg?.initDataUnsafe?.user?.username) {
+          setTelegramUsername(tg.initDataUnsafe.user.username);
+        }
+      } else {
+        setTelegramLinked(false);
+      }
+    } catch (e) {
+      console.error('Error checking telegram link:', e);
+      if (isTelegramUser) {
+        setTelegramLinked(true);
+      }
     }
-  }, [isOpen, userId, isTelegramUser]);
+    setIsCheckingLink(false);
+  };
+  
+  if (isOpen) {
+    checkTelegramLink();
+  }
+}, [isOpen, userId, isTelegramUser]);
+
 
   useEffect(() => {
     if (initialHabit) {
