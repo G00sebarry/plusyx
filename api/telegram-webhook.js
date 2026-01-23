@@ -1,4 +1,3 @@
-// api/telegram-webhook.js
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
@@ -8,10 +7,9 @@ const supabase = createClient(
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
-// Отправка сообщения в Telegram
+// Отправка сообщения
 async function sendMessage(chatId, text) {
-  const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
-  await fetch(url, {
+  await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -22,84 +20,195 @@ async function sendMessage(chatId, text) {
   });
 }
 
+// Ответ на callback (убирает "часики" на кнопке)
+async function answerCallback(callbackId, text) {
+  await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/answerCallbackQuery`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      callback_query_id: callbackId,
+      text: text,
+      show_alert: false
+    })
+  });
+}
+
+// Редактирование сообщения (убираем кнопки после нажатия)
+async function editMessage(chatId, messageId, newText) {
+  await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/editMessageText`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: chatId,
+      message_id: messageId,
+      text: newText,
+      parse_mode: 'HTML'
+    })
+  });
+}
+
+// Получаем московскую дату
+function getMoscowDate() {
+  const now = new Date();
+  const moscow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Moscow' }));
+  const year = moscow.getFullYear();
+  const month = (moscow.getMonth() + 1).toString().padStart(2, '0');
+  const day = moscow.getDate().toString().padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 export default async function handler(req, res) {
-  // GET — проверка статуса
-  if (req.method === 'GET') {
-    return res.status(200).json({
-      status: "ok",
-      message: "Telegram webhook endpoint",
-      hasSupabaseUrl: !!process.env.SUPABASE_URL,
-      hasServiceKey: !!process.env.SUPABASE_SERVICE_KEY,
-      hasBotToken: !!process.env.TELEGRAM_BOT_TOKEN
-    });
+  if (req.method !== 'POST') {
+    return res.status(200).json({ message: 'Telegram webhook endpoint' });
   }
 
-  // POST — webhook от Telegram
-  if (req.method === 'POST') {
-    try {
-      const update = req.body;
-      console.log('Telegram update:', JSON.stringify(update));
+  try {
+    const update = req.body;
 
-      const message = update.message;
-      if (!message) {
+    // ========== ОБРАБОТКА КНОПОК ==========
+    if (update.callback_query) {
+      const callback = update.callback_query;
+      const chatId = callback.message.chat.id;
+      const messageId = callback.message.id;
+      const data = callback.data; // например: "done_mxdueih0u"
+      
+      const [action, habitId] = data.split('_');
+      const today = getMoscowDate();
+      
+      // Получаем user_id по chat_id
+      const { data: link } = await supabase
+        .from('telegram_links')
+        .select('user_id')
+        .eq('chat_id', chatId.toString())
+        .single();
+      
+      if (!link) {
+        await answerCallback(callback.id, '❌ Аккаунт не привязан');
         return res.status(200).json({ ok: true });
       }
 
-      const chatId = message.chat.id;
-      const text = message.text || '';
-      const username = message.from?.username || '';
+      // Получаем привычку
+      const { data: habit } = await supabase
+        .from('habits')
+        .select('title, emoji')
+        .eq('id', habitId)
+        .single();
 
-      // Обработка команды /start с USER_ID
-      if (text.startsWith('/start ')) {
-        const userId = text.replace('/start ', '').trim();
-        
-        if (userId && userId.length > 10) {
-          // Проверяем существует ли пользователь
-const { data: user } = await supabase
-  .from('user_settings')
-  .select('user_id')
-  .eq('user_id', userId)
-  .single();
-
-
-          if (user) {
-            // Удаляем старую связку если есть
-            await supabase
-              .from('telegram_links')
-              .delete()
-              .eq('user_id', userId);
-
-            // Создаём новую связку
-            const { error } = await supabase
-              .from('telegram_links')
-              .insert({
-                user_id: userId,
-                chat_id: chatId.toString(),
-                username: username
-              });
-
-            if (!error) {
-              await sendMessage(chatId, '✅ <b>Telegram успешно подключён!</b>\n\nТеперь вы будете получать напоминания о задачах и привычках.');
-            } else {
-              console.error('DB error:', error);
-              await sendMessage(chatId, '❌ Ошибка подключения. Попробуйте ещё раз.');
-            }
-          } else {
-            await sendMessage(chatId, '❌ Пользователь не найден. Попробуйте заново из приложения.');
-          }
-        }
-      } 
-      // Просто /start без параметра
-      else if (text === '/start') {
-        await sendMessage(chatId, '👋 <b>Привет!</b>\n\nЧтобы подключить уведомления, нажмите кнопку "Подключить Telegram" в приложении Plusyx.');
+      if (!habit) {
+        await answerCallback(callback.id, '❌ Привычка не найдена');
+        return res.status(200).json({ ok: true });
       }
 
-      return res.status(200).json({ ok: true });
-    } catch (error) {
-      console.error('Webhook error:', error);
+      // Определяем тип записи
+      let status, responseText, emoji;
+      
+      if (action === 'done') {
+        status = 'completed';
+        responseText = '✅ Отлично! Привычка выполнена!';
+        emoji = '✅';
+      } else if (action === 'mini') {
+        status = 'mini';
+        responseText = '🔸 Мини-версия засчитана!';
+        emoji = '🔸';
+      } else if (action === 'freeze') {
+        status = 'frozen';
+        responseText = '❄️ Заморозка активирована';
+        emoji = '❄️';
+      } else {
+        await answerCallback(callback.id, '❌ Неизвестное действие');
+        return res.status(200).json({ ok: true });
+      }
+
+      // Проверяем, нет ли уже записи на сегодня
+      const { data: existing } = await supabase
+        .from('habit_logs')
+        .select('id')
+        .eq('habit_id', habitId)
+        .eq('date', today)
+        .single();
+
+      if (existing) {
+        await answerCallback(callback.id, '⚠️ Уже отмечено сегодня!');
+        return res.status(200).json({ ok: true });
+      }
+
+      // Записываем в habit_logs
+      const { error } = await supabase
+        .from('habit_logs')
+        .insert({
+          habit_id: habitId,
+          user_id: link.user_id,
+          date: today,
+          status: status
+        });
+
+      if (error) {
+        console.error('Insert error:', error);
+        await answerCallback(callback.id, '❌ Ошибка записи');
+        return res.status(200).json({ ok: true });
+      }
+
+      // Отвечаем на callback
+      await answerCallback(callback.id, responseText);
+
+      // Обновляем сообщение (убираем кнопки)
+      const habitEmoji = habit.emoji || '🔔';
+      const newText = `${habitEmoji} <b>${habit.title}</b>\n\n${emoji} <i>${responseText}</i>`;
+      await editMessage(chatId, messageId, newText);
+
       return res.status(200).json({ ok: true });
     }
-  }
 
-  return res.status(405).json({ error: 'Method not allowed' });
+    // ========== ОБРАБОТКА КОМАНДЫ /start ==========
+    if (update.message?.text) {
+      const chatId = update.message.chat.id;
+      const text = update.message.text;
+
+      if (text.startsWith('/start')) {
+        const parts = text.split(' ');
+        
+        if (parts.length > 1) {
+          const token = parts[1];
+          
+          const { data: pending } = await supabase
+            .from('telegram_pending')
+            .select('user_id')
+            .eq('token', token)
+            .single();
+          
+          if (pending) {
+            await supabase
+              .from('telegram_links')
+              .upsert({
+                user_id: pending.user_id,
+                chat_id: chatId.toString(),
+                username: update.message.from?.username || null,
+                linked_at: new Date().toISOString()
+              }, { onConflict: 'user_id' });
+            
+            await supabase
+              .from('telegram_pending')
+              .delete()
+              .eq('token', token);
+            
+            await sendMessage(chatId, 
+              '✅ Telegram успешно подключён!\n\nТеперь вы будете получать напоминания о задачах и привычках.'
+            );
+          } else {
+            await sendMessage(chatId, '❌ Ссылка недействительна или устарела.');
+          }
+        } else {
+          await sendMessage(chatId, 
+            '👋 Привет! Это бот Plusyx.\n\nДля подключения уведомлений перейдите в настройки приложения Plusyx.'
+          );
+        }
+      }
+    }
+
+    return res.status(200).json({ ok: true });
+
+  } catch (error) {
+    console.error('Webhook error:', error);
+    return res.status(200).json({ ok: true });
+  }
 }
