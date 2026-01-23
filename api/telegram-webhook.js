@@ -7,7 +7,6 @@ const supabase = createClient(
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
-// Отправка сообщения
 async function sendMessage(chatId, text) {
   await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
     method: 'POST',
@@ -20,7 +19,6 @@ async function sendMessage(chatId, text) {
   });
 }
 
-// Ответ на callback (убирает "часики" на кнопке)
 async function answerCallback(callbackId, text) {
   await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/answerCallbackQuery`, {
     method: 'POST',
@@ -33,7 +31,6 @@ async function answerCallback(callbackId, text) {
   });
 }
 
-// Редактирование сообщения (убираем кнопки после нажатия)
 async function editMessage(chatId, messageId, newText) {
   await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/editMessageText`, {
     method: 'POST',
@@ -47,7 +44,6 @@ async function editMessage(chatId, messageId, newText) {
   });
 }
 
-// Получаем московскую дату
 function getMoscowDate() {
   const now = new Date();
   const moscow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Moscow' }));
@@ -87,10 +83,10 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true });
       }
 
-      // Получаем привычку
+      // Получаем привычку с текущим history
       const { data: habit } = await supabase
         .from('habits')
-        .select('title, emoji')
+        .select('id, title, emoji, history')
         .eq('id', habitId)
         .single();
 
@@ -99,19 +95,26 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true });
       }
 
-      // Определяем тип записи
-      let status, responseText, statusEmoji;
+      // Проверяем, не отмечено ли уже сегодня
+      const currentHistory = habit.history || {};
+      if (currentHistory[today]) {
+        await answerCallback(callback.id, '⚠️ Уже отмечено сегодня!');
+        return res.status(200).json({ ok: true });
+      }
+
+      // Определяем значение и ответ
+      let value, responseText, statusEmoji;
       
       if (action === 'done') {
-        status = 'completed';
+        value = true;
         responseText = '✅ Отлично! Привычка выполнена!';
         statusEmoji = '✅';
       } else if (action === 'mini') {
-        status = 'mini';
+        value = 'mini';
         responseText = '🔸 Мини-версия засчитана!';
         statusEmoji = '🔸';
       } else if (action === 'freeze') {
-        status = 'frozen';
+        value = 'frozen';
         responseText = '❄️ Заморозка активирована';
         statusEmoji = '❄️';
       } else {
@@ -119,35 +122,16 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true });
       }
 
-      // Проверяем, нет ли уже записи на сегодня
-      const { data: existing } = await supabase
-        .from('habit_logs')
-        .select('id')
-        .eq('habit_id', habitId)
-        .eq('date', today)
-        .single();
-
-      if (existing) {
-        await answerCallback(callback.id, '⚠️ Уже отмечено сегодня!');
-        return res.status(200).json({ ok: true });
-      }
-
-      // Записываем в habit_logs
-      const insertData = {
-        habit_id: habitId,
-        user_id: link.user_id,
-        date: today,
-        status: status
-      };
-
-      console.log('Inserting:', JSON.stringify(insertData));
+      // Обновляем history
+      const newHistory = { ...currentHistory, [today]: value };
 
       const { error } = await supabase
-        .from('habit_logs')
-        .insert(insertData);
+        .from('habits')
+        .update({ history: newHistory })
+        .eq('id', habitId);
 
       if (error) {
-        console.error('Insert error:', JSON.stringify(error));
+        console.error('Update error:', error);
         await answerCallback(callback.id, '❌ ' + error.message);
         return res.status(200).json({ ok: true });
       }
@@ -196,7 +180,7 @@ export default async function handler(req, res) {
               .eq('token', token);
             
             await sendMessage(chatId, 
-              '✅ Telegram успешно подключён!\n\nТеперь вы будете получать напоминания о задачах и привычках.'
+              '✅ Telegram успешно подключён!\n\nТеперь вы будете получать напоминания о привычках и задачах.'
             );
           } else {
             await sendMessage(chatId, '❌ Ссылка недействительна или устарела.');
