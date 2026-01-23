@@ -69,8 +69,8 @@ export default async function handler(req, res) {
     if (update.callback_query) {
       const callback = update.callback_query;
       const chatId = callback.message.chat.id;
-      const messageId = callback.message.id;
-      const data = callback.data; // например: "done_mxdueih0u"
+      const messageId = callback.message.message_id;
+      const data = callback.data;
       
       const [action, habitId] = data.split('_');
       const today = getMoscowDate();
@@ -100,20 +100,20 @@ export default async function handler(req, res) {
       }
 
       // Определяем тип записи
-      let status, responseText, emoji;
+      let status, responseText, statusEmoji;
       
       if (action === 'done') {
         status = 'completed';
         responseText = '✅ Отлично! Привычка выполнена!';
-        emoji = '✅';
+        statusEmoji = '✅';
       } else if (action === 'mini') {
         status = 'mini';
         responseText = '🔸 Мини-версия засчитана!';
-        emoji = '🔸';
+        statusEmoji = '🔸';
       } else if (action === 'freeze') {
         status = 'frozen';
         responseText = '❄️ Заморозка активирована';
-        emoji = '❄️';
+        statusEmoji = '❄️';
       } else {
         await answerCallback(callback.id, '❌ Неизвестное действие');
         return res.status(200).json({ ok: true });
@@ -133,18 +133,22 @@ export default async function handler(req, res) {
       }
 
       // Записываем в habit_logs
+      const insertData = {
+        habit_id: habitId,
+        user_id: link.user_id,
+        date: today,
+        status: status
+      };
+
+      console.log('Inserting:', JSON.stringify(insertData));
+
       const { error } = await supabase
         .from('habit_logs')
-        .insert({
-          habit_id: habitId,
-          user_id: link.user_id,
-          date: today,
-          status: status
-        });
+        .insert(insertData);
 
       if (error) {
-        console.error('Insert error:', error);
-        await answerCallback(callback.id, '❌ Ошибка записи');
+        console.error('Insert error:', JSON.stringify(error));
+        await answerCallback(callback.id, '❌ ' + error.message);
         return res.status(200).json({ ok: true });
       }
 
@@ -153,7 +157,7 @@ export default async function handler(req, res) {
 
       // Обновляем сообщение (убираем кнопки)
       const habitEmoji = habit.emoji || '🔔';
-      const newText = `${habitEmoji} <b>${habit.title}</b>\n\n${emoji} <i>${responseText}</i>`;
+      const newText = `${habitEmoji} <b>${habit.title}</b>\n\n${statusEmoji} <i>${responseText}</i>`;
       await editMessage(chatId, messageId, newText);
 
       return res.status(200).json({ ok: true });
