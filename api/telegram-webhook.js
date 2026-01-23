@@ -114,7 +114,7 @@ export default async function handler(req, res) {
         responseText = '🔸 Мини-версия засчитана!';
         statusEmoji = '🔸';
       } else if (action === 'freeze') {
-        value = 'frozen';
+  value = 'freeze';  // ← ПРАВИЛЬНО
         responseText = '❄️ Заморозка активирована';
         statusEmoji = '❄️';
       } else {
