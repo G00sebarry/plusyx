@@ -483,11 +483,22 @@ const [wallpaperPosition, setWallpaperPosition] = useState<number>(50);
   // --- HABITS ---
   const handleAddHabit = async (habitData: Habit) => {
     if (!userId) return;
-    const newHabit = { ...habitData, id: Math.random().toString(36).substr(2, 9), position: habits.length };
-    setHabits(prev => [newHabit, ...prev]); 
+    // Новая привычка с position: 0 — будет первой
+    const newHabit = { ...habitData, id: Math.random().toString(36).substr(2, 9), position: 0 };
+    
+    // Добавляем в начало списка
+    const newHabits = [newHabit, ...habits];
+    
+    // Пересчитываем позиции всех привычек
+    const updated = newHabits.map((h, idx) => ({ ...h, position: idx }));
+    setHabits(updated);
+    
     setIsHabitModalOpen(false);
     window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
+    
+    // Сохраняем новую привычку и порядок
     await saveHabitToDb(newHabit, userId);
+    await saveHabitsOrderToDb(updated, userId);
   };
 
   const handleUpdateHabit = async (updatedHabit: Habit) => {
@@ -523,11 +534,22 @@ const [wallpaperPosition, setWallpaperPosition] = useState<number>(50);
   // --- ANTI HABITS ---
   const handleAddAntiHabit = async (habit: AntiHabit) => {
     if (!userId) return;
-    const newHabit = { ...habit, id: Math.random().toString(36).substr(2, 9), position: antiHabits.length };
-    setAntiHabits(prev => [newHabit, ...prev]); 
+    // Новая анти-привычка с position: 0 — будет первой
+    const newHabit = { ...habit, id: Math.random().toString(36).substr(2, 9), position: 0 };
+    
+    // Добавляем в начало списка
+    const newAntiHabits = [newHabit, ...antiHabits];
+    
+    // Пересчитываем позиции
+    const updated = newAntiHabits.map((h, idx) => ({ ...h, position: idx }));
+    setAntiHabits(updated);
+    
     setIsAntiHabitModalOpen(false);
     window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
+    
+    // Сохраняем
     await saveAntiHabitToDb(newHabit, userId);
+    await saveAntiHabitsOrderToDb(updated, userId);
   };
 
   const handleUpdateAntiHabit = async (habit: AntiHabit) => {
