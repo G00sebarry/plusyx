@@ -280,9 +280,10 @@ const App: React.FC = () => {
   
   // --- SETTINGS ---
   const [theme, setTheme] = useState<'light' | 'dark'>(() => (localStorage.getItem('plusyx_theme') as 'light' | 'dark') || 'light');
-  const [wallpaper, setWallpaper] = useState<string>(() => localStorage.getItem('plusyx_wallpaper') || '');
-  const [wallpaperOpacity, setWallpaperOpacity] = useState<number>(() => Number(localStorage.getItem('plusyx_wallpaper_opacity')) || 30);
-  const [wallpaperPosition, setWallpaperPosition] = useState<number>(() => Number(localStorage.getItem('plusyx_wallpaper_position')) || 50);
+ const [wallpaper, setWallpaper] = useState<string>('');
+const [wallpaperOpacity, setWallpaperOpacity] = useState<number>(30);
+const [wallpaperPosition, setWallpaperPosition] = useState<number>(50);
+
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const wallpaperInputRef = useRef<HTMLInputElement>(null);
 
