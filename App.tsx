@@ -586,23 +586,27 @@ const [wallpaperPosition, setWallpaperPosition] = useState<number>(50);
 
   // --- DELETE ---
   const handleDeleteConfirm = async () => {
-    if (taskToDelete) {
-       const id = taskToDelete; 
-       setTasks(prev => prev.filter(t => t.id !== id)); 
-       setTaskToDelete(null);
-       await deleteTaskFromDb(id);
-    } else if (habitToDelete) {
-       const isHabit = habits.find(h => h.id === habitToDelete);
-       const isAnti = antiHabits.find(h => h.id === habitToDelete);
-       
-       setHabits(prev => prev.filter(h => h.id !== habitToDelete));
-       setAntiHabits(prev => prev.filter(h => h.id !== habitToDelete));
-       setHabitToDelete(null);
-       
-       if (isHabit) await deleteHabitFromDb(habitToDelete);
-       if (isAnti) await deleteAntiHabitFromDb(habitToDelete);
-    }
-  };
+  if (taskToDelete) {
+     const id = taskToDelete; 
+     setTasks(prev => prev.filter(t => t.id !== id)); 
+     setTaskToDelete(null);
+     await deleteTaskFromDb(id);
+  } else if (habitToDelete) {
+     const isHabit = habits.find(h => h.id === habitToDelete);
+     const isAnti = antiHabits.find(h => h.id === habitToDelete);
+     
+     setHabits(prev => prev.filter(h => h.id !== habitToDelete));
+     setAntiHabits(prev => prev.filter(h => h.id !== habitToDelete));
+     setHabitToDelete(null);
+     
+     if (isHabit) await deleteHabitFromDb(habitToDelete);
+     if (isAnti) await deleteAntiHabitFromDb(habitToDelete);
+  }
+  
+  // 🔧 Принудительно сбрасываем возможные блокировки
+  document.body.style.overflow = '';
+  document.body.style.touchAction = '';
+};
 
   const handleWallpaperChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return;
