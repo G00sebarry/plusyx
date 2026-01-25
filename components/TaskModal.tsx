@@ -185,10 +185,24 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
     return () => { if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current); };
   }, [title, description, date, time, isTimer, status, columnId, color, coverData, coverPosition, coverIntensity, checklists, comments, files]);
 
-  const handleManualSave = () => {
-    onSave(getTaskData());
+ // СТАЛО:
+const handleManualSave = () => {
+  // Валидация: не создаём задачу без названия
+  if (!title.trim()) {
+    // Если редактируем существующую — просто закрываем
+    if (initialTask?.id) {
+      onClose();
+      return;
+    }
+    // Если новая задача без названия — не создаём, просто закрываем
     onClose();
-  };
+    return;
+  }
+  
+  onSave(getTaskData());
+  onClose();
+};
+
 
   const handleBlockDragStart = (idx: number) => setDraggedBlock(idx);
   const handleBlockDragOver = (e: React.DragEvent, targetIdx: number) => {
