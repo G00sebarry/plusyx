@@ -509,7 +509,7 @@ const [wallpaperPosition, setWallpaperPosition] = useState<number>(50);
     await saveHabitToDb(updatedHabit, userId);
   };
 
-  const handleToggleHabit = async (id: string, date: string, value: number | boolean) => {
+  const handleToggleHabit = async (id: string, date: string, value: boolean | 'mini' | 'freeze') => {
     if (!userId) return;
     let updatedHabit: Habit | undefined;
     setHabits(prev => prev.map(h => { 

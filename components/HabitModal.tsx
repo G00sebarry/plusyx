@@ -8,16 +8,14 @@ interface HabitModalProps {
   onSave: (habit: Habit) => void;
   initialHabit?: Habit;
   userId?: string;
-  // isTelegramUser убрали!
 }
 
-// Популярные шаблоны
 const TEMPLATES = [
-  { title: 'Пить воду', emoji: '💧', color: 'bg-blue-500', unit: 'мл', goal: 2000 },
-  { title: 'Спорт', emoji: '🏃', color: 'bg-orange-500', unit: 'мин', goal: 45 },
-  { title: 'Чтение', emoji: '📚', color: 'bg-purple-500', unit: 'стр', goal: 20 },
-  { title: 'Медитация', emoji: '🧘', color: 'bg-teal-500', unit: 'мин', goal: 15 },
-  { title: 'Витамины', emoji: '💊', color: 'bg-green-500', unit: 'шт', goal: 1 },
+  { title: 'Пить воду', emoji: '💧', color: 'bg-blue-500' },
+  { title: 'Спорт', emoji: '🏃', color: 'bg-orange-500' },
+  { title: 'Чтение', emoji: '📚', color: 'bg-purple-500' },
+  { title: 'Медитация', emoji: '🧘', color: 'bg-teal-500' },
+  { title: 'Витамины', emoji: '💊', color: 'bg-green-500' },
 ];
 
 const COLORS = ['bg-slate-500', 'bg-red-500', 'bg-orange-500', 'bg-green-500', 'bg-emerald-500', 'bg-blue-500', 'bg-purple-500', 'bg-pink-500'];
@@ -30,48 +28,35 @@ export const HabitModal: React.FC<HabitModalProps> = ({
   initialHabit,
   userId
 }) => {
-  // --- БАЗОВЫЕ ПОЛЯ ---
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [color, setColor] = useState('bg-blue-500');
   const [emoji, setEmoji] = useState('🔥');
-  
-  const [isMeasurable, setIsMeasurable] = useState(false);
-  const [goal, setGoal] = useState<number>(1);
-  const [unit, setUnit] = useState('');
-
   const [selectedDays, setSelectedDays] = useState<number[]>([1, 2, 3, 4, 5, 6, 0]);
   const [isCustomEmoji, setIsCustomEmoji] = useState(false);
 
-  // --- ⚛️ АТОМНЫЕ ПОЛЯ ---
   const [isAtomicMode, setIsAtomicMode] = useState(false);
   const [identity, setIdentity] = useState('');
   const [triggerEvent, setTriggerEvent] = useState('');
   const [miniAction, setMiniAction] = useState('');
   
-  // --- 🔔 УВЕДОМЛЕНИЯ ---
   const [reminderEnabled, setReminderEnabled] = useState(false);
   const [reminderTime, setReminderTime] = useState('');
   
-  // --- 📲 TELEGRAM LINK ---
   const [telegramLinked, setTelegramLinked] = useState(false);
   const [telegramUsername, setTelegramUsername] = useState<string | null>(null);
   const [isCheckingLink, setIsCheckingLink] = useState(false);
   
-  // Состояние для тултипов
   const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
 
-  // --- ОБЛОЖКА ---
   const [fileData, setFileData] = useState<string>('');
   const [coverPosition, setCoverPosition] = useState<number>(50);
   const [coverIntensity, setCoverIntensity] = useState<number>(60);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 📲 Проверяем связку с Telegram при открытии
   useEffect(() => {
     const checkTelegramLink = async () => {
       if (!userId) return;
-      
       setIsCheckingLink(true);
       try {
         const link = await fetchTelegramLink(userId);
@@ -88,10 +73,7 @@ export const HabitModal: React.FC<HabitModalProps> = ({
       }
       setIsCheckingLink(false);
     };
-    
-    if (isOpen) {
-      checkTelegramLink();
-    }
+    if (isOpen) checkTelegramLink();
   }, [isOpen, userId]);
 
   useEffect(() => {
@@ -100,27 +82,19 @@ export const HabitModal: React.FC<HabitModalProps> = ({
       setDescription(initialHabit.description || '');
       setColor(initialHabit.color);
       setEmoji(initialHabit.emoji || '🔥');
-      setIsMeasurable(initialHabit.isMeasurable || false);
-      setGoal(initialHabit.targetValue || 1);
-      setUnit(initialHabit.unit || '');
-      
       if (initialHabit.frequency && initialHabit.frequency.days) {
         setSelectedDays(initialHabit.frequency.days);
       } else {
         setSelectedDays([1, 2, 3, 4, 5, 6, 0]);
       }
-
       setFileData(initialHabit.fileData || '');
       setCoverPosition(initialHabit.coverPosition ?? 50);
       setCoverIntensity(initialHabit.coverIntensity ?? 60);
-
       setIdentity(initialHabit.identity || '');
       setTriggerEvent(initialHabit.triggerEvent || '');
       setMiniAction(initialHabit.miniAction || '');
-      
       setReminderEnabled(initialHabit.reminderEnabled || false);
       setReminderTime(initialHabit.reminderTime || '');
-      
       if (initialHabit.identity || initialHabit.triggerEvent || initialHabit.miniAction) {
         setIsAtomicMode(true);
       }
@@ -131,7 +105,7 @@ export const HabitModal: React.FC<HabitModalProps> = ({
 
   const resetForm = () => {
     setTitle(''); setDescription(''); setColor('bg-blue-500'); setEmoji('🔥');
-    setIsMeasurable(false); setGoal(1); setUnit(''); setSelectedDays([1, 2, 3, 4, 5, 6, 0]);
+    setSelectedDays([1, 2, 3, 4, 5, 6, 0]);
     setFileData(''); setCoverPosition(50); setCoverIntensity(60);
     setIdentity(''); setTriggerEvent(''); setMiniAction('');
     setReminderEnabled(false); setReminderTime('');
@@ -140,7 +114,6 @@ export const HabitModal: React.FC<HabitModalProps> = ({
 
   const handleTemplateClick = (t: typeof TEMPLATES[0]) => {
     setTitle(t.title); setEmoji(t.emoji); setColor(t.color);
-    if (t.unit) { setIsMeasurable(true); setUnit(t.unit); setGoal(t.goal); }
   };
 
   const toggleDay = (dayIndex: number) => {
@@ -165,32 +138,22 @@ export const HabitModal: React.FC<HabitModalProps> = ({
     if (!title.trim()) return;
     const isEveryDay = selectedDays.length === 7;
     
-    const newHabit: any = {
+    const newHabit: Habit = {
       id: initialHabit?.id || Math.random().toString(36).substr(2, 9),
       title,
       description,
       color,
       emoji,
-      
-      isMeasurable,
-      targetValue: isMeasurable ? Number(goal) : 1,
-      unit: isMeasurable ? unit : '',
-      
       frequency: { type: isEveryDay ? 'daily' : 'specific', days: selectedDays },
       history: initialHabit?.history || {},
-      
       fileData,
       coverPosition,
       coverIntensity,
-      
       identity: isAtomicMode ? identity : '',
       triggerEvent: isAtomicMode ? triggerEvent : '',
       miniAction: isAtomicMode ? miniAction : '',
-      
-      // 🔔 Уведомления — сохраняем только если Telegram подключён
       reminderEnabled: reminderEnabled && !!reminderTime && telegramLinked,
-      reminderTime: reminderTime || null,
-      
+      reminderTime: reminderTime || undefined,
       position: initialHabit?.position || 0
     };
     onSave(newHabit);
@@ -214,9 +177,7 @@ export const HabitModal: React.FC<HabitModalProps> = ({
       <button 
         onClick={(e) => { e.stopPropagation(); setActiveTooltip(activeTooltip === id ? null : id); }}
         className="w-4 h-4 rounded-full bg-white/10 text-white/50 text-[10px] font-bold flex items-center justify-center hover:bg-white/20 hover:text-white transition-all"
-      >
-        ?
-      </button>
+      >?</button>
       {activeTooltip === id && (
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-48 p-3 bg-[#2c2c2e] border border-white/10 rounded-xl shadow-2xl animate-in zoom-in-95 duration-200">
           <p className="text-[10px] text-gray-300 leading-relaxed text-center font-medium">{text}</p>
@@ -302,25 +263,6 @@ export const HabitModal: React.FC<HabitModalProps> = ({
             </div>
           )}
 
-          <div className="bg-black/5 p-1 rounded-[18px] flex relative border border-white/5">
-            <div className="absolute top-1 bottom-1 w-[48%] bg-[var(--tg-theme-button-color)] rounded-[14px] transition-all duration-300 shadow-md" style={{ left: isMeasurable ? '51%' : '1%' }} />
-            <button onClick={() => setIsMeasurable(false)} className={`flex-1 py-3 text-[10px] font-black uppercase relative z-10 text-center transition-colors ${!isMeasurable ? 'text-white' : 'tg-text opacity-50'}`}>Простая</button>
-            <button onClick={() => setIsMeasurable(true)} className={`flex-1 py-3 text-[10px] font-black uppercase relative z-10 text-center transition-colors ${isMeasurable ? 'text-white' : 'tg-text opacity-50'}`}>Измеримая</button>
-          </div>
-
-          {isMeasurable && (
-            <div className="flex gap-3 animate-in fade-in">
-              <div className="flex-1 flex flex-col gap-1">
-                <label className="text-[9px] font-black tg-hint uppercase ml-2">Цель в день</label>
-                <input type="number" value={goal} onChange={e => setGoal(Number(e.target.value))} className="w-full bg-black/5 border border-white/5 rounded-2xl p-3 px-4 font-bold text-center outline-none tg-text focus:border-blue-500/30 transition-colors" />
-              </div>
-              <div className="w-1/3 flex flex-col gap-1">
-                <label className="text-[9px] font-black tg-hint uppercase ml-2">Ед. изм.</label>
-                <input type="text" placeholder="мл..." value={unit} onChange={e => setUnit(e.target.value)} className="w-full bg-black/5 border border-white/5 rounded-2xl p-3 px-4 font-bold text-center outline-none tg-text focus:border-blue-500/30 transition-colors" />
-              </div>
-            </div>
-          )}
-
           {isAtomicMode && (
             <div className="flex flex-col gap-4 animate-in fade-in slide-in-from-top-4 p-4 rounded-3xl bg-black/20 border border-white/5">
               <div className="flex flex-col gap-2">
@@ -342,7 +284,6 @@ export const HabitModal: React.FC<HabitModalProps> = ({
             </div>
           )}
 
-          {/* 🔔 УВЕДОМЛЕНИЯ В TELEGRAM */}
           <div className="flex flex-col gap-3 p-4 rounded-3xl bg-gradient-to-br from-blue-500/10 to-purple-500/10 border border-white/5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -372,9 +313,7 @@ export const HabitModal: React.FC<HabitModalProps> = ({
                     <span className="text-lg">✅</span>
                     <div className="flex-1">
                       <span className="text-[10px] font-bold text-green-400">Telegram подключён</span>
-                      {telegramUsername && (
-                        <p className="text-[9px] text-green-300/60">@{telegramUsername}</p>
-                      )}
+                      {telegramUsername && <p className="text-[9px] text-green-300/60">@{telegramUsername}</p>}
                     </div>
                   </div>
                 ) : (
@@ -383,21 +322,15 @@ export const HabitModal: React.FC<HabitModalProps> = ({
                       <span className="text-lg">⚠️</span>
                       <span className="text-[10px] font-bold text-yellow-400">Telegram не подключён</span>
                     </div>
-                    <p className="text-[9px] text-yellow-300/60 leading-relaxed">
-                      Чтобы получать напоминания, подключи свой Telegram
-                    </p>
+                    <p className="text-[9px] text-yellow-300/60 leading-relaxed">Чтобы получать напоминания, подключи свой Telegram</p>
                     <button 
                       onClick={handleConnectTelegram}
                       className="w-full py-3 bg-[#0088cc] hover:bg-[#0099dd] text-white rounded-xl font-bold text-[10px] uppercase tracking-wider flex items-center justify-center gap-2 active:scale-95 transition-all shadow-lg shadow-blue-500/20"
                     >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
-                      </svg>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
                       Подключить Telegram
                     </button>
-                    <p className="text-[8px] text-gray-500 text-center">
-                      Откроется бот — нажми Start и готово!
-                    </p>
+                    <p className="text-[8px] text-gray-500 text-center">Откроется бот — нажми Start и готово!</p>
                   </div>
                 )}
                 
@@ -473,7 +406,6 @@ export const HabitModal: React.FC<HabitModalProps> = ({
           <button onClick={handleSave} className="w-full py-5 rounded-[28px] bg-[var(--tg-theme-button-color)] text-white font-black text-lg shadow-2xl active:scale-95 transition-all mt-2 uppercase tracking-widest hover:brightness-110">
             {initialHabit ? 'Сохранить' : 'Создать'}
           </button>
-
         </div>
         
         {isCustomEmoji && <div className="fixed inset-0 z-40" onClick={() => setIsCustomEmoji(false)} />}
