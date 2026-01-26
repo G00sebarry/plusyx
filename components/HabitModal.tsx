@@ -22,7 +22,7 @@ const COLORS = ['bg-slate-500', 'bg-red-500', 'bg-orange-500', 'bg-green-500', '
 const EMOJI_PRESETS = ['🔥', '💧', '🏃', '📚', '🧘', '💊', '💰', '🥗', '💤', '🧠', '🎸', '✈️'];
 
 const IDENTITY_EXAMPLES = [
-  { text: 'Атлет', emoji: '💪' },
+  { text: 'Спортсмен', emoji: '💪' },
   { text: 'Читатель', emoji: '📚' },
   { text: 'Продуктивный человек', emoji: '⚡' },
   { text: 'Здоровый человек', emoji: '🌱' },
@@ -392,7 +392,7 @@ export const HabitModal: React.FC<HabitModalProps> = ({
                 <input 
                   value={identity} 
                   onChange={e => setIdentity(e.target.value)} 
-                  placeholder="Например: Атлет, Читатель..." 
+                  placeholder="Например: Спортсмен, Читатель..." 
                   className="bg-black/20 border border-white/10 rounded-xl p-3 text-white font-medium placeholder:text-white/30 outline-none focus:border-indigo-500/50 transition-colors" 
                 />
                 <div className="flex gap-2 flex-wrap">
