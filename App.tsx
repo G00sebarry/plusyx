@@ -511,28 +511,29 @@ const [wallpaperPosition, setWallpaperPosition] = useState<number>(50);
 
   const handleToggleHabit = async (id: string, date: string, value: boolean | 'mini' | 'freeze') => {
   if (!userId) return;
-  let updatedHabit: Habit | undefined;
   
-  setHabits(prev => prev.map(h => { 
-    if (h.id === id) { 
-      const newHistory = { ...h.history };
-      
-      // Если false — удаляем ключ из истории (сброс)
-      if (value === false) {
-        delete newHistory[date];
-      } else {
-        newHistory[date] = value;
-      }
-      
-      updatedHabit = { ...h, history: newHistory }; 
-      return updatedHabit; 
-    } 
-    return h; 
-  }));
+  // Находим привычку и создаём обновлённую версию
+  const habit = habits.find(h => h.id === id);
+  if (!habit) return;
+  
+  const newHistory = { ...habit.history };
+  if (value === false) {
+    delete newHistory[date];
+  } else {
+    newHistory[date] = value;
+  }
+  
+  const updatedHabit = { ...habit, history: newHistory };
+  
+  // Обновляем стейт
+  setHabits(prev => prev.map(h => h.id === id ? updatedHabit : h));
   
   window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
-  if (updatedHabit) await saveHabitToDb(updatedHabit, userId);
+  
+  // Сохраняем в БД
+  await saveHabitToDb(updatedHabit, userId);
 };
+
 
 
   const handleReorderHabits = async (newHabits: Habit[]) => {
