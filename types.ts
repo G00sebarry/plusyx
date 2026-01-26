@@ -55,7 +55,7 @@ export interface Task {
   comments?: TaskComment[];
 }
 
-// --- ПРИВЫЧКИ (АТОМНЫЕ) ---
+// --- ПРИВЫЧКИ ---
 export interface Habit {
   id: string;
   title: string;        
@@ -63,31 +63,27 @@ export interface Habit {
   emoji?: string;       
   color: string;        
   
-  isMeasurable: boolean;
+  // Оставляем для совместимости с HabitModal, но не используем в логике
+  isMeasurable?: boolean;
   targetValue?: number; 
   unit?: string;        
 
   frequency: {
     type: 'daily' | 'specific' | 'flexible';
-    days: number[]; // 0 - Вс, 1 - Пн ... 6 - Сб
+    days: number[];
   };
 
-  // 🔥 ИСТОРИЯ
-  // value: 
-  // - number (прогресс)
-  // - true (выполнено Full)
-  // - 'mini' (выполнено Mini)
-  // - 'freeze' (заморожено)
-  history: Record<string, boolean | number | 'mini' | 'freeze'>;
+  // 🔥 ИСТОРИЯ — теперь только простые значения
+  history: Record<string, boolean | 'mini' | 'freeze'>;
   
-  // ⚛️ АТОМНЫЕ ПОЛЯ (МЕТОД КЛИРА)
-  identity?: string;     // "Я — Атлет"
-  triggerEvent?: string; // "После кофе"
-  miniAction?: string;   // "Хотя бы 2 отжимания"
+  // ⚛️ АТОМНЫЕ ПОЛЯ
+  identity?: string;
+  triggerEvent?: string;
+  miniAction?: string;
   
-  // 🔔 УВЕДОМЛЕНИЯ (НОВОЕ)
-  reminderEnabled?: boolean; // ← НОВОЕ: включены ли уведомления
-  reminderTime?: string;     // "08:00" (время напоминания)
+  // 🔔 УВЕДОМЛЕНИЯ
+  reminderEnabled?: boolean;
+  reminderTime?: string;
 
   position: number;
   fileName?: string;

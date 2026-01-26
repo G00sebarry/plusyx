@@ -510,18 +510,30 @@ const [wallpaperPosition, setWallpaperPosition] = useState<number>(50);
   };
 
   const handleToggleHabit = async (id: string, date: string, value: boolean | 'mini' | 'freeze') => {
-    if (!userId) return;
-    let updatedHabit: Habit | undefined;
-    setHabits(prev => prev.map(h => { 
-        if (h.id === id) { 
-            updatedHabit = { ...h, history: { ...h.history, [date]: value } }; 
-            return updatedHabit; 
-        } 
-        return h; 
-    }));
-    window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
-    if (updatedHabit) await saveHabitToDb(updatedHabit, userId);
-  };
+  if (!userId) return;
+  let updatedHabit: Habit | undefined;
+  
+  setHabits(prev => prev.map(h => { 
+    if (h.id === id) { 
+      const newHistory = { ...h.history };
+      
+      // Если false — удаляем ключ из истории (сброс)
+      if (value === false) {
+        delete newHistory[date];
+      } else {
+        newHistory[date] = value;
+      }
+      
+      updatedHabit = { ...h, history: newHistory }; 
+      return updatedHabit; 
+    } 
+    return h; 
+  }));
+  
+  window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+  if (updatedHabit) await saveHabitToDb(updatedHabit, userId);
+};
+
 
   const handleReorderHabits = async (newHabits: Habit[]) => {
     if (!userId) return;
