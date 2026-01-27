@@ -392,7 +392,7 @@ export const HabitModal: React.FC<HabitModalProps> = ({
                 <input 
                   value={identity} 
                   onChange={e => setIdentity(e.target.value)} 
-                  placeholder="Например: Спортсмен, Читатель..." 
+                  placeholder="Например: Спортсмен.." 
                   className="bg-black/20 border border-white/10 rounded-xl p-3 text-white font-medium placeholder:text-white/30 outline-none focus:border-indigo-500/50 transition-colors" 
                 />
                 <div className="flex gap-2 flex-wrap">
