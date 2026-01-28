@@ -74,9 +74,33 @@ interface TooltipProps {
 
 const Tooltip: React.FC<TooltipProps> = ({ id, text, activeTooltip, setActiveTooltip }) => {
   const isActive = activeTooltip === id;
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  
+  // Закрытие по клику вне подсказки
+  useEffect(() => {
+    if (!isActive) return;
+    
+    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
+      if (tooltipRef.current && !tooltipRef.current.contains(event.target as Node)) {
+        setActiveTooltip(null);
+      }
+    };
+    
+    // Небольшая задержка чтобы не сработало сразу при открытии
+    const timer = setTimeout(() => {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('touchstart', handleClickOutside);
+    }, 10);
+    
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, [isActive, setActiveTooltip]);
   
   return (
-    <div className="relative inline-block ml-1.5">
+    <div className="relative inline-block ml-1.5" ref={tooltipRef}>
       <button 
         type="button"
         onClick={(e) => { 
@@ -89,25 +113,17 @@ const Tooltip: React.FC<TooltipProps> = ({ id, text, activeTooltip, setActiveToo
         ?
       </button>
       {isActive && (
-        <>
-          <div 
-            className="fixed inset-0 z-[9998]" 
-            onClick={(e) => {
-              e.stopPropagation();
-              setActiveTooltip(null);
-            }}
-          />
-          <div className="absolute bottom-7 left-1/2 -translate-x-1/2 w-64 p-4 bg-gradient-to-br from-indigo-900/95 to-purple-900/95 backdrop-blur-xl border border-indigo-500/30 rounded-2xl shadow-2xl shadow-indigo-500/20 animate-in zoom-in-95 fade-in duration-200 z-[9999]">
-            <p className="text-[11px] text-indigo-100 leading-relaxed font-medium whitespace-pre-line">
-              {text}
-            </p>
-            <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-gradient-to-br from-indigo-900 to-purple-900 rotate-45 border-r border-b border-indigo-500/30" />
-          </div>
-        </>
+        <div className="absolute bottom-7 left-1/2 -translate-x-1/2 w-64 p-4 bg-gradient-to-br from-indigo-900/95 to-purple-900/95 backdrop-blur-xl border border-indigo-500/30 rounded-2xl shadow-2xl shadow-indigo-500/20 animate-in zoom-in-95 fade-in duration-200 z-[9999]">
+          <p className="text-[11px] text-indigo-100 leading-relaxed font-medium whitespace-pre-line">
+            {text}
+          </p>
+          <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-gradient-to-br from-indigo-900 to-purple-900 rotate-45 border-r border-b border-indigo-500/30" />
+        </div>
       )}
     </div>
   );
 };
+
 
 export const HabitModal: React.FC<HabitModalProps> = ({ 
   isOpen, 
