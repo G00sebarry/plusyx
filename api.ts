@@ -104,18 +104,17 @@ export const saveHabitToDb = async (habit, userId) => {
     id: habit.id,
     user_id: userId,
     title: habit.title,
+    description: habit.description,  // ← ДОБАВЛЕНО
+    notes: habit.notes,              // ← ДОБАВЛЕНО
     color: habit.color,
     frequency: habit.frequency,
     history: habit.history,
     emoji: habit.emoji,
-    isMeasurable: habit.isMeasurable,
-    target_value: Number(habit.targetValue) || 1,
-    unit: habit.unit || '',
     position: habit.position || 0,
     identity: habit.identity,
     trigger_event: habit.triggerEvent,
     mini_action: habit.miniAction,
-    reminder_enabled: habit.reminderEnabled,  // ← НОВОЕ
+    reminder_enabled: habit.reminderEnabled,
     reminder_time: habit.reminderTime,
     file_data: habit.fileData,
     cover_position: habit.coverPosition,
