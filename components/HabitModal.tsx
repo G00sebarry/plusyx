@@ -42,7 +42,6 @@ const MINI_EXAMPLES = [
   { text: '1 минута медитации', emoji: '🧘' },
 ];
 
-// Компонент кнопки-примера (вынесен наружу для корректной работы с key)
 interface ExampleButtonProps {
   text: string;
   emoji: string;
@@ -64,7 +63,6 @@ const ExampleButton: React.FC<ExampleButtonProps> = ({ text, emoji, onClick }) =
   </button>
 );
 
-// Компонент подсказки (вынесен наружу для корректной работы)
 interface TooltipProps {
   id: string;
   text: string;
@@ -76,7 +74,6 @@ const Tooltip: React.FC<TooltipProps> = ({ id, text, activeTooltip, setActiveToo
   const isActive = activeTooltip === id;
   const tooltipRef = useRef<HTMLDivElement>(null);
   
-  // Закрытие по клику вне подсказки
   useEffect(() => {
     if (!isActive) return;
     
@@ -86,7 +83,6 @@ const Tooltip: React.FC<TooltipProps> = ({ id, text, activeTooltip, setActiveToo
       }
     };
     
-    // Небольшая задержка чтобы не сработало сразу при открытии
     const timer = setTimeout(() => {
       document.addEventListener('mousedown', handleClickOutside);
       document.addEventListener('touchstart', handleClickOutside);
@@ -124,7 +120,6 @@ const Tooltip: React.FC<TooltipProps> = ({ id, text, activeTooltip, setActiveToo
   );
 };
 
-
 export const HabitModal: React.FC<HabitModalProps> = ({ 
   isOpen, 
   onClose, 
@@ -143,6 +138,9 @@ export const HabitModal: React.FC<HabitModalProps> = ({
   const [identity, setIdentity] = useState('');
   const [triggerEvent, setTriggerEvent] = useState('');
   const [miniAction, setMiniAction] = useState('');
+  
+  const [notes, setNotes] = useState<Array<{ id: string; text: string; date: string }>>([]);
+  const [newNote, setNewNote] = useState('');
   
   const [reminderEnabled, setReminderEnabled] = useState(false);
   const [reminderTime, setReminderTime] = useState('');
@@ -197,6 +195,7 @@ export const HabitModal: React.FC<HabitModalProps> = ({
       setIdentity(initialHabit.identity || '');
       setTriggerEvent(initialHabit.triggerEvent || '');
       setMiniAction(initialHabit.miniAction || '');
+      setNotes(initialHabit.notes || []);
       setReminderEnabled(initialHabit.reminderEnabled || false);
       setReminderTime(initialHabit.reminderTime || '');
       if (initialHabit.identity || initialHabit.triggerEvent || initialHabit.miniAction) {
@@ -212,6 +211,8 @@ export const HabitModal: React.FC<HabitModalProps> = ({
     setSelectedDays([1, 2, 3, 4, 5, 6, 0]);
     setFileData(''); setCoverPosition(50); setCoverIntensity(60);
     setIdentity(''); setTriggerEvent(''); setMiniAction('');
+    setNotes([]);
+    setNewNote('');
     setReminderEnabled(false); setReminderTime('');
     setIsAtomicMode(false);
   };
@@ -238,6 +239,37 @@ export const HabitModal: React.FC<HabitModalProps> = ({
     }
   };
 
+  const handleAddNote = () => {
+    if (!newNote.trim()) return;
+    const note = {
+      id: Date.now().toString(),
+      text: newNote.trim(),
+      date: new Date().toISOString()
+    };
+    setNotes(prev => [note, ...prev]);
+    setNewNote('');
+  };
+
+  const handleDeleteNote = (noteId: string) => {
+    setNotes(prev => prev.filter(n => n.id !== noteId));
+  };
+
+  const formatNoteDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    if (date.toDateString() === today.toDateString()) {
+      return 'Сегодня, ' + date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+    } else if (date.toDateString() === yesterday.toDateString()) {
+      return 'Вчера, ' + date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+    } else {
+      return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }) + ', ' + 
+             date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+    }
+  };
+
   const handleSave = () => {
     if (!title.trim()) return;
     const isEveryDay = selectedDays.length === 7;
@@ -246,6 +278,7 @@ export const HabitModal: React.FC<HabitModalProps> = ({
       id: initialHabit?.id || Math.random().toString(36).substr(2, 9),
       title,
       description,
+      notes,
       color,
       emoji,
       frequency: { type: isEveryDay ? 'daily' : 'specific', days: selectedDays },
@@ -387,7 +420,6 @@ export const HabitModal: React.FC<HabitModalProps> = ({
           {isAtomicMode && (
             <div className="animate-in fade-in slide-in-from-top-2 flex flex-col gap-5">
               
-              {/* Личность */}
               <div className="bg-gradient-to-br from-indigo-500/10 to-purple-500/10 border border-indigo-500/20 rounded-2xl p-4 flex flex-col gap-3">
                 <div className="flex items-center gap-2">
                   <span className="text-2xl">🎯</span>
@@ -408,7 +440,7 @@ export const HabitModal: React.FC<HabitModalProps> = ({
                 <input 
                   value={identity} 
                   onChange={e => setIdentity(e.target.value)} 
-                  placeholder="Например: Спортсменский.." 
+                  placeholder="Например: Спортсмен..." 
                   className="bg-black/20 border border-white/10 rounded-xl p-3 text-white font-medium placeholder:text-white/30 outline-none focus:border-indigo-500/50 transition-colors" 
                 />
                 <div className="flex gap-2 flex-wrap">
@@ -423,7 +455,6 @@ export const HabitModal: React.FC<HabitModalProps> = ({
                 </div>
               </div>
 
-              {/* Триггер */}
               <div className="bg-gradient-to-br from-blue-500/10 to-cyan-500/10 border border-blue-500/20 rounded-2xl p-4 flex flex-col gap-3">
                 <div className="flex items-center gap-2">
                   <span className="text-2xl">⚡</span>
@@ -459,7 +490,6 @@ export const HabitModal: React.FC<HabitModalProps> = ({
                 </div>
               </div>
 
-              {/* Мини-действие */}
               <div className="bg-gradient-to-br from-amber-500/10 to-orange-500/10 border border-amber-500/20 rounded-2xl p-4 flex flex-col gap-3">
                 <div className="flex items-center gap-2">
                   <span className="text-2xl">🍃</span>
@@ -550,88 +580,164 @@ export const HabitModal: React.FC<HabitModalProps> = ({
                   </div>
                 )}
                 
-{telegramLinked && (
-  <div className="flex items-center gap-3">
-    <span className="text-[10px] font-bold text-gray-400">⏰ Время:</span>
-    <input 
-      type="time" 
-      value={reminderTime} 
-      onChange={e => setReminderTime(e.target.value)} 
-      className="flex-1 bg-black/20 text-white text-sm font-bold rounded-xl px-4 py-2 outline-none border border-white/10 focus:border-blue-500 transition-colors"
-    />
-  </div>
-)}
-                      {telegramLinked && !reminderTime && (
-              <p className="text-[9px] text-yellow-500 font-medium">⚠️ Укажи время для напоминания</p>
+                {telegramLinked && (
+                  <div className="flex items-center gap-3">
+                    <span className="text-[10px] font-bold text-gray-400">⏰ Время:</span>
+                    <input 
+                      type="time" 
+                      value={reminderTime} 
+                      onChange={e => setReminderTime(e.target.value)} 
+                      className="flex-1 bg-black/20 text-white text-sm font-bold rounded-xl px-4 py-2 outline-none border border-white/10 focus:border-blue-500 transition-colors"
+                    />
+                  </div>
+                )}
+                
+                {telegramLinked && !reminderTime && (
+                  <p className="text-[9px] text-yellow-500 font-medium">⚠️ Укажи время для напоминания</p>
+                )}
+              </div>
             )}
           </div>
-        )}
-      </div>
 
-      <div className="flex flex-col gap-2">
-        <div className="flex justify-between items-end px-1">
-          <label className="text-[10px] font-black tg-hint uppercase">График</label>
-          <span className="text-[10px] font-bold text-[var(--tg-theme-button-color)] uppercase">{getFrequencyLabel()}</span>
-        </div>
-        <div className="flex justify-between gap-1 bg-black/5 p-2 rounded-2xl border border-white/5">
-          {[1, 2, 3, 4, 5, 6, 0].map((d) => {
-            const labels = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
-            return (
-              <button 
-                key={d} 
-                type="button"
-                onClick={() => toggleDay(d)} 
-                className={`w-10 h-10 rounded-full flex items-center justify-center text-[10px] font-black transition-all ${selectedDays.includes(d) ? 'bg-white text-black shadow-lg scale-105' : 'text-gray-500 hover:bg-white/5'}`}
-              >
-                {labels[d]}
-              </button>
-            )
-          })}
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-2">
-        <div className="flex justify-between items-center px-1">
-          <label className="text-[10px] font-black tg-hint uppercase">Обложка</label>
-          {fileData && <button type="button" onClick={() => setFileData('')} className="text-[9px] font-black text-red-500 uppercase">Удалить</button>}
-        </div>
-        {!fileData ? (
-          <button type="button" onClick={() => fileInputRef.current?.click()} className="w-full py-3 rounded-2xl bg-black/5 border border-dashed border-gray-400/20 tg-text text-[10px] font-black uppercase tracking-widest hover:bg-black/10 transition-all flex items-center justify-center gap-2">
-            <span>📷</span> Загрузить фото
-          </button>
-        ) : (
-          <div className="bg-black/5 p-4 rounded-[28px] border border-white/5 animate-in fade-in">
-            <div className="relative w-full h-32 rounded-2xl overflow-hidden bg-black/20 shadow-inner mb-4">
-              <img src={fileData} alt="Cover" className="w-full h-full object-cover" style={{ objectPosition: `50% ${coverPosition}%` }} />
-              <div className="absolute inset-0 z-[1]" style={{ backgroundColor: `rgba(0,0,0,${coverIntensity/100})` }} />
+          <div className="flex flex-col gap-2">
+            <div className="flex justify-between items-end px-1">
+              <label className="text-[10px] font-black tg-hint uppercase">График</label>
+              <span className="text-[10px] font-bold text-[var(--tg-theme-button-color)] uppercase">{getFrequencyLabel()}</span>
             </div>
-            <div className="flex flex-col gap-3">
-              <div className="flex flex-col gap-1.5">
-                <span className="text-[8px] font-black tg-hint uppercase px-1">Позиция</span>
-                <input type="range" min="0" max="100" value={coverPosition} onChange={e => setCoverPosition(Number(e.target.value))} className="w-full h-1 bg-black/10 rounded-full appearance-none accent-blue-500" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <span className="text-[8px] font-black tg-hint uppercase px-1">Затемнение</span>
-                <input type="range" min="0" max="100" value={coverIntensity} onChange={e => setCoverIntensity(Number(e.target.value))} className="w-full h-1 bg-black/10 rounded-full appearance-none accent-purple-500" />
-              </div>
+            <div className="flex justify-between gap-1 bg-black/5 p-2 rounded-2xl border border-white/5">
+              {[1, 2, 3, 4, 5, 6, 0].map((d) => {
+                const labels = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+                return (
+                  <button 
+                    key={d} 
+                    type="button"
+                    onClick={() => toggleDay(d)} 
+                    className={`w-10 h-10 rounded-full flex items-center justify-center text-[10px] font-black transition-all ${selectedDays.includes(d) ? 'bg-white text-black shadow-lg scale-105' : 'text-gray-500 hover:bg-white/5'}`}
+                  >
+                    {labels[d]}
+                  </button>
+                )
+              })}
             </div>
           </div>
-        )}
-        <input type="file" ref={fileInputRef} accept="image/*" onChange={handleFileChange} className="hidden" />
-      </div>
 
-      <div className="flex flex-col gap-2">
-        <label className="text-[10px] font-black tg-hint uppercase ml-1">Описание / Мотивация</label>
-        <textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Зачем мне это нужно?" rows={2} className="w-full bg-black/5 border border-white/5 rounded-2xl p-4 text-xs font-medium tg-text outline-none resize-none placeholder:opacity-30 focus:border-blue-500/30 transition-colors" />
-      </div>
+          <div className="flex flex-col gap-2">
+            <div className="flex justify-between items-center px-1">
+              <label className="text-[10px] font-black tg-hint uppercase">Обложка</label>
+              {fileData && <button type="button" onClick={() => setFileData('')} className="text-[9px] font-black text-red-500 uppercase">Удалить</button>}
+            </div>
+            {!fileData ? (
+              <button type="button" onClick={() => fileInputRef.current?.click()} className="w-full py-3 rounded-2xl bg-black/5 border border-dashed border-gray-400/20 tg-text text-[10px] font-black uppercase tracking-widest hover:bg-black/10 transition-all flex items-center justify-center gap-2">
+                <span>📷</span> Загрузить фото
+              </button>
+            ) : (
+              <div className="bg-black/5 p-4 rounded-[28px] border border-white/5 animate-in fade-in">
+                <div className="relative w-full h-32 rounded-2xl overflow-hidden bg-black/20 shadow-inner mb-4">
+                  <img src={fileData} alt="Cover" className="w-full h-full object-cover" style={{ objectPosition: `50% ${coverPosition}%` }} />
+                  <div className="absolute inset-0 z-[1]" style={{ backgroundColor: `rgba(0,0,0,${coverIntensity/100})` }} />
+                </div>
+                <div className="flex flex-col gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-[8px] font-black tg-hint uppercase px-1">Позиция</span>
+                    <input type="range" min="0" max="100" value={coverPosition} onChange={e => setCoverPosition(Number(e.target.value))} className="w-full h-1 bg-black/10 rounded-full appearance-none accent-blue-500" />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-[8px] font-black tg-hint uppercase px-1">Затемнение</span>
+                    <input type="range" min="0" max="100" value={coverIntensity} onChange={e => setCoverIntensity(Number(e.target.value))} className="w-full h-1 bg-black/10 rounded-full appearance-none accent-purple-500" />
+                  </div>
+                </div>
+              </div>
+            )}
+            <input type="file" ref={fileInputRef} accept="image/*" onChange={handleFileChange} className="hidden" />
+          </div>
 
-      <button type="button" onClick={handleSave} className="w-full py-5 rounded-[28px] bg-[var(--tg-theme-button-color)] text-white font-black text-lg shadow-2xl active:scale-95 transition-all mt-2 uppercase tracking-widest hover:brightness-110">
-        {initialHabit ? 'Сохранить' : 'Создать'}
-      </button>
+          {isAtomicMode ? (
+            <div className="flex flex-col gap-3 p-4 rounded-3xl bg-gradient-to-br from-emerald-500/10 to-teal-500/10 border border-emerald-500/20 animate-in fade-in slide-in-from-top-2">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">📝</span>
+                <div>
+                  <span className="text-[11px] font-black text-emerald-300 uppercase">Дневник привычки</span>
+                  <p className="text-[9px] text-emerald-400/60">Заметки, рефлексии, мысли</p>
+                </div>
+              </div>
+              
+              <div className="flex gap-2">
+                <textarea
+                  value={newNote}
+                  onChange={e => setNewNote(e.target.value)}
+                  placeholder="Что я замечаю? Как себя чувствую?"
+                  rows={2}
+                  className="flex-1 bg-black/20 border border-white/10 rounded-xl p-3 text-white text-xs font-medium placeholder:text-white/30 outline-none resize-none focus:border-emerald-500/50 transition-colors"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                      e.preventDefault();
+                      handleAddNote();
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={handleAddNote}
+                  disabled={!newNote.trim()}
+                  className="w-10 h-10 self-end bg-emerald-500 hover:bg-emerald-600 disabled:bg-white/5 disabled:text-white/20 text-white rounded-xl font-bold text-xl flex items-center justify-center active:scale-95 transition-all disabled:cursor-not-allowed"
+                >
+                  +
+                </button>
+              </div>
+              
+              {notes.length > 0 && (
+                <div className="flex flex-col gap-2 max-h-64 overflow-y-auto no-scrollbar">
+                  {notes.map(note => (
+                    <div 
+                      key={note.id}
+                      className="group bg-black/20 border border-white/10 rounded-xl p-3 hover:border-emerald-500/30 transition-all"
+                    >
+                      <div className="flex justify-between items-start gap-2 mb-1">
+                        <span className="text-[9px] text-emerald-400/70 font-medium">
+                          {formatNoteDate(note.date)}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteNote(note.id)}
+                          className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center text-red-400 hover:text-red-300 transition-all active:scale-90"
+                        >
+                          ×
+                        </button>
+                      </div>
+                      <p className="text-xs text-white/90 leading-relaxed whitespace-pre-wrap break-words">
+                        {note.text}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              {notes.length === 0 && (
+                <p className="text-[10px] text-gray-500 text-center py-2">
+                  Пока нет записей. Начни вести дневник! ✨
+                </p>
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              <label className="text-[10px] font-black tg-hint uppercase ml-1">Описание / Мотивация</label>
+              <textarea 
+                value={description} 
+                onChange={e => setDescription(e.target.value)} 
+                placeholder="Зачем мне это нужно?" 
+                rows={2} 
+                className="w-full bg-black/5 border border-white/5 rounded-2xl p-4 text-xs font-medium tg-text outline-none resize-none placeholder:opacity-30 focus:border-blue-500/30 transition-colors" 
+              />
+            </div>
+          )}
+
+          <button type="button" onClick={handleSave} className="w-full py-5 rounded-[28px] bg-[var(--tg-theme-button-color)] text-white font-black text-lg shadow-2xl active:scale-95 transition-all mt-2 uppercase tracking-widest hover:brightness-110">
+            {initialHabit ? 'Сохранить' : 'Создать'}
+          </button>
+        </div>
+        
+        {isCustomEmoji && <div className="fixed inset-0 z-40" onClick={() => setIsCustomEmoji(false)} />}
+      </div>
     </div>
-    
-    {isCustomEmoji && <div className="fixed inset-0 z-40" onClick={() => setIsCustomEmoji(false)} />}
-  </div>
-</div>
-);
+  );
 };

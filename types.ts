@@ -59,9 +59,14 @@ export interface Task {
 export interface Habit {
   id: string;
   title: string;        
-  description?: string; 
+  description?: string;
+  notes?: Array<{
+    id: string;
+    text: string;
+    date: string;
+  }>;
   emoji?: string;       
-  color: string;        
+  color: string;       
   
   // Оставляем для совместимости с HabitModal, но не используем в логике
   isMeasurable?: boolean;
