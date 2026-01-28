@@ -134,7 +134,12 @@ export const HabitModal: React.FC<HabitModalProps> = ({
   const [selectedDays, setSelectedDays] = useState<number[]>([1, 2, 3, 4, 5, 6, 0]);
   const [isCustomEmoji, setIsCustomEmoji] = useState(false);
 
-  const [isAtomicMode, setIsAtomicMode] = useState(false);
+  const [isAtomicMode, setIsAtomicMode] = useState(() => {
+  if (initialHabit) {
+    return !!(initialHabit.identity || initialHabit.triggerEvent || initialHabit.miniAction);
+  }
+  return false;
+});
   const [identity, setIdentity] = useState('');
   const [triggerEvent, setTriggerEvent] = useState('');
   const [miniAction, setMiniAction] = useState('');
