@@ -80,18 +80,17 @@ export const fetchHabits = async (userId) => {
   return (data || []).map(h => ({
     id: h.id,
     title: h.title,
+    description: h.description,        // ← ДОБАВЛЕНО
+    notes: h.notes || [],              // ← ДОБАВЛЕНО
     color: h.color,
     frequency: h.frequency,
     history: h.history || {},
     emoji: h.emoji,
-    isMeasurable: h.isMeasurable,
-    targetValue: Number(h.target_value) || 1,
-    unit: h.unit || '',
     position: h.position || 0,
     identity: h.identity,
     triggerEvent: h.trigger_event,
     miniAction: h.mini_action,
-    reminderEnabled: h.reminder_enabled,  // ← НОВОЕ
+    reminderEnabled: h.reminder_enabled,
     reminderTime: h.reminder_time,
     fileData: h.file_data,
     coverPosition: h.cover_position,
