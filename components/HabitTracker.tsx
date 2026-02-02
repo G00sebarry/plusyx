@@ -47,6 +47,11 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
   const [draggedHabitId, setDraggedHabitId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const [freezeWarnings, setFreezeWarnings] = useState<Set<string>>(new Set());
+  const [dismissedWarnings, setDismissedWarnings] = useState<Set<string>>(() => {
+    const saved = localStorage.getItem('dismissedFreezeWarnings');
+    return saved ? new Set(JSON.parse(saved)) : new Set();
+  });
+  const [calendarMonth, setCalendarMonth] = useState<{[key: string]: {year: number, month: number}}>({});
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -109,6 +114,29 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
 
   const setHabitChartPeriod = (habitId: string, period: 'week' | 'month' | 'year') => {
     setChartPeriod(prev => ({...prev, [habitId]: period}));
+  };
+
+  const dismissFreezeWarning = (habitId: string) => {
+    const newDismissed = new Set(dismissedWarnings);
+    newDismissed.add(habitId);
+    setDismissedWarnings(newDismissed);
+    localStorage.setItem('dismissedFreezeWarnings', JSON.stringify([...newDismissed]));
+  };
+
+  const changeCalendarMonth = (habitId: string, direction: 'prev' | 'next') => {
+    const current = calendarMonth[habitId] || { year: new Date().getFullYear(), month: new Date().getMonth() };
+    let newMonth = current.month + (direction === 'next' ? 1 : -1);
+    let newYear = current.year;
+    
+    if (newMonth > 11) {
+      newMonth = 0;
+      newYear++;
+    } else if (newMonth < 0) {
+      newMonth = 11;
+      newYear--;
+    }
+    
+    setCalendarMonth(prev => ({...prev, [habitId]: {year: newYear, month: newMonth}}));
   };
 
   // =====================================================
@@ -565,9 +593,11 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
 
   // Рендер календаря месяца
   const renderMonthCalendar = (habit: Habit, hasCover: boolean) => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth();
+    const habitId = habit.id;
+    const currentMonthData = calendarMonth[habitId] || { year: new Date().getFullYear(), month: new Date().getMonth() };
+    const year = currentMonthData.year;
+    const month = currentMonthData.month;
+    
     const firstDay = new Date(year, month, 1);
     const lastDay = new Date(year, month + 1, 0);
     const daysInMonth = lastDay.getDate();
@@ -611,56 +641,112 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     const monthNames = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 
                         'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
 
-    const stats = getCompletionRate(habit, 30);
+    // Считаем статистику для выбранного месяца
+    let completed = 0;
+    let frozen = 0;
+    let missed = 0;
+    let total = 0;
+    
+    for (let d = 1; d <= daysInMonth; d++) {
+      const date = new Date(year, month, d);
+      const dayOfWeek = date.getDay();
+      
+      if (habit.frequency.days.includes(dayOfWeek)) {
+        const ds = formatDate(date);
+        const val = habit.history[ds];
+        
+        if (val === 'freeze') {
+          frozen++;
+        } else {
+          total++;
+          if (isCompleted(val)) {
+            completed++;
+          } else {
+            missed++;
+          }
+        }
+      }
+    }
+    
+    const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
     const currentStreak = getCurrentStreak(habit);
     const bestStreak = getBestStreak(habit);
 
+    const today = new Date();
+    const isCurrentMonth = year === today.getFullYear() && month === today.getMonth();
+    const canGoNext = year < today.getFullYear() || (year === today.getFullYear() && month < today.getMonth());
+
     return (
-      <div className={`mt-2 p-3 rounded-2xl ${hasCover ? 'bg-black/40 backdrop-blur-sm' : 'bg-black/10'} border border-white/10`}>
-        <div className="flex items-center justify-between mb-2">
-          <span className={`text-[9px] font-black uppercase tracking-wider ${hasCover ? 'text-white/70' : 'tg-hint'}`}>
+      <div className={`mt-2 p-3 md:p-4 rounded-2xl ${hasCover ? 'bg-black/40 backdrop-blur-sm' : 'bg-black/10'} border border-white/10`}>
+        {/* Навигация по месяцам */}
+        <div className="flex items-center justify-between mb-3">
+          <button
+            onClick={(e) => { e.stopPropagation(); changeCalendarMonth(habitId, 'prev'); }}
+            className={`p-1.5 rounded-lg transition-all ${hasCover ? 'text-white/60 hover:bg-white/10' : 'tg-hint hover:bg-black/10'}`}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <polyline points="15 18 9 12 15 6"/>
+            </svg>
+          </button>
+          
+          <span className={`text-[10px] md:text-xs font-black uppercase tracking-wider ${hasCover ? 'text-white/70' : 'tg-hint'}`}>
             {monthNames[month]} {year}
           </span>
-          <div className="flex gap-2 items-center">
-            <div className="flex items-center gap-1">
-              <div className="w-1.5 h-1.5 rounded-sm bg-green-500" />
-              <span className={`text-[7px] ${hasCover ? 'text-white/50' : 'tg-hint'}`}>✓</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-1.5 h-1.5 rounded-sm bg-yellow-500" />
-              <span className={`text-[7px] ${hasCover ? 'text-white/50' : 'tg-hint'}`}>Mini</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-1.5 h-1.5 rounded-sm bg-cyan-400" />
-              <span className={`text-[7px] ${hasCover ? 'text-white/50' : 'tg-hint'}`}>❄️</span>
-            </div>
+          
+          <button
+            onClick={(e) => { e.stopPropagation(); changeCalendarMonth(habitId, 'next'); }}
+            disabled={!canGoNext}
+            className={`p-1.5 rounded-lg transition-all ${
+              canGoNext 
+                ? `${hasCover ? 'text-white/60 hover:bg-white/10' : 'tg-hint hover:bg-black/10'}` 
+                : 'opacity-30 cursor-not-allowed'
+            }`}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
+          </button>
+        </div>
+
+        <div className="flex items-center justify-end gap-2 mb-2">
+          <div className="flex items-center gap-1">
+            <div className="w-1.5 h-1.5 rounded-sm bg-green-500" />
+            <span className={`text-[7px] md:text-[8px] ${hasCover ? 'text-white/50' : 'tg-hint'}`}>✓</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-1.5 h-1.5 rounded-sm bg-yellow-500" />
+            <span className={`text-[7px] md:text-[8px] ${hasCover ? 'text-white/50' : 'tg-hint'}`}>Mini</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-1.5 h-1.5 rounded-sm bg-cyan-400" />
+            <span className={`text-[7px] md:text-[8px] ${hasCover ? 'text-white/50' : 'tg-hint'}`}>❄️</span>
           </div>
         </div>
         
-        <div className="grid grid-cols-7 gap-0.5 mb-1">
+        <div className="grid grid-cols-7 gap-0.5 md:gap-1 mb-1">
           {WEEKDAYS_SHORT.map(day => (
-            <div key={day} className={`text-[7px] text-center font-bold ${hasCover ? 'text-white/40' : 'tg-hint opacity-50'}`}>
+            <div key={day} className={`text-[7px] md:text-[8px] text-center font-bold ${hasCover ? 'text-white/40' : 'tg-hint opacity-50'}`}>
               {day}
             </div>
           ))}
         </div>
         
-        <div className="grid gap-0.5">
+        <div className="grid gap-0.5 md:gap-1">
           {weeks.map((week, wi) => (
-            <div key={wi} className="grid grid-cols-7 gap-0.5">
+            <div key={wi} className="grid grid-cols-7 gap-0.5 md:gap-1">
               {week.map((date, di) => {
-                const isToday = date && formatDate(date) === formatDate(new Date());
+                const isToday = date && formatDate(date) === formatDate(new Date()) && isCurrentMonth;
                 return (
                   <div 
                     key={di}
                     className={`
-                      aspect-square rounded-[3px] transition-all flex items-center justify-center
+                      aspect-square rounded-[3px] md:rounded-[4px] transition-all flex items-center justify-center
                       ${getHeatmapColor(date)}
                       ${isToday ? 'ring-1 ring-white scale-110' : ''}
                     `}
                   >
                     {date && (
-                      <span className={`text-[6px] font-bold ${hasCover ? 'text-white/60' : 'text-white/80'}`}>
+                      <span className={`text-[6px] md:text-[8px] font-bold ${hasCover ? 'text-white/60' : 'text-white/80'}`}>
                         {date.getDate()}
                       </span>
                     )}
@@ -672,14 +758,14 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
         </div>
 
         {/* Краткая статистика */}
-        <div className={`mt-3 pt-3 border-t ${hasCover ? 'border-white/10' : 'border-black/10'} grid grid-cols-2 gap-2`}>
+        <div className={`mt-3 pt-3 border-t ${hasCover ? 'border-white/10' : 'border-black/10'} grid grid-cols-2 gap-2 md:gap-4`}>
           <div className="text-center">
-            <div className={`text-[10px] font-black ${hasCover ? 'text-white' : 'tg-text'}`}>{stats.percentage}%</div>
-            <div className={`text-[7px] ${hasCover ? 'text-white/50' : 'tg-hint'}`}>Выполнено</div>
+            <div className={`text-[10px] md:text-xs font-black ${hasCover ? 'text-white' : 'tg-text'}`}>{percentage}%</div>
+            <div className={`text-[7px] md:text-[8px] ${hasCover ? 'text-white/50' : 'tg-hint'}`}>Выполнено</div>
           </div>
           <div className="text-center">
-            <div className={`text-[10px] font-black ${hasCover ? 'text-white' : 'tg-text'}`}>{currentStreak}д</div>
-            <div className={`text-[7px] ${hasCover ? 'text-white/50' : 'tg-hint'}`}>Серия</div>
+            <div className={`text-[10px] md:text-xs font-black ${hasCover ? 'text-white' : 'tg-text'}`}>{currentStreak}д</div>
+            <div className={`text-[7px] md:text-[8px] ${hasCover ? 'text-white/50' : 'tg-hint'}`}>Серия</div>
           </div>
         </div>
       </div>
@@ -1017,19 +1103,19 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
             onClick={(e) => handleToggle(e, habit, ds)}
             onContextMenu={(e) => handleLongPress(e, habit, ds)}
             className={`
-              min-w-[50px] h-[70px] flex flex-col items-center justify-between py-2 px-1 rounded-2xl transition-all relative z-10
+              min-w-[50px] md:min-w-[45px] h-[70px] md:h-[60px] flex flex-col items-center justify-between py-2 px-1 rounded-2xl md:rounded-xl transition-all relative z-10
               ${className} ${isToday ? 'ring-2 ring-white scale-105 z-20' : ''}
             `}
           >
             <div className="flex flex-col items-center gap-1 w-full h-full">
-              <span className="text-[10px] font-black">{formatShortDate(date)}</span>
-              <span className="text-[8px] font-bold opacity-60">{WEEKDAYS[date.getDay()]}</span>
+              <span className="text-[10px] md:text-[9px] font-black">{formatShortDate(date)}</span>
+              <span className="text-[8px] md:text-[7px] font-bold opacity-60">{WEEKDAYS[date.getDay()]}</span>
               
               <div className="flex-1 flex items-center justify-center">
-                {val === 'freeze' && <span className="text-lg drop-shadow-md">❄️</span>}
-                {val === 'mini' && <div className="w-2 h-2 rounded-full bg-current opacity-80" />}
+                {val === 'freeze' && <span className="text-lg md:text-base drop-shadow-md">❄️</span>}
+                {val === 'mini' && <div className="w-2 h-2 md:w-1.5 md:h-1.5 rounded-full bg-current opacity-80" />}
                 {type === 'full' && (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" className="drop-shadow-sm">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" className="drop-shadow-sm md:w-3 md:h-3">
                     <polyline points="20 6 9 17 4 12"/>
                   </svg>
                 )}
@@ -1038,9 +1124,9 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
           </button>
           
           {showBridge && (
-            <div className={`h-[4px] w-[10px] -mx-1 z-0 relative rounded-full ${bridgeColor} animate-pulse`} />
+            <div className={`h-[4px] md:h-[3px] w-[10px] md:w-[8px] -mx-1 z-0 relative rounded-full ${bridgeColor} animate-pulse`} />
           )}
-          {!showBridge && <div className="w-1.5" />}
+          {!showBridge && <div className="w-1.5 md:w-1" />}
         </div>
       );
     });
@@ -1071,7 +1157,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
               <button onClick={onAddHabit} className="py-4 px-8 bg-[#4cc3a1] text-white rounded-2xl font-black uppercase text-xs">Создать</button>
             </div>
           ) : (
-            <>
+            <div className="max-w-4xl mx-auto w-full space-y-4">
               {habits.map(habit => {
                 const progress = calculateProgress(habit);
                 const streak = getCurrentStreak(habit);
@@ -1145,18 +1231,28 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
                     </div>
 
                     {/* ПРЕДУПРЕЖДЕНИЕ О ЗАМОРОЗКАХ */}
-                    {hasWarning && !isExpanded && (
+                    {hasWarning && !isExpanded && !dismissedWarnings.has(habit.id) && (
                       <div className="relative z-10 animate-in slide-in-from-top-2 duration-300">
                         <div className={`p-3 rounded-xl ${hasCover ? 'bg-orange-500/20 border border-orange-400/30' : 'bg-orange-500/10 border border-orange-500/20'} flex items-start gap-2`}>
-                          <span className="text-lg">⚠️</span>
+                          <span className="text-lg shrink-0">⚠️</span>
                           <div className="flex-1">
-                            <p className={`text-[9px] font-bold ${hasCover ? 'text-orange-200' : 'text-orange-600'}`}>
+                            <p className={`text-[9px] md:text-[10px] font-bold ${hasCover ? 'text-orange-200' : 'text-orange-600'}`}>
                               Три заморозки подряд
                             </p>
-                            <p className={`text-[8px] ${hasCover ? 'text-orange-300/70' : 'text-orange-500/70'} mt-0.5`}>
+                            <p className={`text-[8px] md:text-[9px] ${hasCover ? 'text-orange-300/70' : 'text-orange-500/70'} mt-0.5`}>
                               Возможно, стоит пересмотреть привычку?
                             </p>
                           </div>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); dismissFreezeWarning(habit.id); }}
+                            className={`shrink-0 w-5 h-5 flex items-center justify-center rounded-lg transition-all ${
+                              hasCover ? 'hover:bg-white/10 text-orange-200' : 'hover:bg-orange-500/20 text-orange-600'
+                            }`}
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                            </svg>
+                          </button>
                         </div>
                       </div>
                     )}
@@ -1241,7 +1337,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
                 );
               })}
               <button onClick={onAddHabit} className="w-full py-4 rounded-2xl border border-dashed border-gray-400/20 tg-text opacity-50 text-[10px] font-black uppercase tracking-widest hover:opacity-100">+ Создать ещё</button>
-            </>
+            </div>
           )
         )}
 
