@@ -20,17 +20,33 @@ interface HabitTrackerProps {
 const WEEKDAYS = ['ВС', 'ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ'];
 const WEEKDAYS_SHORT = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
 
+// Типы достижений
+interface Achievement {
+  id: string;
+  emoji: string;
+  name: string;
+  description: string;
+  type: 'streak' | 'count';
+  requirement: number;
+  unlocked: boolean;
+  progress: number;
+}
+
 export const HabitTracker: React.FC<HabitTrackerProps> = ({ 
   habits, antiHabits,
   onToggleHabit, onEditHabit, onDeleteHabit, onAddHabit, onReorderHabits,
   onAddAntiHabit, onEditAntiHabit, onDeleteAntiHabit, onRelapseAntiHabit, onReorderAntiHabits
 }) => {
   const [activeTab, setActiveTab] = useState<'build' | 'quit'>('build');
-  const [expandedHeatmaps, setExpandedHeatmaps] = useState<Set<string>>(new Set());
+  const [expandedHabits, setExpandedHabits] = useState<Set<string>>(new Set());
+  const [statsTab, setStatsTab] = useState<{[key: string]: 'calendar' | 'charts' | 'achievements'}>({});
+  const [chartPeriod, setChartPeriod] = useState<{[key: string]: 'week' | 'month' | 'year'}>({});
+  const [selectedAchievement, setSelectedAchievement] = useState<{habitId: string, achievement: Achievement} | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, habitId: string, date: string } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [draggedHabitId, setDraggedHabitId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+  const [freezeWarnings, setFreezeWarnings] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -41,6 +57,17 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Проверка на 3 заморозки подряд
+  useEffect(() => {
+    const newWarnings = new Set<string>();
+    habits.forEach(habit => {
+      if (hasThreeConsecutiveFreezes(habit)) {
+        newWarnings.add(habit.id);
+      }
+    });
+    setFreezeWarnings(newWarnings);
+  }, [habits]);
 
   const formatDate = (date: Date) => {
     const y = date.getFullYear();
@@ -55,40 +82,69 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     return `${day}.${month}`;
   };
 
-  const toggleHeatmap = (habitId: string, e: React.MouseEvent) => {
+  const toggleExpanded = (habitId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setExpandedHeatmaps(prev => {
+    setExpandedHabits(prev => {
       const next = new Set(prev);
-      if (next.has(habitId)) next.delete(habitId);
-      else next.add(habitId);
+      if (next.has(habitId)) {
+        next.delete(habitId);
+        // Сбросить таб при закрытии
+        setStatsTab(prev => {
+          const newTabs = {...prev};
+          delete newTabs[habitId];
+          return newTabs;
+        });
+      } else {
+        next.add(habitId);
+        // Установить календарь по умолчанию
+        setStatsTab(prev => ({...prev, [habitId]: 'calendar'}));
+      }
       return next;
     });
   };
 
-  // Прогресс за месяц (без измеримых)
-  const calculateProgress = (habit: Habit) => {
-    const now = new Date();
-    let completed = 0;
-    let total = 0;
-    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-    
-    for (let d = 1; d <= daysInMonth; d++) {
-      const date = new Date(now.getFullYear(), now.getMonth(), d);
-      const dayOfWeek = date.getDay();
-      if (habit.frequency.days.includes(dayOfWeek)) {
-        const val = habit.history[formatDate(date)];
-        if (val === 'freeze') continue;
-        total++;
-        if (val === true) completed++;
-        else if (val === 'mini') completed += 0.5;
-      }
-    }
-    if (total <= 0) return 0;
-    return Math.min(100, Math.round((completed / total) * 100));
+  const setHabitStatsTab = (habitId: string, tab: 'calendar' | 'charts' | 'achievements') => {
+    setStatsTab(prev => ({...prev, [habitId]: tab}));
   };
 
-  // Серия (streak)
-  const calculateStreak = (habit: Habit): number => {
+  const setHabitChartPeriod = (habitId: string, period: 'week' | 'month' | 'year') => {
+    setChartPeriod(prev => ({...prev, [habitId]: period}));
+  };
+
+  // =====================================================
+  // УТИЛИТЫ ДЛЯ РАСЧЁТОВ
+  // =====================================================
+
+  const isCompleted = (value: any) => value === true || value === 'mini';
+
+  // Проверка на 3 заморозки подряд
+  const hasThreeConsecutiveFreezes = (habit: Habit): boolean => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    let freezeCount = 0;
+
+    for (let i = 0; i < 30; i++) {
+      const checkDate = new Date(today);
+      checkDate.setDate(checkDate.getDate() - i);
+      const dayOfWeek = checkDate.getDay();
+      
+      if (!habit.frequency.days.includes(dayOfWeek)) continue;
+      
+      const ds = formatDate(checkDate);
+      const val = habit.history[ds];
+      
+      if (val === 'freeze') {
+        freezeCount++;
+        if (freezeCount >= 3) return true;
+      } else if (val !== undefined) {
+        freezeCount = 0;
+      }
+    }
+    return false;
+  };
+
+  // Текущая серия (до сегодня)
+  const getCurrentStreak = (habit: Habit): number => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     let streak = 0;
@@ -102,14 +158,15 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
       }
       const ds = formatDate(checkDate);
       const val = habit.history[ds];
-      if (val === 'freeze') {
-        checkDate.setDate(checkDate.getDate() - 1);
-        continue;
-      }
-      if (val === true || val === 'mini') {
+      
+      // Заморозка прерывает серию
+      if (val === 'freeze') break;
+      
+      if (isCompleted(val)) {
         streak++;
         checkDate.setDate(checkDate.getDate() - 1);
       } else {
+        // Если сегодня не выполнено, пропускаем один день
         if (i === 0 && formatDate(checkDate) === formatDate(today)) {
           checkDate.setDate(checkDate.getDate() - 1);
           continue;
@@ -120,7 +177,290 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     return streak;
   };
 
-  // Стиль слота (без измеримых)
+  // Лучшая серия за всё время
+  const getBestStreak = (habit: Habit): number => {
+    const sortedDates = Object.keys(habit.history).sort();
+    let maxStreak = 0;
+    let currentStreak = 0;
+    let prevDate: Date | null = null;
+
+    for (const dateStr of sortedDates) {
+      const date = new Date(dateStr);
+      const dayOfWeek = date.getDay();
+      
+      if (!habit.frequency.days.includes(dayOfWeek)) continue;
+      
+      const val = habit.history[dateStr];
+      
+      // Заморозка прерывает серию
+      if (val === 'freeze') {
+        currentStreak = 0;
+        prevDate = null;
+        continue;
+      }
+      
+      if (isCompleted(val)) {
+        // Проверяем непрерывность
+        if (prevDate) {
+          let isConsecutive = true;
+          const checkDate = new Date(prevDate);
+          checkDate.setDate(checkDate.getDate() + 1);
+          
+          while (checkDate < date) {
+            if (habit.frequency.days.includes(checkDate.getDay())) {
+              isConsecutive = false;
+              break;
+            }
+            checkDate.setDate(checkDate.getDate() + 1);
+          }
+          
+          if (!isConsecutive) {
+            currentStreak = 1;
+          } else {
+            currentStreak++;
+          }
+        } else {
+          currentStreak = 1;
+        }
+        
+        maxStreak = Math.max(maxStreak, currentStreak);
+        prevDate = date;
+      } else {
+        currentStreak = 0;
+        prevDate = null;
+      }
+    }
+    
+    return maxStreak;
+  };
+
+  // Общее количество выполнений
+  const getTotalCompletions = (habit: Habit): number => {
+    let count = 0;
+    for (const dateStr in habit.history) {
+      const val = habit.history[dateStr];
+      if (isCompleted(val)) count++;
+    }
+    return count;
+  };
+
+  // Процент выполнения за период (скользящий)
+  const getCompletionRate = (habit: Habit, days: number): { completed: number, frozen: number, missed: number, total: number, percentage: number } => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    let completed = 0;
+    let frozen = 0;
+    let missed = 0;
+    let total = 0;
+    
+    for (let i = 0; i < days; i++) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - i);
+      const dayOfWeek = date.getDay();
+      
+      if (!habit.frequency.days.includes(dayOfWeek)) continue;
+      
+      const key = formatDate(date);
+      const val = habit.history[key];
+      
+      if (val === 'freeze') {
+        frozen++;
+        // Заморозка не учитывается в total
+      } else {
+        total++;
+        if (isCompleted(val)) {
+          completed++;
+        } else {
+          missed++;
+        }
+      }
+    }
+    
+    const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
+    return { completed, frozen, missed, total, percentage };
+  };
+
+  // Процент заморозок за год
+  const getFreezePercentage = (habit: Habit): number => {
+    const stats = getCompletionRate(habit, 365);
+    const totalScheduled = stats.completed + stats.frozen + stats.missed;
+    if (totalScheduled === 0) return 0;
+    return Math.round((stats.frozen / totalScheduled) * 100);
+  };
+
+  // Проверка на 3 идеальных месяца подряд
+  const hasThreePerfectMonths = (habit: Habit): boolean => {
+    const today = new Date();
+    let perfectMonths = 0;
+
+    for (let monthOffset = 0; monthOffset < 3; monthOffset++) {
+      const checkDate = new Date(today.getFullYear(), today.getMonth() - monthOffset, 1);
+      const year = checkDate.getFullYear();
+      const month = checkDate.getMonth();
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      
+      let scheduledDays = 0;
+      let completedDays = 0;
+      
+      for (let d = 1; d <= daysInMonth; d++) {
+        const date = new Date(year, month, d);
+        const dayOfWeek = date.getDay();
+        
+        if (habit.frequency.days.includes(dayOfWeek)) {
+          scheduledDays++;
+          const val = habit.history[formatDate(date)];
+          if (val === 'freeze') continue; // Заморозка не учитывается
+          if (isCompleted(val)) completedDays++;
+        }
+      }
+      
+      if (scheduledDays > 0 && completedDays === scheduledDays) {
+        perfectMonths++;
+      } else {
+        break;
+      }
+    }
+    
+    return perfectMonths >= 3;
+  };
+
+  // Получить достижения для привычки
+  const getAchievements = (habit: Habit): Achievement[] => {
+    const bestStreak = getBestStreak(habit);
+    const totalCompletions = getTotalCompletions(habit);
+    const freezePercent = getFreezePercentage(habit);
+    const threePerfect = hasThreePerfectMonths(habit);
+
+    const achievements: Achievement[] = [
+      // За серии
+      {
+        id: 'spark',
+        emoji: '🔥',
+        name: 'Искра',
+        description: 'Первая неделя позади! Привычка начинает формироваться.',
+        type: 'streak',
+        requirement: 7,
+        unlocked: bestStreak >= 7,
+        progress: Math.min(bestStreak, 7)
+      },
+      {
+        id: 'momentum',
+        emoji: '⚡',
+        name: 'Разгон',
+        description: 'Две недели подряд! Ты набираешь обороты.',
+        type: 'streak',
+        requirement: 14,
+        unlocked: bestStreak >= 14,
+        progress: Math.min(bestStreak, 14)
+      },
+      {
+        id: 'star',
+        emoji: '🌟',
+        name: 'Звезда',
+        description: 'Целый месяц! Привычка укореняется, ты светишься!',
+        type: 'streak',
+        requirement: 30,
+        unlocked: bestStreak >= 30,
+        progress: Math.min(bestStreak, 30)
+      },
+      {
+        id: 'legend',
+        emoji: '💎',
+        name: 'Легенда',
+        description: '100 дней! Это уже часть твоей жизни.',
+        type: 'streak',
+        requirement: 100,
+        unlocked: bestStreak >= 100,
+        progress: Math.min(bestStreak, 100)
+      },
+      {
+        id: 'champion',
+        emoji: '👑',
+        name: 'Чемпион',
+        description: 'Целый год! Ты достиг вершины!',
+        type: 'streak',
+        requirement: 365,
+        unlocked: bestStreak >= 365,
+        progress: Math.min(bestStreak, 365)
+      },
+      // За успехи
+      {
+        id: 'precise',
+        emoji: '🎯',
+        name: 'Точный удар',
+        description: '50 выполнений! Ты знаешь, что делаешь.',
+        type: 'count',
+        requirement: 50,
+        unlocked: totalCompletions >= 50,
+        progress: Math.min(totalCompletions, 50)
+      },
+      {
+        id: 'eagle',
+        emoji: '🦅',
+        name: 'Орёл',
+        description: '100 выполнений! Высший пилотаж.',
+        type: 'count',
+        requirement: 100,
+        unlocked: totalCompletions >= 100,
+        progress: Math.min(totalCompletions, 100)
+      },
+      {
+        id: 'conqueror',
+        emoji: '🏔️',
+        name: 'Покоритель',
+        description: '365 выполнений! Ты покорил Эверест привычек.',
+        type: 'count',
+        requirement: 365,
+        unlocked: totalCompletions >= 365,
+        progress: Math.min(totalCompletions, 365)
+      },
+      {
+        id: 'invincible',
+        emoji: '🔱',
+        name: 'Непобедимый',
+        description: 'Серия 50+ дней! Остановить тебя невозможно.',
+        type: 'streak',
+        requirement: 50,
+        unlocked: bestStreak >= 50,
+        progress: Math.min(bestStreak, 50)
+      },
+      {
+        id: 'unbreakable',
+        emoji: '🛡️',
+        name: 'Несокрушимый',
+        description: 'Почти без пропусков! Железная воля.',
+        type: 'count',
+        requirement: 5, // меньше 5% заморозок
+        unlocked: freezePercent < 5,
+        progress: freezePercent < 5 ? 5 : Math.max(0, 5 - freezePercent)
+      },
+      {
+        id: 'triumphant',
+        emoji: '🌈',
+        name: 'Триумфатор',
+        description: 'Три идеальных месяца подряд! Грандиозно!',
+        type: 'count',
+        requirement: 3,
+        unlocked: threePerfect,
+        progress: threePerfect ? 3 : 0
+      }
+    ];
+
+    return achievements;
+  };
+
+  // =====================================================
+  // ПРОГРЕСС ЗА МЕСЯЦ (для круга)
+  // =====================================================
+  const calculateProgress = (habit: Habit) => {
+    const stats = getCompletionRate(habit, 30);
+    return stats.percentage;
+  };
+
+  // =====================================================
+  // ОТРИСОВКА
+  // =====================================================
+
   const getSlotStyle = (val: boolean | 'mini' | 'freeze' | undefined, hasCover: boolean) => {
     const emptyStyle = hasCover 
       ? 'bg-white/10 border border-white/10 text-white/40' 
@@ -148,7 +488,6 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     };
   };
 
-  // 🔥 ЦИКЛ КЛИКОВ: пусто → ✅ → 🔸 → ❄️ → пусто
   const handleToggle = (e: React.MouseEvent, habit: Habit, dateStr: string) => {
     e.stopPropagation();
     window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
@@ -223,8 +562,9 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     setDraggedHabitId(null);
     setDropTargetId(null);
   };
-  // Рендер мини-heatmap
-  const renderMiniHeatmap = (habit: Habit, hasCover: boolean) => {
+
+  // Рендер календаря месяца
+  const renderMonthCalendar = (habit: Habit, hasCover: boolean) => {
     const now = new Date();
     const year = now.getFullYear();
     const month = now.getMonth();
@@ -270,6 +610,10 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
 
     const monthNames = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 
                         'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+
+    const stats = getCompletionRate(habit, 30);
+    const currentStreak = getCurrentStreak(habit);
+    const bestStreak = getBestStreak(habit);
 
     return (
       <div className={`mt-2 p-3 rounded-2xl ${hasCover ? 'bg-black/40 backdrop-blur-sm' : 'bg-black/10'} border border-white/10`}>
@@ -325,6 +669,305 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
               })}
             </div>
           ))}
+        </div>
+
+        {/* Краткая статистика */}
+        <div className={`mt-3 pt-3 border-t ${hasCover ? 'border-white/10' : 'border-black/10'} grid grid-cols-2 gap-2`}>
+          <div className="text-center">
+            <div className={`text-[10px] font-black ${hasCover ? 'text-white' : 'tg-text'}`}>{stats.percentage}%</div>
+            <div className={`text-[7px] ${hasCover ? 'text-white/50' : 'tg-hint'}`}>Выполнено</div>
+          </div>
+          <div className="text-center">
+            <div className={`text-[10px] font-black ${hasCover ? 'text-white' : 'tg-text'}`}>{currentStreak}д</div>
+            <div className={`text-[7px] ${hasCover ? 'text-white/50' : 'tg-hint'}`}>Серия</div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Рендер круговой диаграммы
+  const renderCircularChart = (habit: Habit, hasCover: boolean) => {
+    const habitId = habit.id;
+    const period = chartPeriod[habitId] || 'month';
+    const days = period === 'week' ? 7 : period === 'month' ? 30 : 365;
+    const stats = getCompletionRate(habit, days);
+    const currentStreak = getCurrentStreak(habit);
+    const bestStreak = getBestStreak(habit);
+
+    const total = stats.completed + stats.frozen + stats.missed;
+    const completedPercent = total > 0 ? (stats.completed / total) * 100 : 0;
+    const frozenPercent = total > 0 ? (stats.frozen / total) * 100 : 0;
+    const missedPercent = total > 0 ? (stats.missed / total) * 100 : 0;
+
+    // SVG для круговой диаграммы
+    const radius = 45;
+    const circumference = 2 * Math.PI * radius;
+    
+    // Рассчитываем offset для каждого сегмента
+    const completedOffset = circumference - (completedPercent / 100) * circumference;
+    const frozenOffset = circumference - (frozenPercent / 100) * circumference;
+
+    const periodLabels = {
+      week: 'Неделя',
+      month: 'Месяц',
+      year: 'Год'
+    };
+
+    return (
+      <div className={`mt-2 p-4 rounded-2xl ${hasCover ? 'bg-black/40 backdrop-blur-sm' : 'bg-black/10'} border border-white/10`}>
+        {/* Переключатель периодов */}
+        <div className="flex gap-1 mb-4 bg-black/20 p-1 rounded-xl">
+          {(['week', 'month', 'year'] as const).map(p => (
+            <button
+              key={p}
+              onClick={() => setHabitChartPeriod(habitId, p)}
+              className={`flex-1 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all ${
+                period === p 
+                  ? 'bg-green-500 text-white shadow-lg' 
+                  : `${hasCover ? 'text-white/40 hover:text-white/60' : 'tg-hint hover:bg-black/10'}`
+              }`}
+            >
+              {periodLabels[p]}
+            </button>
+          ))}
+        </div>
+
+        {/* Круговая диаграмма */}
+        <div className="flex items-center justify-center mb-4">
+          <div className="relative w-32 h-32">
+            <svg className="w-full h-full -rotate-90" viewBox="0 0 120 120">
+              {/* Фон */}
+              <circle 
+                cx="60" 
+                cy="60" 
+                r={radius} 
+                fill="none" 
+                stroke="currentColor" 
+                strokeWidth="12" 
+                className={hasCover ? "text-white/10" : "text-gray-400/10"} 
+              />
+              
+              {/* Пропущено (красный) */}
+              <circle 
+                cx="60" 
+                cy="60" 
+                r={radius} 
+                fill="none" 
+                stroke="#ef4444" 
+                strokeWidth="12" 
+                strokeDasharray={circumference}
+                strokeDashoffset={0}
+                strokeLinecap="round"
+                className="transition-all duration-700"
+                style={{
+                  strokeDashoffset: circumference - (missedPercent / 100) * circumference
+                }}
+              />
+              
+              {/* Заморозка (голубой) */}
+              <circle 
+                cx="60" 
+                cy="60" 
+                r={radius} 
+                fill="none" 
+                stroke="#22d3ee" 
+                strokeWidth="12" 
+                strokeDasharray={circumference}
+                strokeLinecap="round"
+                className="transition-all duration-700"
+                style={{
+                  strokeDashoffset: frozenOffset,
+                  transform: `rotate(${(missedPercent / 100) * 360}deg)`,
+                  transformOrigin: 'center'
+                }}
+              />
+              
+              {/* Выполнено (зелёный) */}
+              <circle 
+                cx="60" 
+                cy="60" 
+                r={radius} 
+                fill="none" 
+                stroke="#22c55e" 
+                strokeWidth="12" 
+                strokeDasharray={circumference}
+                strokeLinecap="round"
+                className="transition-all duration-700"
+                style={{
+                  strokeDashoffset: completedOffset,
+                  transform: `rotate(${((missedPercent + frozenPercent) / 100) * 360}deg)`,
+                  transformOrigin: 'center'
+                }}
+              />
+            </svg>
+            
+            {/* Центральный текст */}
+            <div className="absolute inset-0 flex items-center justify-center flex-col">
+              <span className={`text-2xl font-black ${hasCover ? 'text-white' : 'tg-text'}`}>
+                {Math.round(completedPercent)}%
+              </span>
+              <span className={`text-[7px] ${hasCover ? 'text-white/50' : 'tg-hint'}`}>
+                {period === 'week' ? '7 дней' : period === 'month' ? '30 дней' : '365 дней'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Детальная статистика */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-sm bg-green-500"></div>
+              <span className={`text-[9px] font-bold ${hasCover ? 'text-white/70' : 'tg-hint'}`}>Выполнено</span>
+            </div>
+            <span className={`text-[10px] font-black ${hasCover ? 'text-white' : 'tg-text'}`}>
+              {stats.completed} дней ({Math.round(completedPercent)}%)
+            </span>
+          </div>
+          
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-sm bg-cyan-400"></div>
+              <span className={`text-[9px] font-bold ${hasCover ? 'text-white/70' : 'tg-hint'}`}>Заморозка</span>
+            </div>
+            <span className={`text-[10px] font-black ${hasCover ? 'text-white' : 'tg-text'}`}>
+              {stats.frozen} дней ({Math.round(frozenPercent)}%)
+            </span>
+          </div>
+          
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-sm bg-red-500"></div>
+              <span className={`text-[9px] font-bold ${hasCover ? 'text-white/70' : 'tg-hint'}`}>Пропущено</span>
+            </div>
+            <span className={`text-[10px] font-black ${hasCover ? 'text-white' : 'tg-text'}`}>
+              {stats.missed} дней ({Math.round(missedPercent)}%)
+            </span>
+          </div>
+        </div>
+
+        {/* Серии */}
+        <div className={`mt-4 pt-4 border-t ${hasCover ? 'border-white/10' : 'border-black/10'} grid grid-cols-2 gap-3`}>
+          <div className="text-center">
+            <div className={`text-[10px] font-black ${hasCover ? 'text-orange-300' : 'text-orange-500'} flex items-center justify-center gap-1`}>
+              <span className="text-xs">🔥</span>
+              {currentStreak}
+            </div>
+            <div className={`text-[7px] ${hasCover ? 'text-white/50' : 'tg-hint'}`}>Текущая серия</div>
+          </div>
+          <div className="text-center">
+            <div className={`text-[10px] font-black ${hasCover ? 'text-yellow-300' : 'text-yellow-500'} flex items-center justify-center gap-1`}>
+              <span className="text-xs">⭐</span>
+              {bestStreak}
+            </div>
+            <div className={`text-[7px] ${hasCover ? 'text-white/50' : 'tg-hint'}`}>Лучшая серия</div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Рендер достижений
+  const renderAchievements = (habit: Habit, hasCover: boolean) => {
+    const achievements = getAchievements(habit);
+    const streakAchievements = achievements.filter(a => a.type === 'streak' && ['spark', 'momentum', 'star', 'legend', 'champion'].includes(a.id));
+    const successAchievements = achievements.filter(a => !['spark', 'momentum', 'star', 'legend', 'champion'].includes(a.id));
+
+    return (
+      <div className={`mt-2 p-4 rounded-2xl ${hasCover ? 'bg-black/40 backdrop-blur-sm' : 'bg-black/10'} border border-white/10 space-y-4`}>
+        {/* За серии */}
+        <div>
+          <h4 className={`text-[9px] font-black uppercase tracking-wider mb-3 ${hasCover ? 'text-white/70' : 'tg-hint'}`}>
+            За серии
+          </h4>
+          <div className="grid grid-cols-3 gap-2">
+            {streakAchievements.map(achievement => (
+              <button
+                key={achievement.id}
+                onClick={() => setSelectedAchievement({habitId: habit.id, achievement})}
+                className={`
+                  relative p-3 rounded-xl flex flex-col items-center gap-1.5 transition-all
+                  ${achievement.unlocked 
+                    ? `bg-gradient-to-br from-yellow-500/20 to-orange-500/20 border border-yellow-500/30 shadow-lg` 
+                    : `${hasCover ? 'bg-white/5 border border-white/10' : 'bg-black/5 border border-black/10'}`
+                  }
+                `}
+              >
+                <span className={`text-2xl ${achievement.unlocked ? '' : 'grayscale opacity-40'}`}>
+                  {achievement.emoji}
+                </span>
+                <span className={`text-[7px] font-bold text-center ${achievement.unlocked ? 'text-white' : `${hasCover ? 'text-white/40' : 'tg-hint'}`}`}>
+                  {achievement.name}
+                </span>
+                {!achievement.unlocked && (
+                  <div className={`absolute top-1 right-1 text-[10px] ${hasCover ? 'text-white/30' : 'text-gray-400/50'}`}>
+                    🔒
+                  </div>
+                )}
+                {!achievement.unlocked && (
+                  <div className="w-full mt-1">
+                    <div className={`h-1 rounded-full ${hasCover ? 'bg-white/10' : 'bg-black/10'} overflow-hidden`}>
+                      <div 
+                        className="h-full bg-yellow-500 rounded-full transition-all duration-700"
+                        style={{width: `${(achievement.progress / achievement.requirement) * 100}%`}}
+                      />
+                    </div>
+                    <span className={`text-[6px] ${hasCover ? 'text-white/40' : 'tg-hint'} block text-center mt-0.5`}>
+                      {achievement.progress}/{achievement.requirement}
+                    </span>
+                  </div>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* За успехи */}
+        <div>
+          <h4 className={`text-[9px] font-black uppercase tracking-wider mb-3 ${hasCover ? 'text-white/70' : 'tg-hint'}`}>
+            За успехи
+          </h4>
+          <div className="grid grid-cols-3 gap-2">
+            {successAchievements.map(achievement => (
+              <button
+                key={achievement.id}
+                onClick={() => setSelectedAchievement({habitId: habit.id, achievement})}
+                className={`
+                  relative p-3 rounded-xl flex flex-col items-center gap-1.5 transition-all
+                  ${achievement.unlocked 
+                    ? `bg-gradient-to-br from-blue-500/20 to-purple-500/20 border border-blue-500/30 shadow-lg` 
+                    : `${hasCover ? 'bg-white/5 border border-white/10' : 'bg-black/5 border border-black/10'}`
+                  }
+                `}
+              >
+                <span className={`text-2xl ${achievement.unlocked ? '' : 'grayscale opacity-40'}`}>
+                  {achievement.emoji}
+                </span>
+                <span className={`text-[7px] font-bold text-center leading-tight ${achievement.unlocked ? 'text-white' : `${hasCover ? 'text-white/40' : 'tg-hint'}`}`}>
+                  {achievement.name}
+                </span>
+                {!achievement.unlocked && (
+                  <div className={`absolute top-1 right-1 text-[10px] ${hasCover ? 'text-white/30' : 'text-gray-400/50'}`}>
+                    🔒
+                  </div>
+                )}
+                {!achievement.unlocked && achievement.requirement > 5 && (
+                  <div className="w-full mt-1">
+                    <div className={`h-1 rounded-full ${hasCover ? 'bg-white/10' : 'bg-black/10'} overflow-hidden`}>
+                      <div 
+                        className="h-full bg-blue-500 rounded-full transition-all duration-700"
+                        style={{width: `${(achievement.progress / achievement.requirement) * 100}%`}}
+                      />
+                    </div>
+                    <span className={`text-[6px] ${hasCover ? 'text-white/40' : 'tg-hint'} block text-center mt-0.5`}>
+                      {achievement.progress}/{achievement.requirement}
+                    </span>
+                  </div>
+                )}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     );
@@ -402,6 +1045,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
       );
     });
   };
+
   return (
     <div className="flex flex-col h-full overflow-y-auto no-scrollbar animate-in fade-in duration-300 relative pb-20">
       
@@ -430,14 +1074,16 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
             <>
               {habits.map(habit => {
                 const progress = calculateProgress(habit);
-                const streak = calculateStreak(habit);
+                const streak = getCurrentStreak(habit);
                 const radius = 16;
                 const circ = 2 * Math.PI * radius;
                 const offset = circ - (progress / 100) * circ;
                 const isTarget = dropTargetId === habit.id;
                 const hasCover = !!habit.fileData;
                 const isAtomic = !!habit.identity || !!habit.triggerEvent;
-                const isExpanded = expandedHeatmaps.has(habit.id);
+                const isExpanded = expandedHabits.has(habit.id);
+                const currentStatsTab = statsTab[habit.id] || 'calendar';
+                const hasWarning = freezeWarnings.has(habit.id);
 
                 return (
                   <div 
@@ -498,14 +1144,31 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
                       {renderSlots(habit, hasCover)}
                     </div>
 
+                    {/* ПРЕДУПРЕЖДЕНИЕ О ЗАМОРОЗКАХ */}
+                    {hasWarning && !isExpanded && (
+                      <div className="relative z-10 animate-in slide-in-from-top-2 duration-300">
+                        <div className={`p-3 rounded-xl ${hasCover ? 'bg-orange-500/20 border border-orange-400/30' : 'bg-orange-500/10 border border-orange-500/20'} flex items-start gap-2`}>
+                          <span className="text-lg">⚠️</span>
+                          <div className="flex-1">
+                            <p className={`text-[9px] font-bold ${hasCover ? 'text-orange-200' : 'text-orange-600'}`}>
+                              Три заморозки подряд
+                            </p>
+                            <p className={`text-[8px] ${hasCover ? 'text-orange-300/70' : 'text-orange-500/70'} mt-0.5`}>
+                              Возможно, стоит пересмотреть привычку?
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     {/* FOOTER */}
                     <div className="relative z-10 flex items-center justify-between">
                       <button 
-                        onClick={(e) => toggleHeatmap(habit.id, e)}
+                        onClick={(e) => toggleExpanded(habit.id, e)}
                         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all text-[8px] font-bold uppercase tracking-wider ${hasCover ? 'bg-white/10 text-white/60 hover:bg-white/20' : 'bg-black/5 tg-hint hover:bg-black/10'}`}
                       >
-                        <span className="text-xs">{isExpanded ? '▲' : '📅'}</span>
-                        <span>{isExpanded ? 'Скрыть' : 'Месяц'}</span>
+                        <span className="text-xs">{isExpanded ? '▲' : '📊'}</span>
+                        <span>{isExpanded ? 'Скрыть' : 'Статистика'}</span>
                       </button>
                       
                       <div className="flex items-center gap-2">
@@ -529,10 +1192,49 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
                       </div>
                     </div>
 
-                    {/* HEATMAP */}
+                    {/* РАЗВЁРНУТАЯ СТАТИСТИКА С ТАБАМИ */}
                     {isExpanded && (
                       <div className="relative z-10 animate-in slide-in-from-top-2 duration-300">
-                        {renderMiniHeatmap(habit, hasCover)}
+                        {/* Табы статистики */}
+                        <div className="flex gap-1 mb-2 bg-black/20 p-1 rounded-xl">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setHabitStatsTab(habit.id, 'calendar'); }}
+                            className={`flex-1 py-1.5 rounded-lg text-[8px] font-bold uppercase tracking-wider transition-all ${
+                              currentStatsTab === 'calendar'
+                                ? `bg-green-500 text-white shadow-lg`
+                                : `${hasCover ? 'text-white/40 hover:text-white/60' : 'tg-hint hover:bg-black/10'}`
+                            }`}
+                          >
+                            📅 Календарь
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setHabitStatsTab(habit.id, 'charts'); }}
+                            className={`flex-1 py-1.5 rounded-lg text-[8px] font-bold uppercase tracking-wider transition-all ${
+                              currentStatsTab === 'charts'
+                                ? `bg-green-500 text-white shadow-lg`
+                                : `${hasCover ? 'text-white/40 hover:text-white/60' : 'tg-hint hover:bg-black/10'}`
+                            }`}
+                          >
+                            📈 Графики
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setHabitStatsTab(habit.id, 'achievements'); }}
+                            className={`flex-1 py-1.5 rounded-lg text-[8px] font-bold uppercase tracking-wider transition-all ${
+                              currentStatsTab === 'achievements'
+                                ? `bg-green-500 text-white shadow-lg`
+                                : `${hasCover ? 'text-white/40 hover:text-white/60' : 'tg-hint hover:bg-black/10'}`
+                            }`}
+                          >
+                            🏆 Награды
+                          </button>
+                        </div>
+
+                        {/* Контент табов */}
+                        <div onClick={(e) => e.stopPropagation()}>
+                          {currentStatsTab === 'calendar' && renderMonthCalendar(habit, hasCover)}
+                          {currentStatsTab === 'charts' && renderCircularChart(habit, hasCover)}
+                          {currentStatsTab === 'achievements' && renderAchievements(habit, hasCover)}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -596,6 +1298,66 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
           <button onClick={() => setStatus('reset')} className="p-3 text-left hover:bg-white/5 flex items-center gap-2 text-[10px] font-bold text-red-500">
             Сбросить
           </button>
+        </div>
+      )}
+
+      {/* Модалка достижения */}
+      {selectedAchievement && (
+        <div 
+          className="fixed inset-0 z-[600] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
+          onClick={() => setSelectedAchievement(null)}
+        >
+          <div 
+            className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-white/10 animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex flex-col items-center text-center gap-4">
+              <div className={`text-6xl ${selectedAchievement.achievement.unlocked ? '' : 'grayscale opacity-40'}`}>
+                {selectedAchievement.achievement.emoji}
+              </div>
+              
+              <div>
+                <h3 className="text-xl font-black text-white mb-1">
+                  {selectedAchievement.achievement.name}
+                  {!selectedAchievement.achievement.unlocked && <span className="ml-2 text-sm">🔒</span>}
+                </h3>
+                <p className="text-sm text-gray-400">
+                  {selectedAchievement.achievement.description}
+                </p>
+              </div>
+
+              {selectedAchievement.achievement.unlocked ? (
+                <div className="w-full py-3 px-4 bg-green-500/20 rounded-xl border border-green-500/30">
+                  <p className="text-xs font-bold text-green-400">✓ Разблокировано</p>
+                </div>
+              ) : (
+                <div className="w-full">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs text-gray-400">Прогресс</span>
+                    <span className="text-xs font-bold text-white">
+                      {selectedAchievement.achievement.progress} / {selectedAchievement.achievement.requirement}
+                    </span>
+                  </div>
+                  <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-gradient-to-r from-yellow-500 to-orange-500 rounded-full transition-all duration-700"
+                      style={{width: `${(selectedAchievement.achievement.progress / selectedAchievement.achievement.requirement) * 100}%`}}
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">
+                    Осталось: {selectedAchievement.achievement.requirement - selectedAchievement.achievement.progress}
+                  </p>
+                </div>
+              )}
+
+              <button
+                onClick={() => setSelectedAchievement(null)}
+                className="mt-2 py-3 px-8 bg-white/10 hover:bg-white/20 rounded-xl text-sm font-bold text-white transition-all"
+              >
+                Закрыть
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
