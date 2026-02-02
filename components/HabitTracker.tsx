@@ -352,12 +352,48 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     return perfectMonths >= 3;
   };
 
-  // Получить достижения для привычки
+  // Статистика за текущий месяц
+  const getThisMonthStats = (habit: Habit) => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    
+    let scheduledDays = 0;
+    let completedFull = 0; // только true (✅)
+    let completedMini = 0; // только mini (🔸)
+    let frozen = 0;        // freeze (❄️)
+    let missed = 0;        // не отмечено
+    
+    for (let d = 1; d <= daysInMonth; d++) {
+      const date = new Date(year, month, d);
+      const dayOfWeek = date.getDay();
+      
+      if (habit.frequency.days.includes(dayOfWeek)) {
+        scheduledDays++;
+        const ds = formatDate(date);
+        const val = habit.history[ds];
+        
+        if (val === true) completedFull++;
+        else if (val === 'mini') completedMini++;
+        else if (val === 'freeze') frozen++;
+        else missed++;
+      }
+    }
+    
+    return { scheduledDays, completedFull, completedMini, frozen, missed };
+  };
+
+  // Склонение слова "день"
+  const getDaysWord = (days: number) => {
+    if (days % 10 === 1 && days % 100 !== 11) return 'день';
+    if ([2,3,4].includes(days % 10) && ![12,13,14].includes(days % 100)) return 'дня';
+    return 'дней';
+  };
+
+  // Получить достижения за серии
   const getAchievements = (habit: Habit): Achievement[] => {
     const bestStreak = getBestStreak(habit);
-    const totalCompletions = getTotalCompletions(habit);
-    const freezePercent = getFreezePercentage(habit);
-    const threePerfect = hasThreePerfectMonths(habit);
 
     const achievements: Achievement[] = [
       // За серии
@@ -392,57 +428,6 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
         progress: Math.min(bestStreak, 30)
       },
       {
-        id: 'legend',
-        emoji: '💎',
-        name: 'Легенда',
-        description: '100 дней! Это уже часть твоей жизни.',
-        type: 'streak',
-        requirement: 100,
-        unlocked: bestStreak >= 100,
-        progress: Math.min(bestStreak, 100)
-      },
-      {
-        id: 'champion',
-        emoji: '👑',
-        name: 'Чемпион',
-        description: 'Целый год! Ты достиг вершины!',
-        type: 'streak',
-        requirement: 365,
-        unlocked: bestStreak >= 365,
-        progress: Math.min(bestStreak, 365)
-      },
-      // За успехи
-      {
-        id: 'precise',
-        emoji: '🎯',
-        name: 'Точный удар',
-        description: '50 выполнений! Ты знаешь, что делаешь.',
-        type: 'count',
-        requirement: 50,
-        unlocked: totalCompletions >= 50,
-        progress: Math.min(totalCompletions, 50)
-      },
-      {
-        id: 'eagle',
-        emoji: '🦅',
-        name: 'Орёл',
-        description: '100 выполнений! Высший пилотаж.',
-        type: 'count',
-        requirement: 100,
-        unlocked: totalCompletions >= 100,
-        progress: Math.min(totalCompletions, 100)
-      },
-      {
-        id: 'conqueror',
-        emoji: '🏔️',
-        name: 'Покоритель',
-        description: '365 выполнений! Ты покорил Эверест привычек.',
-        type: 'count',
-        requirement: 365,
-        unlocked: totalCompletions >= 365,
-        progress: Math.min(totalCompletions, 365)
-      },
-      {
         id: 'invincible',
         emoji: '🔱',
         name: 'Непобедимый',
@@ -453,28 +438,80 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
         progress: Math.min(bestStreak, 50)
       },
       {
-        id: 'unbreakable',
-        emoji: '🛡️',
-        name: 'Несокрушимый',
-        description: 'Почти без пропусков! Железная воля.',
-        type: 'count',
-        requirement: 5, // меньше 5% заморозок
-        unlocked: freezePercent < 5,
-        progress: freezePercent < 5 ? 5 : Math.max(0, 5 - freezePercent)
+        id: 'champion',
+        emoji: '👑',
+        name: 'Чемпион',
+        description: '100 дней! Ты на вершине мастерства!',
+        type: 'streak',
+        requirement: 100,
+        unlocked: bestStreak >= 100,
+        progress: Math.min(bestStreak, 100)
       },
       {
-        id: 'triumphant',
-        emoji: '🌈',
-        name: 'Триумфатор',
-        description: 'Три идеальных месяца подряд! Грандиозно!',
-        type: 'count',
-        requirement: 3,
-        unlocked: threePerfect,
-        progress: threePerfect ? 3 : 0
+        id: 'legend',
+        emoji: '💎',
+        name: 'Легенда',
+        description: 'Целый год! Это уже легенда!',
+        type: 'streak',
+        requirement: 365,
+        unlocked: bestStreak >= 365,
+        progress: Math.min(bestStreak, 365)
       }
     ];
 
     return achievements;
+  };
+
+  // Месячные челленджи
+  const getMonthChallenges = (habit: Habit) => {
+    const stats = getThisMonthStats(habit);
+    const today = new Date();
+    const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    const daysUntilReset = Math.ceil((lastDayOfMonth.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    
+    return {
+      challenges: [
+        {
+          id: 'flawless',
+          emoji: '🎖️',
+          name: 'Безупречный',
+          description: 'Все запланированные дни выполнены полностью!',
+          unlocked: stats.scheduledDays > 0 && stats.completedFull === stats.scheduledDays,
+          progress: stats.completedFull,
+          requirement: stats.scheduledDays,
+          detail: `${stats.completedFull}/${stats.scheduledDays} дней`
+        },
+        {
+          id: 'full-power',
+          emoji: '💪',
+          name: 'Полная отдача',
+          description: 'Меньше 2 мини-действий! Ты идёшь по максимуму.',
+          unlocked: stats.completedMini < 2,
+          progress: stats.completedMini,
+          requirement: 2,
+          detail: stats.completedMini === 0 
+            ? '0 мини!' 
+            : stats.completedMini === 1 
+              ? '1 мини' 
+              : `${stats.completedMini} мини (лимит: <2)`
+        },
+        {
+          id: 'resilient',
+          emoji: '🧊',
+          name: 'Стойкий',
+          description: 'Меньше 2 заморозок! Ты не сдаёшься.',
+          unlocked: stats.frozen < 2,
+          progress: stats.frozen,
+          requirement: 2,
+          detail: stats.frozen === 0 
+            ? '0 заморозок!' 
+            : stats.frozen === 1 
+              ? '1 заморозка' 
+              : `${stats.frozen} заморозок (лимит: <2)`
+        }
+      ],
+      daysUntilReset
+    };
   };
 
   // =====================================================
@@ -957,8 +994,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
   // Рендер достижений
   const renderAchievements = (habit: Habit, hasCover: boolean) => {
     const achievements = getAchievements(habit);
-    const streakAchievements = achievements.filter(a => a.type === 'streak' && ['spark', 'momentum', 'star', 'legend', 'champion'].includes(a.id));
-    const successAchievements = achievements.filter(a => !['spark', 'momentum', 'star', 'legend', 'champion'].includes(a.id));
+    const monthlyChallenges = getMonthChallenges(habit);
 
     return (
       <div className={`mt-2 p-4 rounded-2xl ${hasCover ? 'bg-black/40 backdrop-blur-sm' : 'bg-black/10'} border border-white/10 space-y-4`}>
@@ -968,7 +1004,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
             За серии
           </h4>
           <div className="grid grid-cols-3 gap-2">
-            {streakAchievements.map(achievement => (
+            {achievements.map(achievement => (
               <button
                 key={achievement.id}
                 onClick={() => setSelectedAchievement({habitId: habit.id, achievement})}
@@ -1009,50 +1045,73 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
           </div>
         </div>
 
-        {/* За успехи */}
+        {/* Тонкая светящаяся линия */}
+        <div className="relative h-px my-4">
+          <div className={`absolute inset-0 bg-gradient-to-r ${
+            hasCover 
+              ? 'from-transparent via-white/20 to-transparent' 
+              : 'from-transparent via-gray-400/30 to-transparent'
+          } shadow-[0_0_8px_rgba(255,255,255,0.2)]`} />
+        </div>
+
+        {/* Челлендж месяца */}
         <div>
           <h4 className={`text-[9px] font-black uppercase tracking-wider mb-3 ${hasCover ? 'text-white/70' : 'tg-hint'}`}>
-            За успехи
+            Челлендж месяца
           </h4>
           <div className="grid grid-cols-3 gap-2">
-            {successAchievements.map(achievement => (
+            {monthlyChallenges.challenges.map(challenge => (
               <button
-                key={achievement.id}
-                onClick={() => setSelectedAchievement({habitId: habit.id, achievement})}
+                key={challenge.id}
+                onClick={() => setSelectedAchievement({
+                  habitId: habit.id, 
+                  achievement: {
+                    ...challenge,
+                    type: 'count' as const
+                  }
+                })}
                 className={`
                   relative p-3 rounded-xl flex flex-col items-center gap-1.5 transition-all
-                  ${achievement.unlocked 
-                    ? `bg-gradient-to-br from-blue-500/20 to-purple-500/20 border border-blue-500/30 shadow-lg` 
+                  ${challenge.unlocked 
+                    ? `bg-gradient-to-br from-green-500/20 to-emerald-500/20 border border-green-500/30 shadow-lg animate-pulse` 
                     : `${hasCover ? 'bg-white/5 border border-white/10' : 'bg-black/5 border border-black/10'}`
                   }
                 `}
               >
-                <span className={`text-2xl ${achievement.unlocked ? '' : 'grayscale opacity-40'}`}>
-                  {achievement.emoji}
+                <span className={`text-2xl ${challenge.unlocked ? '' : 'grayscale opacity-40'}`}>
+                  {challenge.emoji}
                 </span>
-                <span className={`text-[7px] font-bold text-center leading-tight ${achievement.unlocked ? 'text-white' : `${hasCover ? 'text-white/40' : 'tg-hint'}`}`}>
-                  {achievement.name}
+                <span className={`text-[7px] font-bold text-center leading-tight ${challenge.unlocked ? 'text-white' : `${hasCover ? 'text-white/40' : 'tg-hint'}`}`}>
+                  {challenge.name}
                 </span>
-                {!achievement.unlocked && (
+                
+                {/* Детали прогресса */}
+                <div className="w-full mt-1">
+                  <span className={`text-[6px] ${
+                    challenge.unlocked 
+                      ? 'text-green-400 font-bold' 
+                      : challenge.progress >= challenge.requirement 
+                        ? 'text-red-400' 
+                        : `${hasCover ? 'text-white/40' : 'tg-hint'}`
+                  } block text-center`}>
+                    {challenge.detail}
+                  </span>
+                </div>
+
+                {!challenge.unlocked && (
                   <div className={`absolute top-1 right-1 text-[10px] ${hasCover ? 'text-white/30' : 'text-gray-400/50'}`}>
                     🔒
                   </div>
                 )}
-                {!achievement.unlocked && achievement.requirement > 5 && (
-                  <div className="w-full mt-1">
-                    <div className={`h-1 rounded-full ${hasCover ? 'bg-white/10' : 'bg-black/10'} overflow-hidden`}>
-                      <div 
-                        className="h-full bg-blue-500 rounded-full transition-all duration-700"
-                        style={{width: `${(achievement.progress / achievement.requirement) * 100}%`}}
-                      />
-                    </div>
-                    <span className={`text-[6px] ${hasCover ? 'text-white/40' : 'tg-hint'} block text-center mt-0.5`}>
-                      {achievement.progress}/{achievement.requirement}
-                    </span>
-                  </div>
-                )}
               </button>
             ))}
+          </div>
+
+          {/* Счётчик дней до сброса */}
+          <div className="text-center mt-3 pt-3 border-t border-white/5">
+            <span className={`text-[8px] ${hasCover ? 'text-white/50' : 'tg-hint'}`}>
+              Обновится через {monthlyChallenges.daysUntilReset} {getDaysWord(monthlyChallenges.daysUntilReset)}
+            </span>
           </div>
         </div>
       </div>
@@ -1428,21 +1487,46 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
                 </div>
               ) : (
                 <div className="w-full">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs text-gray-400">Прогресс</span>
-                    <span className="text-xs font-bold text-white">
-                      {selectedAchievement.achievement.progress} / {selectedAchievement.achievement.requirement}
-                    </span>
-                  </div>
-                  <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-gradient-to-r from-yellow-500 to-orange-500 rounded-full transition-all duration-700"
-                      style={{width: `${(selectedAchievement.achievement.progress / selectedAchievement.achievement.requirement) * 100}%`}}
-                    />
-                  </div>
-                  <p className="text-xs text-gray-500 mt-2">
-                    Осталось: {selectedAchievement.achievement.requirement - selectedAchievement.achievement.progress}
-                  </p>
+                  {/* Для достижений за серии */}
+                  {selectedAchievement.achievement.type === 'streak' && (
+                    <>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs text-gray-400">Прогресс</span>
+                        <span className="text-xs font-bold text-white">
+                          {selectedAchievement.achievement.progress} / {selectedAchievement.achievement.requirement} дней
+                        </span>
+                      </div>
+                      <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-gradient-to-r from-yellow-500 to-orange-500 rounded-full transition-all duration-700"
+                          style={{width: `${(selectedAchievement.achievement.progress / selectedAchievement.achievement.requirement) * 100}%`}}
+                        />
+                      </div>
+                      <p className="text-xs text-gray-500 mt-2">
+                        Осталось: {selectedAchievement.achievement.requirement - selectedAchievement.achievement.progress} {getDaysWord(selectedAchievement.achievement.requirement - selectedAchievement.achievement.progress)}
+                      </p>
+                    </>
+                  )}
+
+                  {/* Для месячных челленджей */}
+                  {selectedAchievement.achievement.type === 'count' && 'detail' in selectedAchievement.achievement && (
+                    <>
+                      <div className="py-3 px-4 bg-white/5 rounded-xl border border-white/10">
+                        <p className={`text-sm font-bold ${
+                          selectedAchievement.achievement.progress >= selectedAchievement.achievement.requirement 
+                            ? 'text-red-400' 
+                            : 'text-gray-300'
+                        }`}>
+                          {(selectedAchievement.achievement as any).detail}
+                        </p>
+                      </div>
+                      {selectedAchievement.achievement.progress >= selectedAchievement.achievement.requirement && (
+                        <p className="text-xs text-red-400 mt-2">
+                          ⚠️ Превышен лимит
+                        </p>
+                      )}
+                    </>
+                  )}
                 </div>
               )}
 
