@@ -130,6 +130,13 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
   const [editingListId, setEditingListId] = useState<string | null>(null);
   const [coverSettingsOpen, setCoverSettingsOpen] = useState(false);
+  
+  // Drag-and-drop для элементов чек-листа
+  const [dragItem, setDragItem] = useState<{listId: string, itemId: string} | null>(null);
+  const [dragOverItem, setDragOverItem] = useState<string | null>(null);
+  const touchStartY = useRef<number>(0);
+  const touchCurrentEl = useRef<HTMLElement | null>(null);
+  const dragClone = useRef<HTMLElement | null>(null);
 
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -293,7 +300,7 @@ const handleManualSave = () => {
     setActiveMenuId(null);
   };
 
-  // Перемещение чек-листа
+  // Перемещение элемента чек-листа
   const moveChecklist = (id: string, direction: 'up' | 'down' | 'top' | 'bottom') => {
     const index = checklists.findIndex(l => l.id === id);
     if (index === -1) return;
@@ -306,6 +313,78 @@ const handleManualSave = () => {
     else newLists.splice(index, 0, moved);
     setChecklists(newLists);
     setActiveMenuId(null);
+  };
+
+  // Drag-and-drop: завершение перетаскивания
+  const handleItemDragDrop = (listId: string, targetItemId: string) => {
+    if (!dragItem || dragItem.listId !== listId || dragItem.itemId === targetItemId) {
+      setDragItem(null);
+      setDragOverItem(null);
+      return;
+    }
+    setChecklists(prev => prev.map(l => {
+      if (l.id !== listId) return l;
+      const items = [...l.items];
+      const fromIdx = items.findIndex(i => i.id === dragItem.itemId);
+      const toIdx = items.findIndex(i => i.id === targetItemId);
+      if (fromIdx === -1 || toIdx === -1) return l;
+      const [moved] = items.splice(fromIdx, 1);
+      items.splice(toIdx, 0, moved);
+      return { ...l, items };
+    }));
+    setDragItem(null);
+    setDragOverItem(null);
+  };
+
+  // Touch drag handlers
+  const handleTouchStart = (e: React.TouchEvent, listId: string, itemId: string) => {
+    const handle = (e.target as HTMLElement).closest('[data-drag-handle]');
+    if (!handle) return;
+    
+    touchStartY.current = e.touches[0].clientY;
+    touchCurrentEl.current = (e.target as HTMLElement).closest('[data-item-id]') as HTMLElement;
+    
+    // Задержка чтобы отличить тап от drag
+    const timer = setTimeout(() => {
+      setDragItem({ listId, itemId });
+      if (touchCurrentEl.current) {
+        touchCurrentEl.current.style.opacity = '0.4';
+      }
+    }, 150);
+    
+    const cleanup = () => {
+      clearTimeout(timer);
+      document.removeEventListener('touchend', cleanup);
+    };
+    document.addEventListener('touchend', cleanup, { once: true });
+  };
+
+  const handleTouchMove = (e: React.TouchEvent, listId: string) => {
+    if (!dragItem) return;
+    e.preventDefault();
+    
+    const touch = e.touches[0];
+    const elements = document.elementsFromPoint(touch.clientX, touch.clientY);
+    const itemEl = elements.find(el => el.hasAttribute('data-item-id'));
+    
+    if (itemEl) {
+      const targetId = itemEl.getAttribute('data-item-id');
+      if (targetId && targetId !== dragItem.itemId) {
+        setDragOverItem(targetId);
+      }
+    }
+  };
+
+  const handleTouchEnd = (listId: string) => {
+    if (dragItem && dragOverItem) {
+      handleItemDragDrop(listId, dragOverItem);
+    }
+    if (touchCurrentEl.current) {
+      touchCurrentEl.current.style.opacity = '1';
+    }
+    setDragItem(null);
+    setDragOverItem(null);
+    touchCurrentEl.current = null;
   };
 
 // 🔥 ИСПРАВЛЕННАЯ ФУНКЦИЯ ПЕРЕМЕЩЕНИЯ
@@ -532,11 +611,41 @@ const moveChecklistItem = (listId: string, itemId: string, direction: 'up' | 'do
                         )}
                       </div>
                    </div>
-                   <div className="flex flex-col gap-1.5">
+                   <div 
+                      className="flex flex-col gap-1.5"
+                      onTouchMove={(e) => handleTouchMove(e, list.id)}
+                      onTouchEnd={() => handleTouchEnd(list.id)}
+                   >
                       {visibleItems.map((item, index) => (
-                        <div key={item.id} className="flex items-start gap-3 p-3 tg-secondary-bg rounded-2xl group min-w-0">
+                        <div 
+                          key={item.id} 
+                          data-item-id={item.id}
+                          draggable
+                          onDragStart={(e) => { setDragItem({ listId: list.id, itemId: item.id }); e.dataTransfer.effectAllowed = 'move'; }}
+                          onDragOver={(e) => { e.preventDefault(); setDragOverItem(item.id); }}
+                          onDrop={() => handleItemDragDrop(list.id, item.id)}
+                          onDragEnd={() => { setDragItem(null); setDragOverItem(null); }}
+                          onTouchStart={(e) => handleTouchStart(e, list.id, item.id)}
+                          className={`flex items-start gap-2 p-3 tg-secondary-bg rounded-2xl group min-w-0 transition-all ${
+                            dragOverItem === item.id && dragItem?.listId === list.id ? 'ring-2 ring-blue-500/50 bg-blue-500/5' : ''
+                          } ${dragItem?.itemId === item.id ? 'opacity-40' : ''}`}
+                        >
+                           {/* Ручка перетаскивания */}
+                           <div 
+                             data-drag-handle
+                             className="mt-1 shrink-0 cursor-grab active:cursor-grabbing touch-none select-none text-gray-500/40 hover:text-gray-500"
+                           >
+                             <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                               <circle cx="8" cy="4" r="2"/><circle cx="16" cy="4" r="2"/>
+                               <circle cx="8" cy="12" r="2"/><circle cx="16" cy="12" r="2"/>
+                               <circle cx="8" cy="20" r="2"/><circle cx="16" cy="20" r="2"/>
+                             </svg>
+                           </div>
+
+                           {/* Чекбокс */}
                            <button onClick={() => setChecklists(checklists.map(l => l.id === list.id ? { ...l, items: l.items.map(it => it.id === item.id ? { ...it, completed: !it.completed, completedAt: !it.completed ? new Date().toISOString() : undefined } : it) } : l))} className={`w-5 h-5 mt-0.5 rounded-lg border-2 flex items-center justify-center shrink-0 ${item.completed ? 'bg-green-500 border-green-500' : 'border-gray-400/30'}`}>{item.completed && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4"><polyline points="20 6 9 17 4 12"/></svg>}</button>
                            
+                           {/* Текст + дата */}
                            <div className="flex-1 min-w-0 flex flex-col">
                              <AutoResizeTextarea 
                                   value={item.text}
@@ -549,46 +658,16 @@ const moveChecklistItem = (listId: string, itemId: string, direction: 'up' | 'do
                              )}
                            </div>
                            
-                           {/* 🔥 БЛОК УПРАВЛЕНИЯ: ВВЕРХ / ВНИЗ / УДАЛИТЬ */}
-<div className="flex items-center gap-0.5">
-    {/* Кнопка ВВЕРХ */}
-    <button 
-        onClick={(e) => { 
-          e.stopPropagation(); 
-          moveChecklistItem(list.id, item.id, 'up'); 
-        }}
-        className={`w-6 h-6 flex items-center justify-center rounded-lg text-gray-600 hover:text-white hover:bg-white/5 transition-all active:scale-90 ${
-          list.items.findIndex(i => i.id === item.id) === 0 ? 'opacity-0 pointer-events-none' : ''
-        }`}
-    >
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="18 15 12 9 6 15"></polyline></svg>
-    </button>
-
-    {/* Кнопка ВНИЗ */}
-    <button 
-        onClick={(e) => { 
-          e.stopPropagation(); 
-          moveChecklistItem(list.id, item.id, 'down'); 
-        }}
-        className={`w-6 h-6 flex items-center justify-center rounded-lg text-gray-600 hover:text-white hover:bg-white/5 transition-all active:scale-90 ${
-          list.items.findIndex(i => i.id === item.id) === list.items.length - 1 ? 'opacity-0 pointer-events-none' : ''
-        }`}
-    >
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="6 9 12 15 18 9"></polyline></svg>
-    </button>
-
-    {/* Кнопка УДАЛИТЬ */}
-    <button 
-        onClick={(e) => { 
-          e.stopPropagation(); 
-          setChecklists(checklists.map(l => l.id === list.id ? { ...l, items: l.items.filter(it => it.id !== item.id) } : l)); 
-        }} 
-        className="w-6 h-6 flex items-center justify-center rounded-lg text-red-500/40 hover:text-red-500 hover:bg-red-500/10 transition-all active:scale-90 ml-1"
-    >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-    </button>
-</div>
-
+                           {/* Кнопка УДАЛИТЬ */}
+                           <button 
+                               onClick={(e) => { 
+                                 e.stopPropagation(); 
+                                 setChecklists(checklists.map(l => l.id === list.id ? { ...l, items: l.items.filter(it => it.id !== item.id) } : l)); 
+                               }} 
+                               className="w-6 h-6 mt-0.5 flex items-center justify-center rounded-lg text-red-500/30 hover:text-red-500 hover:bg-red-500/10 transition-all active:scale-90 shrink-0"
+                           >
+                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                           </button>
                         </div>
                       ))}
                       <input type="text" placeholder="Добавить..." className="flex-1 tg-secondary-bg p-3 px-4 rounded-xl text-xs font-bold tg-text outline-none mt-1" onKeyDown={e => e.key === 'Enter' && e.currentTarget.value.trim() && (setChecklists(checklists.map(l => l.id === list.id ? { ...l, items: [...l.items, { id: Math.random().toString(36).substr(2, 9), text: e.currentTarget.value, completed: false }] } : l)), e.currentTarget.value = '')} />
