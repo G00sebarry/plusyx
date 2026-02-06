@@ -77,12 +77,23 @@ const AutoResizeTextarea: React.FC<{
   
   const ref = useRef<HTMLTextAreaElement>(null);
 
-  useEffect(() => {
+  const adjustHeight = () => {
     if (ref.current) {
-      ref.current.style.height = 'auto';
+      ref.current.style.height = '0px';
       ref.current.style.height = ref.current.scrollHeight + 'px';
     }
+  };
+
+  useEffect(() => {
+    adjustHeight();
   }, [value]);
+
+  // Пересчитать при изменении размера окна (ротация экрана и т.д.)
+  useEffect(() => {
+    const observer = new ResizeObserver(() => adjustHeight());
+    if (ref.current) observer.observe(ref.current);
+    return () => observer.disconnect();
+  }, []);
 
   return (
     <textarea
@@ -91,7 +102,7 @@ const AutoResizeTextarea: React.FC<{
       value={value}
       onChange={(e) => onChange(e.target.value)}
       onKeyDown={onKeyDown}
-      className={`flex-1 text-sm tg-text bg-transparent outline-none resize-none overflow-hidden block w-full break-words ${completed ? 'line-through opacity-30 italic' : ''}`}
+      className={`w-full text-sm tg-text bg-transparent outline-none resize-none overflow-hidden ${completed ? 'line-through opacity-30 italic' : ''}`}
       style={{ minHeight: '24px', lineHeight: '1.5', wordBreak: 'break-word', overflowWrap: 'anywhere' }}
     />
   );
