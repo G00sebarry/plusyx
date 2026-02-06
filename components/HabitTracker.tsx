@@ -74,6 +74,17 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     setFreezeWarnings(newWarnings);
   }, [habits]);
 
+  // Авто-скролл к сегодняшнему дню на мобилке
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const todaySlots = document.querySelectorAll('[data-today="true"]');
+      todaySlots.forEach(el => {
+        el.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+      });
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [habits, activeTab]);
+
   const formatDate = (date: Date) => {
     const y = date.getFullYear();
     const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -1161,6 +1172,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
           <button 
             onClick={(e) => handleToggle(e, habit, ds)}
             onContextMenu={(e) => handleLongPress(e, habit, ds)}
+            data-today={isToday ? 'true' : undefined}
             className={`
               min-w-[50px] md:min-w-[45px] h-[70px] md:h-[60px] flex flex-col items-center justify-between py-2 px-1 rounded-2xl md:rounded-xl transition-all relative z-10
               ${className} ${isToday ? 'ring-2 ring-white scale-105 z-20' : ''}
