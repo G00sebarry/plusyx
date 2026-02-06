@@ -286,6 +286,7 @@ const [wallpaperPosition, setWallpaperPosition] = useState<number>(50);
 
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const wallpaperInputRef = useRef<HTMLInputElement>(null);
+  const initialSettingsApplied = useRef(false);
 
   // ═══════════════════════════════════════════════════════════
   // 🔐 ПРОВЕРКА АВТОРИЗАЦИИ (УБРАЛИ TG)

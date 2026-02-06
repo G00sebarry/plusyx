@@ -22,18 +22,17 @@ export const saveTaskToDb = async (task, userId) => {
 
 export const saveTasksOrderToDb = async (tasks, userId) => {
   if (tasks.length === 0) return;
-  const updates = tasks.map(t => ({
-    id: t.id, 
-    user_id: userId, 
-    position: t.position, 
-    columnId: t.columnId, 
-    status: t.status, 
-    title: t.title, 
-    description: t.description, 
-    date: t.date
-  }));
-  const { error } = await supabase.from('tasks').upsert(updates);
-  if (error) console.error('Error saving order:', error);
+  const promises = tasks.map(t =>
+    supabase
+      .from('tasks')
+      .update({ position: t.position, columnId: t.columnId, status: t.status })
+      .eq('id', t.id)
+      .eq('user_id', userId)
+  );
+  const results = await Promise.all(promises);
+  results.forEach(({ error }) => {
+    if (error) console.error('Error saving task order:', error);
+  });
 };
 
 export const deleteTaskFromDb = async (taskId) => {
