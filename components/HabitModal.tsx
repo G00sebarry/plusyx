@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Habit } from '../types';
-import { fetchTelegramLink } from '../api';
+import { fetchTelegramLink, createTelegramToken } from '../api';
 
 interface HabitModalProps {
   isOpen: boolean;
@@ -307,10 +307,15 @@ export const HabitModal: React.FC<HabitModalProps> = ({
     return 'Выбранные дни';
   };
 
-  const handleConnectTelegram = () => {
+  const handleConnectTelegram = async () => {
+    if (!userId) return;
+    const token = await createTelegramToken(userId);
+    if (!token) {
+      alert('Ошибка создания ссылки. Попробуйте ещё раз.');
+      return;
+    }
     const botUsername = 'plusyxbot';
-    const startParam = userId;
-    const url = `https://t.me/${botUsername}?start=${startParam}`;
+    const url = `https://t.me/${botUsername}?start=${token}`;
     window.open(url, '_blank');
   };
 

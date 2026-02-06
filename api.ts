@@ -349,3 +349,32 @@ export const fetchRandomQuote = async () => {
   const randomIndex = Math.floor(Math.random() * data.length);
   return data[randomIndex];
 };
+
+// ═══════════════════════════════════════════════════════════
+// 🔐 TELEGRAM PENDING TOKEN
+// ═══════════════════════════════════════════════════════════
+
+export const createTelegramToken = async (userId: string) => {
+  // Удаляем старые токены этого пользователя
+  await supabase
+    .from('telegram_pending')
+    .delete()
+    .eq('user_id', userId);
+
+  // Генерируем безопасный токен
+  const token = crypto.randomUUID().replace(/-/g, '') + Date.now().toString(36);
+
+  const { error } = await supabase
+    .from('telegram_pending')
+    .insert({
+      user_id: userId,
+      token: token
+    });
+
+  if (error) {
+    console.error('Error creating telegram token:', error);
+    return null;
+  }
+
+  return token;
+};

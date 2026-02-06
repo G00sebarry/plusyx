@@ -114,7 +114,7 @@ export default async function handler(req, res) {
         responseText = '🔸 Мини-версия засчитана!';
         statusEmoji = '🔸';
       } else if (action === 'freeze') {
-  value = 'freeze';  // ← ПРАВИЛЬНО
+        value = 'freeze';
         responseText = '❄️ Заморозка активирована';
         statusEmoji = '❄️';
       } else {
@@ -158,36 +158,52 @@ export default async function handler(req, res) {
         if (parts.length > 1) {
           const token = parts[1];
           
+          // Ищем токен и проверяем срок действия
           const { data: pending } = await supabase
             .from('telegram_pending')
-            .select('user_id')
+            .select('user_id, expires_at')
             .eq('token', token)
             .single();
           
-          if (pending) {
-            await supabase
-              .from('telegram_links')
-              .upsert({
-                user_id: pending.user_id,
-                chat_id: chatId.toString(),
-                username: update.message.from?.username || null,
-                linked_at: new Date().toISOString()
-              }, { onConflict: 'user_id' });
-            
+          if (!pending) {
+            await sendMessage(chatId, '❌ Ссылка недействительна или устарела.\n\nПопробуйте заново подключить Telegram в настройках привычки в Plusyx.');
+            return res.status(200).json({ ok: true });
+          }
+
+          // Проверяем срок действия
+          if (new Date(pending.expires_at) < new Date()) {
+            // Удаляем просроченный токен
             await supabase
               .from('telegram_pending')
               .delete()
               .eq('token', token);
             
-            await sendMessage(chatId, 
-              '✅ Telegram успешно подключён!\n\nТеперь вы будете получать напоминания о привычках и задачах.'
-            );
-          } else {
-            await sendMessage(chatId, '❌ Ссылка недействительна или устарела.');
+            await sendMessage(chatId, '⏰ Ссылка истекла (действует 10 минут).\n\nНажмите «Подключить Telegram» заново в Plusyx.');
+            return res.status(200).json({ ok: true });
           }
+
+          // Всё ок — привязываем
+          await supabase
+            .from('telegram_links')
+            .upsert({
+              user_id: pending.user_id,
+              chat_id: chatId.toString(),
+              username: update.message.from?.username || null,
+              linked_at: new Date().toISOString()
+            }, { onConflict: 'user_id' });
+          
+          // Удаляем использованный токен
+          await supabase
+            .from('telegram_pending')
+            .delete()
+            .eq('token', token);
+          
+          await sendMessage(chatId, 
+            '✅ Telegram успешно подключён!\n\nТеперь вы будете получать напоминания о привычках и задачах.'
+          );
         } else {
           await sendMessage(chatId, 
-            '👋 Привет! Это бот Plusyx.\n\nДля подключения уведомлений перейдите в настройки приложения Plusyx.'
+            '👋 Привет! Это бот Plusyx.\n\nДля подключения уведомлений перейдите в настройки привычки в приложении Plusyx и нажмите «Подключить Telegram».'
           );
         }
       }
