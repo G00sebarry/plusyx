@@ -91,8 +91,8 @@ const AutoResizeTextarea: React.FC<{
       value={value}
       onChange={(e) => onChange(e.target.value)}
       onKeyDown={onKeyDown}
-      className={`flex-1 text-sm tg-text bg-transparent outline-none resize-none overflow-hidden block ${completed ? 'line-through opacity-30 italic' : ''}`}
-      style={{ minHeight: '24px', lineHeight: '1.5' }}
+      className={`flex-1 text-sm tg-text bg-transparent outline-none resize-none overflow-hidden block w-full break-words ${completed ? 'line-through opacity-30 italic' : ''}`}
+      style={{ minHeight: '24px', lineHeight: '1.5', wordBreak: 'break-word', overflowWrap: 'anywhere' }}
     />
   );
 };
@@ -293,6 +293,21 @@ const handleManualSave = () => {
     setActiveMenuId(null);
   };
 
+  // Перемещение чек-листа
+  const moveChecklist = (id: string, direction: 'up' | 'down' | 'top' | 'bottom') => {
+    const index = checklists.findIndex(l => l.id === id);
+    if (index === -1) return;
+    const newLists = [...checklists];
+    const [moved] = newLists.splice(index, 1);
+    if (direction === 'top') newLists.unshift(moved);
+    else if (direction === 'bottom') newLists.push(moved);
+    else if (direction === 'up' && index > 0) newLists.splice(index - 1, 0, moved);
+    else if (direction === 'down' && index < checklists.length - 1) newLists.splice(index + 1, 0, moved);
+    else newLists.splice(index, 0, moved);
+    setChecklists(newLists);
+    setActiveMenuId(null);
+  };
+
 // 🔥 ИСПРАВЛЕННАЯ ФУНКЦИЯ ПЕРЕМЕЩЕНИЯ
 const moveChecklistItem = (listId: string, itemId: string, direction: 'up' | 'down') => {
   setChecklists(prev => prev.map(list => {
@@ -481,6 +496,37 @@ const moveChecklistItem = (listId: string, itemId: string, direction: 'up' | 'do
                         {activeMenuId === list.id && (
                           <div className="absolute right-0 top-10 bg-[#1c1c1e] w-48 rounded-2xl shadow-2xl border border-gray-400/20 p-2 z-[220]">
                              <button onClick={() => toggleHideCompleted(list.id)} className="w-full text-left p-3 hover:bg-white/5 rounded-xl text-[10px] font-black uppercase text-white">{list.hideCompleted ? 'Показать всё' : 'Скрыть готовое'}</button>
+                             
+                             {checklists.length > 1 && (
+                               <>
+                                 <div className="my-1 border-t border-white/5" />
+                                 <div className="px-3 py-1.5 text-[8px] font-black text-gray-500 uppercase">Переместить</div>
+                                 <div className="flex gap-1 px-2 pb-1">
+                                   {checklists.findIndex(l => l.id === list.id) > 0 && (
+                                     <>
+                                       <button onClick={() => moveChecklist(list.id, 'top')} className="h-8 flex-1 bg-white/5 rounded-lg flex items-center justify-center hover:bg-white/10 transition-colors" title="В начало">
+                                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><polyline points="17 11 12 6 7 11"/><polyline points="17 18 12 13 7 18"/></svg>
+                                       </button>
+                                       <button onClick={() => moveChecklist(list.id, 'up')} className="h-8 flex-1 bg-white/5 rounded-lg flex items-center justify-center hover:bg-white/10 transition-colors" title="Вверх">
+                                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><polyline points="18 15 12 9 6 15"/></svg>
+                                       </button>
+                                     </>
+                                   )}
+                                   {checklists.findIndex(l => l.id === list.id) < checklists.length - 1 && (
+                                     <>
+                                       <button onClick={() => moveChecklist(list.id, 'down')} className="h-8 flex-1 bg-white/5 rounded-lg flex items-center justify-center hover:bg-white/10 transition-colors" title="Вниз">
+                                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><polyline points="6 9 12 15 18 9"/></svg>
+                                       </button>
+                                       <button onClick={() => moveChecklist(list.id, 'bottom')} className="h-8 flex-1 bg-white/5 rounded-lg flex items-center justify-center hover:bg-white/10 transition-colors" title="В конец">
+                                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><polyline points="7 13 12 18 17 13"/><polyline points="7 6 12 11 17 6"/></svg>
+                                       </button>
+                                     </>
+                                   )}
+                                 </div>
+                               </>
+                             )}
+                             
+                             <div className="my-1 border-t border-white/5" />
                              <button onClick={() => removeChecklist(list.id)} className="w-full text-left p-3 hover:bg-red-500/20 text-red-500 rounded-xl text-[10px] font-black uppercase">Удалить список</button>
                           </div>
                         )}
@@ -488,15 +534,20 @@ const moveChecklistItem = (listId: string, itemId: string, direction: 'up' | 'do
                    </div>
                    <div className="flex flex-col gap-1.5">
                       {visibleItems.map((item, index) => (
-                        <div key={item.id} className="flex items-start gap-3 p-3 tg-secondary-bg rounded-2xl group">
-                           <button onClick={() => setChecklists(checklists.map(l => l.id === list.id ? { ...l, items: l.items.map(it => it.id === item.id ? { ...it, completed: !it.completed } : it) } : l))} className={`w-5 h-5 mt-0.5 rounded-lg border-2 flex items-center justify-center shrink-0 ${item.completed ? 'bg-green-500 border-green-500' : 'border-gray-400/30'}`}>{item.completed && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4"><polyline points="20 6 9 17 4 12"/></svg>}</button>
+                        <div key={item.id} className="flex items-start gap-3 p-3 tg-secondary-bg rounded-2xl group min-w-0">
+                           <button onClick={() => setChecklists(checklists.map(l => l.id === list.id ? { ...l, items: l.items.map(it => it.id === item.id ? { ...it, completed: !it.completed, completedAt: !it.completed ? new Date().toISOString() : undefined } : it) } : l))} className={`w-5 h-5 mt-0.5 rounded-lg border-2 flex items-center justify-center shrink-0 ${item.completed ? 'bg-green-500 border-green-500' : 'border-gray-400/30'}`}>{item.completed && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4"><polyline points="20 6 9 17 4 12"/></svg>}</button>
                            
-                           <AutoResizeTextarea 
-                                value={item.text}
-                                completed={item.completed}
-                                onChange={(val) => setChecklists(checklists.map(l => l.id === list.id ? { ...l, items: l.items.map(it => it.id === item.id ? { ...it, text: val } : it) } : l))}
-                                onKeyDown={handleItemKeyDown}
-                           />
+                           <div className="flex-1 min-w-0 flex flex-col">
+                             <AutoResizeTextarea 
+                                  value={item.text}
+                                  completed={item.completed}
+                                  onChange={(val) => setChecklists(checklists.map(l => l.id === list.id ? { ...l, items: l.items.map(it => it.id === item.id ? { ...it, text: val } : it) } : l))}
+                                  onKeyDown={handleItemKeyDown}
+                             />
+                             {item.completed && item.completedAt && (
+                               <span className="text-[9px] tg-hint opacity-40 mt-0.5">✓ {new Date(item.completedAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}</span>
+                             )}
+                           </div>
                            
                            {/* 🔥 БЛОК УПРАВЛЕНИЯ: ВВЕРХ / ВНИЗ / УДАЛИТЬ */}
 <div className="flex items-center gap-0.5">
