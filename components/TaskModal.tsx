@@ -121,12 +121,15 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
   const [comments, setComments] = useState<TaskComment[]>([]);
   const [newComment, setNewComment] = useState('');
   
-  const [blocksOrder, setBlocksOrder] = useState<TaskBlockType[]>(['meta', 'cover', 'checklists', 'files', 'comments']);
+  const [blocksOrder, setBlocksOrder] = useState<TaskBlockType[]>(
+    initialTask?.blocksOrder as TaskBlockType[] || ['meta', 'cover', 'checklists', 'files', 'comments']
+  );
   const [draggedBlock, setDraggedBlock] = useState<number | null>(null);
   
   const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
   const [editingListId, setEditingListId] = useState<string | null>(null);
+  const [coverSettingsOpen, setCoverSettingsOpen] = useState(false);
 
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -151,6 +154,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
       setFiles(initialTask.files || []);
       setChecklists(initialTask.checklists || [{ id: 'default', title: 'Чек-лист', items: [], hideCompleted: false }]);
       setComments(initialTask.comments || []);
+      setBlocksOrder(initialTask.blocksOrder as TaskBlockType[] || ['meta', 'cover', 'checklists', 'files', 'comments']);
       setSaveStatus('saved');
     } else if (isOpen && !initialTask) {
       setTitle(''); setDescription(''); setDate(toLocalDateString(new Date())); setTime(''); setIsTimer(false);
@@ -170,7 +174,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
     title, description, date, time, isTimer, status, columnId, color, 
     files,
     coverData, coverPosition, coverIntensity,
-    checklists, comments 
+    checklists, comments, blocksOrder
   });
 
   // Автосохранение
@@ -183,7 +187,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
         setSaveStatus('saved');
     }, 1000);
     return () => { if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current); };
-  }, [title, description, date, time, isTimer, status, columnId, color, coverData, coverPosition, coverIntensity, checklists, comments, files]);
+  }, [title, description, date, time, isTimer, status, columnId, color, coverData, coverPosition, coverIntensity, checklists, comments, files, blocksOrder]);
 
  // СТАЛО:
 const handleManualSave = () => {
@@ -429,15 +433,18 @@ const moveChecklistItem = (listId: string, itemId: string, direction: 'up' | 'do
              <label className="text-[10px] font-black tg-hint uppercase ml-1">Обложка карточки</label>
              <div className="flex items-center gap-3">
                 <button onClick={() => coverInputRef.current?.click()} className="flex-1 tg-secondary-bg h-12 px-4 rounded-2xl text-[10px] font-black uppercase tracking-widest tg-text flex items-center justify-center gap-2 border border-dashed border-gray-400/20">{coverData ? '📸 Изменить' : '🖼️ Обложка JPG'}</button>
-                {coverData && <button onClick={() => {setCoverData('');}} className="w-12 h-12 rounded-2xl bg-red-500/10 text-red-500 flex items-center justify-center text-lg">×</button>}
+                {coverData && <button onClick={() => setCoverSettingsOpen(!coverSettingsOpen)} className={`w-12 h-12 rounded-2xl flex items-center justify-center text-lg transition-all ${coverSettingsOpen ? 'bg-blue-500/20 text-blue-500' : 'bg-black/5 tg-hint'}`}>⚙️</button>}
+                {coverData && <button onClick={() => {setCoverData(''); setCoverSettingsOpen(false);}} className="w-12 h-12 rounded-2xl bg-red-500/10 text-red-500 flex items-center justify-center text-lg">×</button>}
                 <input type="file" ref={coverInputRef} accept="image/jpeg" onChange={handleCoverChange} className="hidden" />
              </div>
              {coverData && (
-               <div className="flex flex-col gap-4 p-5 bg-black/5 rounded-[28px]">
-                  <div className="relative w-full h-32 rounded-2xl overflow-hidden bg-black/20">
-                     <img src={coverData} className="w-full h-full object-cover" style={{ objectPosition: `50% ${coverPosition}%` }} />
-                     <div className="absolute inset-0 z-[1]" style={{ backgroundColor: `rgba(0,0,0,${coverIntensity/100})` }} />
-                  </div>
+               <div className="relative w-full h-32 rounded-2xl overflow-hidden bg-black/20">
+                  <img src={coverData} className="w-full h-full object-cover" style={{ objectPosition: `50% ${coverPosition}%` }} />
+                  <div className="absolute inset-0 z-[1]" style={{ backgroundColor: `rgba(0,0,0,${coverIntensity/100})` }} />
+               </div>
+             )}
+             {coverData && coverSettingsOpen && (
+               <div className="flex flex-col gap-4 p-5 bg-black/5 rounded-[28px] animate-in fade-in slide-in-from-top-2 duration-200">
                   <div className="grid grid-cols-1 gap-4">
                       <div className="flex flex-col gap-1.5">
                          <div className="flex justify-between px-1"><label className="text-[9px] font-black tg-hint uppercase">Вертикаль</label></div>

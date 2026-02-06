@@ -53,6 +53,7 @@ export interface Task {
   coverIntensity?: number;
   checklists: Checklist[];
   comments?: TaskComment[];
+  blocksOrder?: string[];
 }
 
 // --- ПРИВЫЧКИ ---
