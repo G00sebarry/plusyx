@@ -307,16 +307,22 @@ export const HabitModal: React.FC<HabitModalProps> = ({
     return 'Выбранные дни';
   };
 
-  const handleConnectTelegram = async () => {
+  const handleConnectTelegram = () => {
     if (!userId) return;
-    const token = await createTelegramToken(userId);
-    if (!token) {
-      alert('Ошибка создания ссылки. Попробуйте ещё раз.');
-      return;
-    }
+    
+    // Открываем окно СИНХРОННО (иначе Safari блокирует)
     const botUsername = 'plusyxbot';
-    const url = `https://t.me/${botUsername}?start=${token}`;
-    window.open(url, '_blank');
+    const newWindow = window.open(`https://t.me/${botUsername}`, '_blank');
+    
+    // Параллельно создаём токен и обновляем URL
+    createTelegramToken(userId).then(token => {
+      if (token && newWindow) {
+        newWindow.location.href = `https://t.me/${botUsername}?start=${token}`;
+      } else if (token && !newWindow) {
+        // Фолбэк если окно всё же заблокировано
+        window.location.href = `https://t.me/${botUsername}?start=${token}`;
+      }
+    });
   };
 
   if (!isOpen) return null;
