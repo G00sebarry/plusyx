@@ -1402,7 +1402,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
 
         {/* Таб "Бросить" */}
         {activeTab === 'quit' && (
-          <div className="grid grid-cols-1 gap-4">
+          <div className="max-w-4xl mx-auto w-full grid grid-cols-1 gap-4">
             {antiHabits.length === 0 ? (
               <div className="flex flex-col items-center justify-center min-h-[50vh] text-center gap-6">
                 <div className="w-24 h-24 bg-red-500/10 rounded-[32px] flex items-center justify-center text-5xl animate-pulse">🚫</div>
