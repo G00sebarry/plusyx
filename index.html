@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -49,30 +48,31 @@
         }
 
         /* ===== LIGHT THEME OVERRIDES ===== */
-        /* Fix hardcoded dark-only colors for light theme */
+        /* cover-preserve: marker class for elements with bg images/covers */
+        /* Elements inside .cover-preserve keep white text & dark overlays */
         
-        /* bg-white/X → transparent overlays */
-        body:not(.dark) .bg-white\/5 { background-color: rgba(0,0,0,0.03) !important; }
-        body:not(.dark) .bg-white\/10 { background-color: rgba(0,0,0,0.05) !important; }
-        body:not(.dark) .bg-white\/15 { background-color: rgba(0,0,0,0.06) !important; }
-        body:not(.dark) .bg-white\/20 { background-color: rgba(0,0,0,0.08) !important; }
-        body:not(.dark) .hover\:bg-white\/5:hover { background-color: rgba(0,0,0,0.04) !important; }
-        body:not(.dark) .hover\:bg-white\/10:hover { background-color: rgba(0,0,0,0.06) !important; }
-        body:not(.dark) .hover\:bg-white\/20:hover { background-color: rgba(0,0,0,0.1) !important; }
+        /* bg-white/X → light overlays (not inside covers) */
+        body:not(.dark) .bg-white\/5:not(.cover-preserve *) { background-color: rgba(0,0,0,0.03) !important; }
+        body:not(.dark) .bg-white\/10:not(.cover-preserve *) { background-color: rgba(0,0,0,0.05) !important; }
+        body:not(.dark) .bg-white\/15:not(.cover-preserve *) { background-color: rgba(0,0,0,0.06) !important; }
+        body:not(.dark) .bg-white\/20:not(.cover-preserve *) { background-color: rgba(0,0,0,0.08) !important; }
+        body:not(.dark) .hover\:bg-white\/5:hover:not(.cover-preserve *) { background-color: rgba(0,0,0,0.04) !important; }
+        body:not(.dark) .hover\:bg-white\/10:hover:not(.cover-preserve *) { background-color: rgba(0,0,0,0.06) !important; }
+        body:not(.dark) .hover\:bg-white\/20:hover:not(.cover-preserve *) { background-color: rgba(0,0,0,0.1) !important; }
         
-        /* text-white → dark text */
-        body:not(.dark) .text-white { color: var(--tg-theme-text-color) !important; }
-        body:not(.dark) .text-white\/40 { color: rgba(0,0,0,0.3) !important; }
-        body:not(.dark) .text-white\/60 { color: rgba(0,0,0,0.5) !important; }
-        body:not(.dark) .text-white\/70 { color: rgba(0,0,0,0.6) !important; }
-        body:not(.dark) .text-white\/80 { color: rgba(0,0,0,0.7) !important; }
-        body:not(.dark) .hover\:text-white:hover { color: var(--tg-theme-text-color) !important; }
+        /* text-white → dark text, EXCEPT inside .cover-preserve */
+        body:not(.dark) .text-white:not(.cover-preserve):not(.cover-preserve *) { color: var(--tg-theme-text-color) !important; }
+        body:not(.dark) .text-white\/40:not(.cover-preserve):not(.cover-preserve *) { color: rgba(0,0,0,0.3) !important; }
+        body:not(.dark) .text-white\/60:not(.cover-preserve):not(.cover-preserve *) { color: rgba(0,0,0,0.5) !important; }
+        body:not(.dark) .text-white\/70:not(.cover-preserve):not(.cover-preserve *) { color: rgba(0,0,0,0.6) !important; }
+        body:not(.dark) .text-white\/80:not(.cover-preserve):not(.cover-preserve *) { color: rgba(0,0,0,0.7) !important; }
+        body:not(.dark) .hover\:text-white:hover:not(.cover-preserve):not(.cover-preserve *) { color: var(--tg-theme-text-color) !important; }
         
-        /* text-gray-X → appropriate light shades */
-        body:not(.dark) .text-gray-400 { color: #8a8a8a !important; }
-        body:not(.dark) .text-gray-500 { color: #6b6b6b !important; }
-        body:not(.dark) .text-gray-600 { color: #555555 !important; }
-        body:not(.dark) .text-gray-300 { color: #999999 !important; }
+        /* text-gray-X */
+        body:not(.dark) .text-gray-400:not(.cover-preserve):not(.cover-preserve *) { color: #8a8a8a !important; }
+        body:not(.dark) .text-gray-500:not(.cover-preserve):not(.cover-preserve *) { color: #6b6b6b !important; }
+        body:not(.dark) .text-gray-600:not(.cover-preserve):not(.cover-preserve *) { color: #555555 !important; }
+        body:not(.dark) .text-gray-300:not(.cover-preserve):not(.cover-preserve *) { color: #999999 !important; }
         
         /* border-white/X → dark borders */
         body:not(.dark) .border-white\/5 { border-color: rgba(0,0,0,0.06) !important; }
@@ -83,37 +83,37 @@
         body:not(.dark) .border-gray-400\/20 { border-color: rgba(0,0,0,0.1) !important; }
         body:not(.dark) .border-gray-400\/30 { border-color: rgba(0,0,0,0.12) !important; }
         
-        /* bg-black/X stays mostly fine, but some need adjustment */
+        /* bg-black/X */
         body:not(.dark) .bg-black\/5 { background-color: rgba(0,0,0,0.03) !important; }
         body:not(.dark) .bg-black\/10 { background-color: rgba(0,0,0,0.05) !important; }
-        body:not(.dark) .bg-black\/20 { background-color: rgba(0,0,0,0.06) !important; }
-        body:not(.dark) .bg-black\/30 { background-color: rgba(0,0,0,0.08) !important; }
+        body:not(.dark) .bg-black\/20:not(.cover-preserve *) { background-color: rgba(0,0,0,0.06) !important; }
+        body:not(.dark) .bg-black\/30:not(.cover-preserve *) { background-color: rgba(0,0,0,0.08) !important; }
         body:not(.dark) .bg-black\/60 { background-color: rgba(0,0,0,0.4) !important; }
 
-        /* Dark background elements in modals/dropdowns */
+        /* Dark bg elements in modals/dropdowns → white */
         body:not(.dark) .bg-\[\#1c1c1e\] { background-color: #ffffff !important; box-shadow: 0 4px 24px rgba(0,0,0,0.12) !important; }
         body:not(.dark) .bg-\[\#2c2c2e\] { background-color: #ffffff !important; box-shadow: 0 4px 24px rgba(0,0,0,0.12) !important; }
         body:not(.dark) .bg-\[\#121212\] { background-color: var(--tg-theme-bg-color) !important; }
         body:not(.dark) .bg-\[\#1e1e1e\] { background-color: var(--tg-theme-secondary-bg-color) !important; }
         
-        /* Ring overrides */
+        /* Ring */
         body:not(.dark) .ring-white { --tw-ring-color: rgba(0,0,0,0.2) !important; }
         
-        /* Gradient text that assumes dark bg */
-        body:not(.dark) .from-white { --tw-gradient-from: var(--tg-theme-text-color) !important; }
-        body:not(.dark) .to-white\/60 { --tw-gradient-to: rgba(0,0,0,0.5) !important; }
-        body:not(.dark) .to-white\/40 { --tw-gradient-to: rgba(0,0,0,0.3) !important; }
+        /* Gradients */
+        body:not(.dark) .from-white:not(.cover-preserve *) { --tw-gradient-from: var(--tg-theme-text-color) !important; }
+        body:not(.dark) .to-white\/60:not(.cover-preserve *) { --tw-gradient-to: rgba(0,0,0,0.5) !important; }
+        body:not(.dark) .to-white\/40:not(.cover-preserve *) { --tw-gradient-to: rgba(0,0,0,0.3) !important; }
         
-        /* Placeholder colors */
+        /* Placeholders */
         body:not(.dark) .placeholder\:text-white\/20::placeholder { color: rgba(0,0,0,0.25) !important; }
         body:not(.dark) .placeholder\:opacity-30::placeholder { opacity: 0.4 !important; }
         
-        /* Shadow/glow overrides for light mode */
+        /* Glows → softer */
         body:not(.dark) .shadow-\[0_0_10px_lime\] { box-shadow: 0 0 6px rgba(74,222,128,0.4) !important; }
         body:not(.dark) .shadow-\[0_0_10px_cyan\] { box-shadow: 0 0 6px rgba(34,211,238,0.4) !important; }
         body:not(.dark) .shadow-\[0_0_5px_yellow\] { box-shadow: 0 0 4px rgba(234,179,8,0.4) !important; }
 
-        /* Buttons that are white text on dark theme need to keep white text */
+        /* Colored buttons keep white text */
         body:not(.dark) .bg-green-500 .text-white,
         body:not(.dark) .bg-red-500 .text-white,
         body:not(.dark) .bg-blue-500 .text-white,
@@ -124,8 +124,18 @@
         body:not(.dark) [class*="bg-green-500"] > svg,
         body:not(.dark) [class*="bg-\[var(--tg-theme-button-color)"] { color: #ffffff !important; }
         
-        /* Cards get subtle shadows in light mode */
+        /* Card shadows */
         body:not(.dark) .tg-secondary-bg { box-shadow: var(--tg-theme-card-shadow); }
+        
+        /* Wallpaper: white wash overlay in light theme for readability */
+        body:not(.dark) .wallpaper-container::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: rgba(248, 247, 244, 0.6);
+            pointer-events: none;
+            z-index: 1;
+        }
 
         .font-logo { font-family: 'Space Grotesk', sans-serif; }
 

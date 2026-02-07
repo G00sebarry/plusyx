@@ -92,7 +92,7 @@ export const AntiHabitCard: React.FC<AntiHabitCardProps> = ({ habit, onRelapse, 
 
   return (
     <div 
-        className={`relative overflow-hidden rounded-[32px] p-5 flex flex-col justify-between min-h-[240px] transition-all active:scale-[0.98] cursor-pointer ${!hasCover ? 'tg-secondary-bg border border-gray-400/5' : 'shadow-lg'}`}
+        className={`relative overflow-hidden rounded-[32px] p-5 flex flex-col justify-between min-h-[240px] transition-all active:scale-[0.98] cursor-pointer ${!hasCover ? 'tg-secondary-bg border border-gray-400/5' : 'shadow-lg'} ${hasCover ? 'cover-preserve' : ''}`}
         style={hasCover ? {
             backgroundImage: `url(${habit.fileData})`,
             backgroundSize: 'cover',

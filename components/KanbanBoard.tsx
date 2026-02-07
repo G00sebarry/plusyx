@@ -446,6 +446,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                        relative tg-secondary-bg p-5 rounded-[28px] shadow-sm border border-gray-100/10 flex flex-col gap-3 
                        transition-all overflow-hidden min-h-[140px]
                        ${isDraggable ? 'active:scale-[0.98] cursor-grab active:cursor-grabbing' : 'cursor-default'}
+                       ${hasCover ? 'cover-preserve' : ''}
                     `}
                     onClick={() => {
                         if (isMenuOpen) setActiveTaskMenuId(null);

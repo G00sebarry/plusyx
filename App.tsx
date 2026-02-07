@@ -661,7 +661,7 @@ const handleAutoSaveHabit = async (updatedHabit: Habit) => {
 
   return (
     <div className="flex flex-col h-screen overflow-hidden tg-bg select-none relative">
-      {wallpaper && <div className="fixed inset-0 z-0 pointer-events-none transition-all duration-300 ease-out" style={{ backgroundImage: `url(${wallpaper})`, backgroundSize: 'cover', backgroundPosition: `50% ${wallpaperPosition}%`, opacity: wallpaperOpacity / 100 }} />}
+      {wallpaper && <div className="fixed inset-0 z-0 pointer-events-none transition-all duration-300 ease-out wallpaper-container" style={{ backgroundImage: `url(${wallpaper})`, backgroundSize: 'cover', backgroundPosition: `50% ${wallpaperPosition}%`, opacity: wallpaperOpacity / 100 }} />}
       
       <header className="px-5 py-4 flex justify-between items-center border-b border-gray-200/10 tg-secondary-bg/80 backdrop-blur-md shadow-sm z-[150]">
         <div className="flex items-center gap-2">

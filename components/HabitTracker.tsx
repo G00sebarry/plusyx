@@ -1250,7 +1250,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
                     onDragOver={(e) => handleDragOver(e, habit.id)}
                     onDrop={(e) => handleDrop(e, habit.id)}
                     onDragEnd={() => { setDraggedHabitId(null); setDropTargetId(null); }}
-                    className={`relative overflow-hidden rounded-[28px] shadow-sm p-4 flex flex-col gap-3 transition-all min-h-[120px] cursor-grab active:cursor-grabbing ${isTarget ? 'scale-[1.02] ring-2 ring-blue-500' : ''} ${draggedHabitId === habit.id ? 'opacity-40' : ''} ${!hasCover ? 'tg-secondary-bg border border-gray-400/5' : ''}`}
+                    className={`relative overflow-hidden rounded-[28px] shadow-sm p-4 flex flex-col gap-3 transition-all min-h-[120px] cursor-grab active:cursor-grabbing ${isTarget ? 'scale-[1.02] ring-2 ring-blue-500' : ''} ${draggedHabitId === habit.id ? 'opacity-40' : ''} ${!hasCover ? 'tg-secondary-bg border border-gray-400/5' : ''} ${hasCover ? 'cover-preserve' : ''}`}
                     style={hasCover ? { backgroundImage: `url(${habit.fileData})`, backgroundSize: 'cover', backgroundPosition: `50% ${habit.coverPosition ?? 50}%` } : {}}
                     onClick={() => onEditHabit(habit)}
                   >
