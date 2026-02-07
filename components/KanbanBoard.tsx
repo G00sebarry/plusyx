@@ -413,7 +413,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
             </div>
           </div>
           
-          <div className="flex flex-col gap-4 flex-1 pb-24 min-h-[500px]">
+          <div className="flex flex-col gap-4 flex-1 pb-40 min-h-[500px]">
             {tasks.filter(t => t.columnId === column.id).map(task => {
               const activeCover = task.coverData || task.fileData;
               const hasCover = !!activeCover;
