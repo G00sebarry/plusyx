@@ -321,6 +321,14 @@ export const fetchTelegramLink = async (userId: string) => {
   return data;
 };
 
+export const disconnectTelegram = async (userId: string) => {
+  const { error } = await supabase
+    .from('telegram_links')
+    .delete()
+    .eq('user_id', userId);
+  return !error;
+};
+
 export const saveTelegramLink = async (userId: string, chatId: string, username?: string) => {
   const { data, error } = await supabase
     .from('telegram_links')

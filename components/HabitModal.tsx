@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Habit } from '../types';
-import { fetchTelegramLink, createTelegramToken } from '../api';
+import { fetchTelegramLink, createTelegramToken, disconnectTelegram } from '../api';
 
 interface HabitModalProps {
   isOpen: boolean;
@@ -155,6 +155,8 @@ export const HabitModal: React.FC<HabitModalProps> = ({
   const [telegramLinked, setTelegramLinked] = useState(false);
   const [telegramUsername, setTelegramUsername] = useState<string | null>(null);
   const [isCheckingLink, setIsCheckingLink] = useState(false);
+  const [telegramConnectUrl, setTelegramConnectUrl] = useState<string | null>(null);
+  const [isGeneratingToken, setIsGeneratingToken] = useState(false);
   
   const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
 
@@ -350,22 +352,29 @@ export const HabitModal: React.FC<HabitModalProps> = ({
     return 'Выбранные дни';
   };
 
-  const handleConnectTelegram = () => {
+  const handleConnectTelegram = async () => {
     if (!userId) return;
+    setIsGeneratingToken(true);
+    setTelegramConnectUrl(null);
     
-    // Открываем окно СИНХРОННО (иначе Safari блокирует)
-    const botUsername = 'plusyxbot';
-    const newWindow = window.open(`https://t.me/${botUsername}`, '_blank');
+    const token = await createTelegramToken(userId);
+    setIsGeneratingToken(false);
     
-    // Параллельно создаём токен и обновляем URL
-    createTelegramToken(userId).then(token => {
-      if (token && newWindow) {
-        newWindow.location.href = `https://t.me/${botUsername}?start=${token}`;
-      } else if (token && !newWindow) {
-        // Фолбэк если окно всё же заблокировано
-        window.location.href = `https://t.me/${botUsername}?start=${token}`;
-      }
-    });
+    if (token) {
+      const url = `https://t.me/plusyxbot?start=${token}`;
+      setTelegramConnectUrl(url);
+      // Пробуем открыть автоматически
+      window.open(url, '_blank');
+    }
+  };
+
+  const handleDisconnectTelegram = async () => {
+    if (!userId) return;
+    const success = await disconnectTelegram(userId);
+    if (success) {
+      setTelegramLinked(false);
+      setTelegramUsername(null);
+    }
   };
 
   if (!isOpen) return null;
@@ -613,11 +622,20 @@ export const HabitModal: React.FC<HabitModalProps> = ({
                     <span className="text-[10px] text-gray-400">Проверяем Telegram...</span>
                   </div>
                 ) : telegramLinked ? (
-                  <div className="flex items-center gap-2 p-3 bg-green-500/10 border border-green-500/20 rounded-xl">
-                    <span className="text-lg">✅</span>
-                    <div className="flex-1">
-                      <span className="text-[10px] font-bold text-green-400">Telegram подключён</span>
-                      {telegramUsername && <p className="text-[9px] text-green-300/60">@{telegramUsername}</p>}
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-2 p-3 bg-green-500/10 border border-green-500/20 rounded-xl">
+                      <span className="text-lg">✅</span>
+                      <div className="flex-1">
+                        <span className="text-[10px] font-bold text-green-400">Telegram подключён</span>
+                        {telegramUsername && <p className="text-[9px] text-green-300/60">@{telegramUsername}</p>}
+                      </div>
+                      <button 
+                        type="button"
+                        onClick={handleDisconnectTelegram}
+                        className="px-3 py-1.5 bg-red-500/10 text-red-500 rounded-lg text-[8px] font-black uppercase hover:bg-red-500/20 transition-all active:scale-95"
+                      >
+                        Отключить
+                      </button>
                     </div>
                   </div>
                 ) : (
@@ -630,12 +648,35 @@ export const HabitModal: React.FC<HabitModalProps> = ({
                     <button 
                       type="button"
                       onClick={handleConnectTelegram}
-                      className="w-full py-3 bg-[#0088cc] hover:bg-[#0099dd] text-white rounded-xl font-bold text-[10px] uppercase tracking-wider flex items-center justify-center gap-2 active:scale-95 transition-all shadow-lg shadow-blue-500/20"
+                      disabled={isGeneratingToken}
+                      className="w-full py-3 bg-[#0088cc] hover:bg-[#0099dd] text-white rounded-xl font-bold text-[10px] uppercase tracking-wider flex items-center justify-center gap-2 active:scale-95 transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50"
                     >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
-                      Подключить Telegram
+                      {isGeneratingToken ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          Подготовка...
+                        </>
+                      ) : (
+                        <>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+                          Подключить Telegram
+                        </>
+                      )}
                     </button>
-                    <p className="text-[8px] text-gray-500 text-center">Откроется бот — нажми Start и готово!</p>
+                    {telegramConnectUrl && (
+                      <div className="flex flex-col gap-1.5 p-2 bg-blue-500/10 border border-blue-500/20 rounded-lg animate-in fade-in">
+                        <p className="text-[9px] text-blue-400 font-bold">Если бот не открылся, нажми на ссылку:</p>
+                        <a 
+                          href={telegramConnectUrl} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-[10px] text-blue-400 underline break-all font-bold"
+                        >
+                          Открыть бот Plusyx →
+                        </a>
+                      </div>
+                    )}
+                    <p className="text-[8px] text-gray-500 text-center">Нажми Start в боте после открытия</p>
                   </div>
                 )}
                 
