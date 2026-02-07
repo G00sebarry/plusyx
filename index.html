@@ -10,13 +10,16 @@
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --tg-theme-bg-color: #ffffff;
-            --tg-theme-secondary-bg-color: #efeff4;
-            --tg-theme-text-color: #000000;
-            --tg-theme-hint-color: #999999;
+            --tg-theme-bg-color: #f8f7f4;
+            --tg-theme-secondary-bg-color: #eeecea;
+            --tg-theme-text-color: #1a1a1a;
+            --tg-theme-hint-color: #8a8a8a;
             --tg-theme-link-color: #2481cc;
             --tg-theme-button-color: #2481cc;
             --tg-theme-button-text-color: #ffffff;
+            --tg-theme-surface-overlay: rgba(0, 0, 0, 0.04);
+            --tg-theme-border-color: rgba(0, 0, 0, 0.08);
+            --tg-theme-card-shadow: 0 1px 3px rgba(0,0,0,0.06);
             
             /* Plusyx Colors */
             --plusyx-purple: #9d73d2;
@@ -40,7 +43,89 @@
             --tg-theme-secondary-bg-color: #1e1e1e;
             --tg-theme-text-color: #ffffff;
             --tg-theme-hint-color: #777777;
+            --tg-theme-surface-overlay: rgba(255, 255, 255, 0.05);
+            --tg-theme-border-color: rgba(255, 255, 255, 0.06);
+            --tg-theme-card-shadow: none;
         }
+
+        /* ===== LIGHT THEME OVERRIDES ===== */
+        /* Fix hardcoded dark-only colors for light theme */
+        
+        /* bg-white/X → transparent overlays */
+        body:not(.dark) .bg-white\/5 { background-color: rgba(0,0,0,0.03) !important; }
+        body:not(.dark) .bg-white\/10 { background-color: rgba(0,0,0,0.05) !important; }
+        body:not(.dark) .bg-white\/15 { background-color: rgba(0,0,0,0.06) !important; }
+        body:not(.dark) .bg-white\/20 { background-color: rgba(0,0,0,0.08) !important; }
+        body:not(.dark) .hover\:bg-white\/5:hover { background-color: rgba(0,0,0,0.04) !important; }
+        body:not(.dark) .hover\:bg-white\/10:hover { background-color: rgba(0,0,0,0.06) !important; }
+        body:not(.dark) .hover\:bg-white\/20:hover { background-color: rgba(0,0,0,0.1) !important; }
+        
+        /* text-white → dark text */
+        body:not(.dark) .text-white { color: var(--tg-theme-text-color) !important; }
+        body:not(.dark) .text-white\/40 { color: rgba(0,0,0,0.3) !important; }
+        body:not(.dark) .text-white\/60 { color: rgba(0,0,0,0.5) !important; }
+        body:not(.dark) .text-white\/70 { color: rgba(0,0,0,0.6) !important; }
+        body:not(.dark) .text-white\/80 { color: rgba(0,0,0,0.7) !important; }
+        body:not(.dark) .hover\:text-white:hover { color: var(--tg-theme-text-color) !important; }
+        
+        /* text-gray-X → appropriate light shades */
+        body:not(.dark) .text-gray-400 { color: #8a8a8a !important; }
+        body:not(.dark) .text-gray-500 { color: #6b6b6b !important; }
+        body:not(.dark) .text-gray-600 { color: #555555 !important; }
+        body:not(.dark) .text-gray-300 { color: #999999 !important; }
+        
+        /* border-white/X → dark borders */
+        body:not(.dark) .border-white\/5 { border-color: rgba(0,0,0,0.06) !important; }
+        body:not(.dark) .border-white\/10 { border-color: rgba(0,0,0,0.08) !important; }
+        body:not(.dark) .border-white\/20 { border-color: rgba(0,0,0,0.12) !important; }
+        body:not(.dark) .border-white\/30 { border-color: rgba(0,0,0,0.15) !important; }
+        body:not(.dark) .border-gray-400\/10 { border-color: rgba(0,0,0,0.08) !important; }
+        body:not(.dark) .border-gray-400\/20 { border-color: rgba(0,0,0,0.1) !important; }
+        body:not(.dark) .border-gray-400\/30 { border-color: rgba(0,0,0,0.12) !important; }
+        
+        /* bg-black/X stays mostly fine, but some need adjustment */
+        body:not(.dark) .bg-black\/5 { background-color: rgba(0,0,0,0.03) !important; }
+        body:not(.dark) .bg-black\/10 { background-color: rgba(0,0,0,0.05) !important; }
+        body:not(.dark) .bg-black\/20 { background-color: rgba(0,0,0,0.06) !important; }
+        body:not(.dark) .bg-black\/30 { background-color: rgba(0,0,0,0.08) !important; }
+        body:not(.dark) .bg-black\/60 { background-color: rgba(0,0,0,0.4) !important; }
+
+        /* Dark background elements in modals/dropdowns */
+        body:not(.dark) .bg-\[\#1c1c1e\] { background-color: #ffffff !important; box-shadow: 0 4px 24px rgba(0,0,0,0.12) !important; }
+        body:not(.dark) .bg-\[\#2c2c2e\] { background-color: #ffffff !important; box-shadow: 0 4px 24px rgba(0,0,0,0.12) !important; }
+        body:not(.dark) .bg-\[\#121212\] { background-color: var(--tg-theme-bg-color) !important; }
+        body:not(.dark) .bg-\[\#1e1e1e\] { background-color: var(--tg-theme-secondary-bg-color) !important; }
+        
+        /* Ring overrides */
+        body:not(.dark) .ring-white { --tw-ring-color: rgba(0,0,0,0.2) !important; }
+        
+        /* Gradient text that assumes dark bg */
+        body:not(.dark) .from-white { --tw-gradient-from: var(--tg-theme-text-color) !important; }
+        body:not(.dark) .to-white\/60 { --tw-gradient-to: rgba(0,0,0,0.5) !important; }
+        body:not(.dark) .to-white\/40 { --tw-gradient-to: rgba(0,0,0,0.3) !important; }
+        
+        /* Placeholder colors */
+        body:not(.dark) .placeholder\:text-white\/20::placeholder { color: rgba(0,0,0,0.25) !important; }
+        body:not(.dark) .placeholder\:opacity-30::placeholder { opacity: 0.4 !important; }
+        
+        /* Shadow/glow overrides for light mode */
+        body:not(.dark) .shadow-\[0_0_10px_lime\] { box-shadow: 0 0 6px rgba(74,222,128,0.4) !important; }
+        body:not(.dark) .shadow-\[0_0_10px_cyan\] { box-shadow: 0 0 6px rgba(34,211,238,0.4) !important; }
+        body:not(.dark) .shadow-\[0_0_5px_yellow\] { box-shadow: 0 0 4px rgba(234,179,8,0.4) !important; }
+
+        /* Buttons that are white text on dark theme need to keep white text */
+        body:not(.dark) .bg-green-500 .text-white,
+        body:not(.dark) .bg-red-500 .text-white,
+        body:not(.dark) .bg-blue-500 .text-white,
+        body:not(.dark) .bg-green-500.text-white,
+        body:not(.dark) .bg-red-500.text-white,
+        body:not(.dark) .bg-blue-500.text-white,
+        body:not(.dark) .tg-button,
+        body:not(.dark) [class*="bg-green-500"] > svg,
+        body:not(.dark) [class*="bg-\[var(--tg-theme-button-color)"] { color: #ffffff !important; }
+        
+        /* Cards get subtle shadows in light mode */
+        body:not(.dark) .tg-secondary-bg { box-shadow: var(--tg-theme-card-shadow); }
 
         .font-logo { font-family: 'Space Grotesk', sans-serif; }
 
