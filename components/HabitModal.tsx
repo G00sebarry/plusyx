@@ -6,6 +6,7 @@ interface HabitModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (habit: Habit) => void;
+  onAutoSave?: (habit: Habit) => void;
   initialHabit?: Habit;
   userId?: string;
 }
@@ -123,7 +124,8 @@ const Tooltip: React.FC<TooltipProps> = ({ id, text, activeTooltip, setActiveToo
 export const HabitModal: React.FC<HabitModalProps> = ({ 
   isOpen, 
   onClose, 
-  onSave, 
+  onSave,
+  onAutoSave,
   initialHabit,
   userId
 }) => {
@@ -163,6 +165,7 @@ export const HabitModal: React.FC<HabitModalProps> = ({
   
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isInitialLoad = useRef(true);
 
   useEffect(() => {
     const checkTelegramLink = async () => {
@@ -212,6 +215,8 @@ export const HabitModal: React.FC<HabitModalProps> = ({
     } else {
       resetForm();
     }
+    isInitialLoad.current = true;
+    setSaveStatus('saved');
   }, [initialHabit, isOpen]);
 
   const resetForm = () => {
@@ -256,10 +261,18 @@ export const HabitModal: React.FC<HabitModalProps> = ({
   useEffect(() => {
     if (!isOpen || !initialHabit?.id) return;
     if (!title.trim()) return;
+    
+    // Пропускаем первый рендер после загрузки данных
+    if (isInitialLoad.current) {
+      isInitialLoad.current = false;
+      return;
+    }
+    
+    const saveFn = onAutoSave || onSave;
     setSaveStatus('saving');
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(() => {
-      onSave(getHabitData());
+      saveFn(getHabitData());
       setSaveStatus('saved');
     }, 1000);
     return () => { if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current); };

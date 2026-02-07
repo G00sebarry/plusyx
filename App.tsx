@@ -510,6 +510,12 @@ const [wallpaperPosition, setWallpaperPosition] = useState<number>(50);
     await saveHabitToDb(updatedHabit, userId);
   };
 
+const handleAutoSaveHabit = async (updatedHabit: Habit) => {
+    if (!userId) return;
+    setHabits(prev => prev.map(h => h.id === updatedHabit.id ? updatedHabit : h));
+    await saveHabitToDb(updatedHabit, userId);
+    // НЕ закрываем модалку!
+};
   const handleToggleHabit = async (id: string, date: string, value: boolean | 'mini' | 'freeze') => {
   if (!userId) return;
   
@@ -716,7 +722,8 @@ const [wallpaperPosition, setWallpaperPosition] = useState<number>(50);
       <HabitModal 
         isOpen={isHabitModalOpen || (!!editingHabit && !!editingHabit.id)} 
         onClose={() => { setIsHabitModalOpen(false); setEditingHabit(undefined); }} 
-        onSave={editingHabit?.id ? handleUpdateHabit : handleAddHabit} 
+        onSave={editingHabit?.id ? handleUpdateHabit : handleAddHabit}
+        onAutoSave={handleAutoSaveHabit}    // ← ДОБАВЬ ЭТУ СТРОКУ 
         initialHabit={editingHabit} 
         userId={userId || undefined} 
       />
