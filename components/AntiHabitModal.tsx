@@ -23,6 +23,7 @@ export const AntiHabitModal: React.FC<AntiHabitModalProps> = ({ isOpen, onClose,
   const [coverPosition, setCoverPosition] = useState<number>(50);
   const [coverIntensity, setCoverIntensity] = useState<number>(60);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [coverSettingsOpen, setCoverSettingsOpen] = useState(false);
 
   const [isCustomEmoji, setIsCustomEmoji] = useState(false);
 
@@ -162,19 +163,27 @@ export const AntiHabitModal: React.FC<AntiHabitModalProps> = ({ isOpen, onClose,
             <div className="flex flex-col gap-2">
                 <div className="flex justify-between items-center px-1">
                      <label className="text-[10px] font-black tg-hint uppercase">Обложка</label>
-                     {fileData && <button onClick={() => setFileData('')} className="text-[9px] font-black text-red-500 uppercase hover:text-red-400">Удалить</button>}
+                     {fileData && <button onClick={() => { setFileData(''); setCoverSettingsOpen(false); }} className="text-[9px] font-black text-red-500 uppercase hover:text-red-400">Удалить</button>}
                 </div>
-                {!fileData ? (
-                    <button onClick={() => fileInputRef.current?.click()} className="w-full py-3 rounded-2xl bg-black/5 border border-dashed border-gray-400/20 tg-text text-[10px] font-black uppercase tracking-widest hover:bg-black/10 transition-all flex items-center justify-center gap-2"><span>📷</span> Загрузить фото</button>
-                ) : (
-                    <div className="bg-black/5 p-4 rounded-[28px] border border-white/5 animate-in fade-in">
-                        <div className="relative w-full h-32 rounded-2xl overflow-hidden bg-black/20 shadow-inner mb-4">
-                           <img src={fileData} className="w-full h-full object-cover" style={{ objectPosition: `50% ${coverPosition}%` }} />
-                           <div className="absolute inset-0 z-[1]" style={{ backgroundColor: `rgba(0,0,0,${coverIntensity/100})` }} />
+                <div className="flex items-center gap-3">
+                    <button onClick={() => fileInputRef.current?.click()} className="flex-1 tg-secondary-bg h-12 px-4 rounded-2xl text-[10px] font-black uppercase tracking-widest tg-text flex items-center justify-center gap-2 border border-dashed border-gray-400/20">{fileData ? '📸 Изменить' : '📷 Загрузить фото'}</button>
+                    {fileData && <button onClick={() => setCoverSettingsOpen(!coverSettingsOpen)} className={`w-12 h-12 rounded-2xl flex items-center justify-center text-lg transition-all ${coverSettingsOpen ? 'bg-blue-500/20 text-blue-500' : 'bg-black/5 tg-hint'}`}>⚙️</button>}
+                </div>
+                {fileData && (
+                    <div className="relative w-full h-32 rounded-2xl overflow-hidden bg-black/20">
+                       <img src={fileData} className="w-full h-full object-cover" style={{ objectPosition: `50% ${coverPosition}%` }} />
+                       <div className="absolute inset-0 z-[1]" style={{ backgroundColor: `rgba(0,0,0,${coverIntensity/100})` }} />
+                    </div>
+                )}
+                {fileData && coverSettingsOpen && (
+                    <div className="flex flex-col gap-4 p-5 bg-black/5 rounded-[28px] animate-in fade-in slide-in-from-top-2 duration-200">
+                        <div className="flex flex-col gap-1.5">
+                            <span className="text-[8px] font-black tg-hint uppercase px-1">Позиция</span>
+                            <input type="range" min="0" max="100" value={coverPosition} onChange={e => setCoverPosition(Number(e.target.value))} className="w-full h-1 bg-black/10 rounded-full appearance-none accent-blue-500 touch-none" />
                         </div>
-                        <div className="flex flex-col gap-3">
-                            <input type="range" min="0" max="100" value={coverPosition} onChange={e => setCoverPosition(Number(e.target.value))} className="w-full h-1 bg-black/10 rounded-full appearance-none accent-blue-500" />
-                            <input type="range" min="0" max="100" value={coverIntensity} onChange={e => setCoverIntensity(Number(e.target.value))} className="w-full h-1 bg-black/10 rounded-full appearance-none accent-purple-500" />
+                        <div className="flex flex-col gap-1.5">
+                            <span className="text-[8px] font-black tg-hint uppercase px-1">Затемнение</span>
+                            <input type="range" min="0" max="100" value={coverIntensity} onChange={e => setCoverIntensity(Number(e.target.value))} className="w-full h-1 bg-black/10 rounded-full appearance-none accent-purple-500 touch-none" />
                         </div>
                     </div>
                 )}
