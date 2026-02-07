@@ -160,6 +160,9 @@ export const HabitModal: React.FC<HabitModalProps> = ({
   const [coverPosition, setCoverPosition] = useState<number>(50);
   const [coverIntensity, setCoverIntensity] = useState<number>(60);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const checkTelegramLink = async () => {
@@ -226,6 +229,42 @@ export const HabitModal: React.FC<HabitModalProps> = ({
     setTitle(t.title); setEmoji(t.emoji); setColor(t.color);
   };
 
+  const getHabitData = (): Habit => {
+    const isEveryDay = selectedDays.length === 7;
+    return {
+      id: initialHabit?.id || Math.random().toString(36).substr(2, 9),
+      title,
+      description,
+      notes,
+      color,
+      emoji,
+      frequency: { type: isEveryDay ? 'daily' : 'specific', days: selectedDays },
+      history: initialHabit?.history || {},
+      fileData,
+      coverPosition,
+      coverIntensity,
+      identity: isAtomicMode ? identity : '',
+      triggerEvent: isAtomicMode ? triggerEvent : '',
+      miniAction: isAtomicMode ? miniAction : '',
+      reminderEnabled: reminderEnabled && !!reminderTime && telegramLinked,
+      reminderTime: reminderTime || undefined,
+      position: initialHabit?.position || 0
+    };
+  };
+
+  // Автосохранение (только для редактирования существующей привычки)
+  useEffect(() => {
+    if (!isOpen || !initialHabit?.id) return;
+    if (!title.trim()) return;
+    setSaveStatus('saving');
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(() => {
+      onSave(getHabitData());
+      setSaveStatus('saved');
+    }, 1000);
+    return () => { if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current); };
+  }, [title, description, color, emoji, selectedDays, fileData, coverPosition, coverIntensity, identity, triggerEvent, miniAction, notes, reminderEnabled, reminderTime, isAtomicMode]);
+
   const toggleDay = (dayIndex: number) => {
     if (selectedDays.includes(dayIndex)) {
       if (selectedDays.length > 1) setSelectedDays(prev => prev.filter(d => d !== dayIndex));
@@ -275,30 +314,20 @@ export const HabitModal: React.FC<HabitModalProps> = ({
     }
   };
 
-  const handleSave = () => {
+  const handleManualSave = () => {
     if (!title.trim()) return;
-    const isEveryDay = selectedDays.length === 7;
     
-    const newHabit: Habit = {
-      id: initialHabit?.id || Math.random().toString(36).substr(2, 9),
-      title,
-      description,
-      notes,
-      color,
-      emoji,
-      frequency: { type: isEveryDay ? 'daily' : 'specific', days: selectedDays },
-      history: initialHabit?.history || {},
-      fileData,
-      coverPosition,
-      coverIntensity,
-      identity: isAtomicMode ? identity : '',
-      triggerEvent: isAtomicMode ? triggerEvent : '',
-      miniAction: isAtomicMode ? miniAction : '',
-      reminderEnabled: reminderEnabled && !!reminderTime && telegramLinked,
-      reminderTime: reminderTime || undefined,
-      position: initialHabit?.position || 0
-    };
-    onSave(newHabit);
+    // Для существующей привычки — просто закрываем (автосохранение уже работает)
+    if (initialHabit?.id) {
+      // Принудительно сохранить последние изменения
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      onSave(getHabitData());
+      onClose();
+      return;
+    }
+    
+    // Для новой привычки — создаём
+    onSave(getHabitData());
   };
 
   const getFrequencyLabel = () => {
@@ -747,9 +776,27 @@ export const HabitModal: React.FC<HabitModalProps> = ({
             </div>
           )}
 
-          <button type="button" onClick={handleSave} className="w-full py-5 rounded-[28px] bg-[var(--tg-theme-button-color)] text-white font-black text-lg shadow-2xl active:scale-95 transition-all mt-2 uppercase tracking-widest hover:brightness-110">
-            {initialHabit ? 'Сохранить' : 'Создать'}
-          </button>
+          {initialHabit?.id ? (
+            /* Для существующей привычки — индикатор автосохранения */
+            <div className="flex items-center justify-between mt-2">
+              <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all duration-300 ${saveStatus === 'saving' ? 'bg-blue-500/10 text-blue-500' : 'bg-green-500/10 text-green-500'}`}>
+                {saveStatus === 'saving' ? (
+                  <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>
+                )}
+                <span className="text-[9px] font-black uppercase tracking-wider">{saveStatus === 'saving' ? 'Сохранение...' : 'Сохранено'}</span>
+              </div>
+              <button type="button" onClick={onClose} className="py-3 px-8 rounded-2xl bg-[var(--tg-theme-button-color)] text-white font-black text-sm shadow-lg active:scale-95 transition-all uppercase tracking-widest hover:brightness-110">
+                Готово
+              </button>
+            </div>
+          ) : (
+            /* Для новой привычки — кнопка Создать */
+            <button type="button" onClick={handleManualSave} className="w-full py-5 rounded-[28px] bg-[var(--tg-theme-button-color)] text-white font-black text-lg shadow-2xl active:scale-95 transition-all mt-2 uppercase tracking-widest hover:brightness-110">
+              Создать
+            </button>
+          )}
         </div>
         
         {isCustomEmoji && <div className="fixed inset-0 z-40" onClick={() => setIsCustomEmoji(false)} />}
