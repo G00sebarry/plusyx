@@ -966,26 +966,6 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
           </div>
         </div>
 
-        {/* Heatmap (GitHub-style) - only for month/year */}
-        {period !== 'week' && (
-          <div className="mb-4">
-            <span className={`text-[9px] font-black uppercase tracking-wider ${hasCover ? 'text-white/60' : 'tg-hint'} block mb-2`}>Карта активности</span>
-            <div className="grid gap-[3px]" style={{ 
-              gridTemplateColumns: `repeat(${Math.ceil(heatmapDays / 7)}, 1fr)`,
-              gridTemplateRows: 'repeat(7, 1fr)',
-              gridAutoFlow: 'column'
-            }}>
-              {heatmapData.map((cell, idx) => (
-                <div
-                  key={idx}
-                  className={`aspect-square rounded-[2px] md:rounded-[3px] ${cell.value === null ? (hasCover ? 'bg-white/3' : 'bg-gray-500/5') : heatColors(cell.value)} transition-all`}
-                  title={`${cell.date}: ${cell.value || 'нет данных'}`}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* Legend + stats */}
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
