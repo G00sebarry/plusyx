@@ -830,9 +830,27 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     const bestStreak = getBestStreak(habit);
 
     const total = stats.completed + stats.frozen + stats.missed;
+    
+    // Count mini separately from completed
+    let miniCount = 0;
+    let fullCount = 0;
+    const todayCheck = new Date();
+    todayCheck.setHours(0, 0, 0, 0);
+    for (let i = 0; i < days; i++) {
+      const date = new Date(todayCheck);
+      date.setDate(date.getDate() - i);
+      if (!habit.frequency.days.includes(date.getDay())) continue;
+      const key = formatDate(date);
+      const val = habit.history[key];
+      if (val === 'mini') miniCount++;
+      else if (isCompleted(val)) fullCount++;
+    }
+    
     const completedPercent = total > 0 ? Math.round((stats.completed / total) * 100) : 0;
     const frozenPercent = total > 0 ? Math.round((stats.frozen / total) * 100) : 0;
     const missedPercent = total > 0 ? Math.round((stats.missed / total) * 100) : 0;
+    const miniPercent = total > 0 ? Math.round((miniCount / total) * 100) : 0;
+    const fullPercent = total > 0 ? Math.round((fullCount / total) * 100) : 0;
 
     const periodLabels = { week: 'Неделя', month: 'Месяц', year: 'Год' };
 
@@ -926,9 +944,10 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
             <span className={`text-[11px] font-black ${hasCover ? 'text-white' : 'tg-text'}`}>{completedPercent}%</span>
           </div>
           <div className={`h-3 rounded-full overflow-hidden flex ${hasCover ? 'bg-white/10' : 'bg-gray-500/10'}`}>
-            {completedWidth > 0 && <div className="bg-green-500 h-full transition-all duration-700 rounded-l-full" style={{ width: `${completedWidth}%` }} />}
-            {frozenWidth > 0 && <div className="bg-cyan-400 h-full transition-all duration-700" style={{ width: `${frozenWidth}%` }} />}
-            {missedWidth > 0 && <div className="bg-red-500/50 h-full transition-all duration-700 rounded-r-full" style={{ width: `${missedWidth}%` }} />}
+            {fullPercent > 0 && <div className="bg-green-500 h-full transition-all duration-700" style={{ width: `${fullPercent}%` }} />}
+            {miniPercent > 0 && <div className="bg-yellow-500 h-full transition-all duration-700" style={{ width: `${miniPercent}%` }} />}
+            {frozenPercent > 0 && <div className="bg-cyan-400 h-full transition-all duration-700" style={{ width: `${frozenPercent}%` }} />}
+            {missedPercent > 0 && <div className="bg-red-500/50 h-full transition-all duration-700" style={{ width: `${missedPercent}%` }} />}
           </div>
         </div>
 
@@ -974,7 +993,16 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
               <span className={`text-[8px] font-bold ${hasCover ? 'text-white/60' : 'tg-hint'}`}>Выполнено</span>
             </div>
             <span className={`text-[9px] font-black ${hasCover ? 'text-white' : 'tg-text'}`}>
-              {stats.completed} ({completedPercent}%)
+              {fullCount} ({fullPercent}%)
+            </span>
+          </div>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-2.5 h-2.5 rounded-sm bg-yellow-500" />
+              <span className={`text-[8px] font-bold ${hasCover ? 'text-white/60' : 'tg-hint'}`}>Мини-версия</span>
+            </div>
+            <span className={`text-[9px] font-black ${hasCover ? 'text-white' : 'tg-text'}`}>
+              {miniCount} ({miniPercent}%)
             </span>
           </div>
           <div className="flex items-center justify-between">
