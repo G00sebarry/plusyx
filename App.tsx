@@ -690,7 +690,24 @@ const handleAutoSaveHabit = async (updatedHabit: Habit) => {
             onDragEnd={() => {}} 
           />
         )}
-        {view === 'calendar' && <CalendarView tasks={tasks} habits={habits} onEditTask={(t) => { setEditingTask(t); setIsTaskModalOpen(true); }} />}
+       {view === 'calendar' && <CalendarView 
+  tasks={tasks} 
+  habits={habits} 
+  columns={columns}
+  onEditTask={(t) => { setEditingTask(t); setIsTaskModalOpen(true); }} 
+  onQuickAdd={(taskData) => {
+    const col = columns.find(c => c.id === taskData.columnId) || columns[0];
+    setEditingTask({ 
+      id: '', title: taskData.title || '', description: '', 
+      date: taskData.date || toLocalDateString(new Date()), 
+      time: taskData.time || '',
+      status: col?.type || 'todo', 
+      columnId: taskData.columnId || col?.id || 'col-todo', 
+      checklists: [], comments: [] 
+    } as Task);
+    setIsTaskModalOpen(true);
+  }}
+/>}
         
         {view === 'tracker' && (
           <HabitTracker 
