@@ -190,6 +190,16 @@ export const HabitModal: React.FC<HabitModalProps> = ({
       setIsCheckingLink(false);
     };
     if (isOpen) checkTelegramLink();
+    
+    // Перепроверяем при возврате из Telegram (focus/visibility)
+    const handleFocus = () => { if (isOpen) checkTelegramLink(); };
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && isOpen) checkTelegramLink();
+    });
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+    };
   }, [isOpen, userId]);
 
   useEffect(() => {
@@ -254,7 +264,7 @@ export const HabitModal: React.FC<HabitModalProps> = ({
       identity: isAtomicMode ? identity : '',
       triggerEvent: isAtomicMode ? triggerEvent : '',
       miniAction: isAtomicMode ? miniAction : '',
-      reminderEnabled: reminderEnabled && !!reminderTime && telegramLinked,
+      reminderEnabled: reminderEnabled,
       reminderTime: reminderTime || undefined,
       position: initialHabit?.position || 0
     };
