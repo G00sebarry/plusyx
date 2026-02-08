@@ -189,7 +189,7 @@ export default async function handler(req, res) {
               user_id: pending.user_id,
               chat_id: chatId.toString(),
               username: update.message.from?.username || null,
-              linked_at: new Date().toISOString()
+              created_at: new Date().toISOString()
             }, { onConflict: 'user_id' });
           
           // Удаляем использованный токен
