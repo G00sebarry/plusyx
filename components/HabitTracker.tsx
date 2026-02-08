@@ -830,27 +830,79 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     const bestStreak = getBestStreak(habit);
 
     const total = stats.completed + stats.frozen + stats.missed;
-    const completedPercent = total > 0 ? (stats.completed / total) * 100 : 0;
-    const frozenPercent = total > 0 ? (stats.frozen / total) * 100 : 0;
-    const missedPercent = total > 0 ? (stats.missed / total) * 100 : 0;
+    const completedPercent = total > 0 ? Math.round((stats.completed / total) * 100) : 0;
+    const frozenPercent = total > 0 ? Math.round((stats.frozen / total) * 100) : 0;
+    const missedPercent = total > 0 ? Math.round((stats.missed / total) * 100) : 0;
 
-    // SVG для круговой диаграммы
-    const radius = 45;
-    const circumference = 2 * Math.PI * radius;
+    const periodLabels = { week: 'Неделя', month: 'Месяц', year: 'Год' };
+
+    // Generate heatmap data
+    const heatmapData: { date: string; value: string | null; dayOfWeek: number }[] = [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const heatmapDays = period === 'week' ? 7 : period === 'month' ? 30 : 90; // year shows last 90 days
     
-    // Рассчитываем offset для каждого сегмента
-    const completedOffset = circumference - (completedPercent / 100) * circumference;
-    const frozenOffset = circumference - (frozenPercent / 100) * circumference;
+    for (let i = heatmapDays - 1; i >= 0; i--) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - i);
+      const key = formatDate(date);
+      const val = habit.history[key];
+      const scheduled = habit.frequency.days.includes(date.getDay());
+      heatmapData.push({
+        date: key,
+        value: scheduled ? (val ? String(val) : 'missed') : null,
+        dayOfWeek: date.getDay()
+      });
+    }
 
-    const periodLabels = {
-      week: 'Неделя',
-      month: 'Месяц',
-      year: 'Год'
+    // Generate streak history (last 30 or 14 days as bars)
+    const streakBarDays = period === 'week' ? 7 : period === 'year' ? 60 : 30;
+    const streakBars: { date: string; status: 'done' | 'mini' | 'freeze' | 'missed' | 'unscheduled'; label: string }[] = [];
+    for (let i = streakBarDays - 1; i >= 0; i--) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - i);
+      const key = formatDate(date);
+      const val = habit.history[key];
+      const scheduled = habit.frequency.days.includes(date.getDay());
+      const dayLabel = date.getDate().toString();
+      
+      if (!scheduled) {
+        streakBars.push({ date: key, status: 'unscheduled', label: dayLabel });
+      } else if (val === 'freeze') {
+        streakBars.push({ date: key, status: 'freeze', label: dayLabel });
+      } else if (val === 'mini') {
+        streakBars.push({ date: key, status: 'mini', label: dayLabel });
+      } else if (isCompleted(val)) {
+        streakBars.push({ date: key, status: 'done', label: dayLabel });
+      } else {
+        streakBars.push({ date: key, status: 'missed', label: dayLabel });
+      }
+    }
+
+    const barColors = {
+      done: 'bg-green-500',
+      mini: 'bg-yellow-500',
+      freeze: 'bg-cyan-400',
+      missed: 'bg-red-500/40',
+      unscheduled: 'bg-gray-500/10'
     };
+
+    const heatColors = (val: string | null) => {
+      if (!val || val === 'missed') return hasCover ? 'bg-white/5' : 'bg-gray-500/10';
+      if (val === 'freeze') return 'bg-cyan-400/70';
+      if (val === 'mini') return 'bg-yellow-500/70';
+      if (val === 'true' || val === '1' || Number(val) > 0) return 'bg-green-500';
+      return hasCover ? 'bg-white/5' : 'bg-gray-500/10';
+    };
+
+    // Progress bar widths
+    const completedWidth = total > 0 ? (stats.completed / total) * 100 : 0;
+    const frozenWidth = total > 0 ? (stats.frozen / total) * 100 : 0;
+    const missedWidth = total > 0 ? (stats.missed / total) * 100 : 0;
 
     return (
       <div className={`mt-2 p-4 rounded-2xl ${hasCover ? 'bg-black/40 backdrop-blur-sm' : 'bg-black/10'} border border-white/10`}>
-        {/* Переключатель периодов */}
+        {/* Period switcher */}
         <div className="flex gap-1 mb-4 bg-black/20 p-1 rounded-xl">
           {(['week', 'month', 'year'] as const).map(p => (
             <button
@@ -867,135 +919,117 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
           ))}
         </div>
 
-        {/* Круговая диаграмма */}
-        <div className="flex items-center justify-center mb-4">
-          <div className="relative w-32 h-32">
-            <svg className="w-full h-full -rotate-90" viewBox="0 0 120 120">
-              {/* Фон */}
-              <circle 
-                cx="60" 
-                cy="60" 
-                r={radius} 
-                fill="none" 
-                stroke="currentColor" 
-                strokeWidth="12" 
-                className={hasCover ? "text-white/10" : "text-gray-400/10"} 
-              />
-              
-              {/* Пропущено (красный) */}
-              <circle 
-                cx="60" 
-                cy="60" 
-                r={radius} 
-                fill="none" 
-                stroke="#ef4444" 
-                strokeWidth="12" 
-                strokeDasharray={circumference}
-                strokeDashoffset={0}
-                strokeLinecap="round"
-                className="transition-all duration-700"
-                style={{
-                  strokeDashoffset: circumference - (missedPercent / 100) * circumference
-                }}
-              />
-              
-              {/* Заморозка (голубой) */}
-              <circle 
-                cx="60" 
-                cy="60" 
-                r={radius} 
-                fill="none" 
-                stroke="#22d3ee" 
-                strokeWidth="12" 
-                strokeDasharray={circumference}
-                strokeLinecap="round"
-                className="transition-all duration-700"
-                style={{
-                  strokeDashoffset: frozenOffset,
-                  transform: `rotate(${(missedPercent / 100) * 360}deg)`,
-                  transformOrigin: 'center'
-                }}
-              />
-              
-              {/* Выполнено (зелёный) */}
-              <circle 
-                cx="60" 
-                cy="60" 
-                r={radius} 
-                fill="none" 
-                stroke="#22c55e" 
-                strokeWidth="12" 
-                strokeDasharray={circumference}
-                strokeLinecap="round"
-                className="transition-all duration-700"
-                style={{
-                  strokeDashoffset: completedOffset,
-                  transform: `rotate(${((missedPercent + frozenPercent) / 100) * 360}deg)`,
-                  transformOrigin: 'center'
-                }}
-              />
-            </svg>
-            
-            {/* Центральный текст */}
-            <div className="absolute inset-0 flex items-center justify-center flex-col">
-              <span className={`text-2xl font-black ${hasCover ? 'text-white' : 'tg-text'}`}>
-                {Math.round(completedPercent)}%
-              </span>
-              <span className={`text-[7px] ${hasCover ? 'text-white/50' : 'tg-hint'}`}>
-                {period === 'week' ? '7 дней' : period === 'month' ? '30 дней' : '365 дней'}
-              </span>
-            </div>
+        {/* Stacked progress bar */}
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className={`text-[9px] font-black uppercase tracking-wider ${hasCover ? 'text-white/60' : 'tg-hint'}`}>Прогресс</span>
+            <span className={`text-[11px] font-black ${hasCover ? 'text-white' : 'tg-text'}`}>{completedPercent}%</span>
+          </div>
+          <div className={`h-3 rounded-full overflow-hidden flex ${hasCover ? 'bg-white/10' : 'bg-gray-500/10'}`}>
+            {completedWidth > 0 && <div className="bg-green-500 h-full transition-all duration-700 rounded-l-full" style={{ width: `${completedWidth}%` }} />}
+            {frozenWidth > 0 && <div className="bg-cyan-400 h-full transition-all duration-700" style={{ width: `${frozenWidth}%` }} />}
+            {missedWidth > 0 && <div className="bg-red-500/50 h-full transition-all duration-700 rounded-r-full" style={{ width: `${missedWidth}%` }} />}
           </div>
         </div>
 
-        {/* Детальная статистика */}
-        <div className="space-y-2">
+        {/* Streak timeline bars */}
+        <div className="mb-4">
+          <span className={`text-[9px] font-black uppercase tracking-wider ${hasCover ? 'text-white/60' : 'tg-hint'} block mb-2`}>
+            {period === 'year' ? 'Последние 60 дней' : period === 'week' ? 'Эта неделя' : 'Последние 30 дней'}
+          </span>
+          <div className="flex gap-[2px] items-end" style={{ height: '40px' }}>
+            {streakBars.map((bar, idx) => (
+              <div 
+                key={idx} 
+                className="flex-1 flex flex-col items-center justify-end h-full gap-[1px]"
+                title={`${bar.date}: ${bar.status}`}
+              >
+                <div 
+                  className={`w-full rounded-sm ${barColors[bar.status]} transition-all duration-300`}
+                  style={{ 
+                    height: bar.status === 'done' ? '100%' : bar.status === 'mini' ? '60%' : bar.status === 'freeze' ? '40%' : bar.status === 'missed' ? '20%' : '4px',
+                    minHeight: '2px'
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+          {/* Day labels (every 5th or at boundaries) */}
+          <div className="flex gap-[2px] mt-1">
+            {streakBars.map((bar, idx) => (
+              <div key={idx} className="flex-1 text-center">
+                {(idx === 0 || idx === streakBars.length - 1 || (streakBars.length <= 14) || (idx % 5 === 0)) ? (
+                  <span className={`text-[6px] ${hasCover ? 'text-white/30' : 'tg-hint opacity-30'}`}>{bar.label}</span>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Heatmap (GitHub-style) - only for month/year */}
+        {period !== 'week' && (
+          <div className="mb-4">
+            <span className={`text-[9px] font-black uppercase tracking-wider ${hasCover ? 'text-white/60' : 'tg-hint'} block mb-2`}>Карта активности</span>
+            <div className="grid gap-[3px]" style={{ 
+              gridTemplateColumns: `repeat(${Math.ceil(heatmapDays / 7)}, 1fr)`,
+              gridTemplateRows: 'repeat(7, 1fr)',
+              gridAutoFlow: 'column'
+            }}>
+              {heatmapData.map((cell, idx) => (
+                <div
+                  key={idx}
+                  className={`aspect-square rounded-[2px] md:rounded-[3px] ${cell.value === null ? (hasCover ? 'bg-white/3' : 'bg-gray-500/5') : heatColors(cell.value)} transition-all`}
+                  title={`${cell.date}: ${cell.value || 'нет данных'}`}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Legend + stats */}
+        <div className="space-y-1.5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-sm bg-green-500"></div>
-              <span className={`text-[9px] font-bold ${hasCover ? 'text-white/70' : 'tg-hint'}`}>Выполнено</span>
+              <div className="w-2.5 h-2.5 rounded-sm bg-green-500" />
+              <span className={`text-[8px] font-bold ${hasCover ? 'text-white/60' : 'tg-hint'}`}>Выполнено</span>
             </div>
-            <span className={`text-[10px] font-black ${hasCover ? 'text-white' : 'tg-text'}`}>
-              {stats.completed} дней ({Math.round(completedPercent)}%)
+            <span className={`text-[9px] font-black ${hasCover ? 'text-white' : 'tg-text'}`}>
+              {stats.completed} ({completedPercent}%)
             </span>
           </div>
-          
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-sm bg-cyan-400"></div>
-              <span className={`text-[9px] font-bold ${hasCover ? 'text-white/70' : 'tg-hint'}`}>Заморозка</span>
+              <div className="w-2.5 h-2.5 rounded-sm bg-cyan-400" />
+              <span className={`text-[8px] font-bold ${hasCover ? 'text-white/60' : 'tg-hint'}`}>Заморозка</span>
             </div>
-            <span className={`text-[10px] font-black ${hasCover ? 'text-white' : 'tg-text'}`}>
-              {stats.frozen} дней ({Math.round(frozenPercent)}%)
+            <span className={`text-[9px] font-black ${hasCover ? 'text-white' : 'tg-text'}`}>
+              {stats.frozen} ({frozenPercent}%)
             </span>
           </div>
-          
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-sm bg-red-500"></div>
-              <span className={`text-[9px] font-bold ${hasCover ? 'text-white/70' : 'tg-hint'}`}>Пропущено</span>
+              <div className="w-2.5 h-2.5 rounded-sm bg-red-500/50" />
+              <span className={`text-[8px] font-bold ${hasCover ? 'text-white/60' : 'tg-hint'}`}>Пропущено</span>
             </div>
-            <span className={`text-[10px] font-black ${hasCover ? 'text-white' : 'tg-text'}`}>
-              {stats.missed} дней ({Math.round(missedPercent)}%)
+            <span className={`text-[9px] font-black ${hasCover ? 'text-white' : 'tg-text'}`}>
+              {stats.missed} ({missedPercent}%)
             </span>
           </div>
         </div>
 
-        {/* Серии */}
-        <div className={`mt-4 pt-4 border-t ${hasCover ? 'border-white/10' : 'border-black/10'} grid grid-cols-2 gap-3`}>
+        {/* Streaks */}
+        <div className={`mt-4 pt-3 border-t ${hasCover ? 'border-white/10' : 'border-black/10'} grid grid-cols-2 gap-3`}>
           <div className="text-center">
-            <div className={`text-[10px] font-black ${hasCover ? 'text-orange-300' : 'text-orange-500'} flex items-center justify-center gap-1`}>
-              <span className="text-xs">🔥</span>
-              {currentStreak}
+            <div className={`text-lg font-black ${hasCover ? 'text-orange-300' : 'text-orange-500'} flex items-center justify-center gap-1`}>
+              🔥 {currentStreak}
             </div>
-            <div className={`text-[7px] ${hasCover ? 'text-white/50' : 'tg-hint'}`}>Текущая серия</div>
+            <div className={`text-[7px] font-bold uppercase tracking-wider ${hasCover ? 'text-white/40' : 'tg-hint'}`}>Текущая серия</div>
           </div>
           <div className="text-center">
-            <div className={`text-[10px] font-black ${hasCover ? 'text-yellow-300' : 'text-yellow-500'} flex items-center justify-center gap-1`}>
-              <span className="text-xs">⭐</span>
-              {bestStreak}
+            <div className={`text-lg font-black ${hasCover ? 'text-yellow-300' : 'text-yellow-500'} flex items-center justify-center gap-1`}>
+              ⭐ {bestStreak}
             </div>
-            <div className={`text-[7px] ${hasCover ? 'text-white/50' : 'tg-hint'}`}>Лучшая серия</div>
+            <div className={`text-[7px] font-bold uppercase tracking-wider ${hasCover ? 'text-white/40' : 'tg-hint'}`}>Лучшая серия</div>
           </div>
         </div>
       </div>
