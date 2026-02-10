@@ -162,74 +162,106 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const columnRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-  // --- SWIPE STATE ---
-  const swipeRef = useRef<{
+  // --- LONG PRESS DRAG STATE ---
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const touchData = useRef<{
     startX: number;
     startY: number;
-    currentX: number;
     taskId: string;
-    locked: boolean; // locked to horizontal after threshold
-    cancelled: boolean; // vertical scroll detected
+    columnId: string;
+    isActive: boolean; // long press activated
   } | null>(null);
-  const [swipeState, setSwipeState] = useState<{ taskId: string; offsetX: number } | null>(null);
+  const [dragState, setDragState] = useState<{
+    taskId: string;
+    originColId: string;
+    currentX: number;
+    currentY: number;
+    offsetX: number;
+    offsetY: number;
+    targetColId: string | null;
+  } | null>(null);
 
-  const handleTouchStart = (e: React.TouchEvent, taskId: string) => {
+  const LONG_PRESS_DELAY = 300;
+
+  const handleTouchStart = (e: React.TouchEvent, taskId: string, columnId: string) => {
     const touch = e.touches[0];
-    swipeRef.current = { 
-      startX: touch.clientX, startY: touch.clientY, 
-      currentX: touch.clientX, taskId, locked: false, cancelled: false 
+    touchData.current = {
+      startX: touch.clientX,
+      startY: touch.clientY,
+      taskId,
+      columnId,
+      isActive: false
     };
+
+    longPressTimer.current = setTimeout(() => {
+      if (!touchData.current) return;
+      touchData.current.isActive = true;
+      try { window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('medium'); } catch {}
+      setDragState({
+        taskId,
+        originColId: columnId,
+        currentX: touchData.current.startX,
+        currentY: touchData.current.startY,
+        offsetX: 0,
+        offsetY: 0,
+        targetColId: null
+      });
+    }, LONG_PRESS_DELAY);
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    if (!swipeRef.current || swipeRef.current.cancelled) return;
     const touch = e.touches[0];
-    const dx = touch.clientX - swipeRef.current.startX;
-    const dy = touch.clientY - swipeRef.current.startY;
     
-    if (!swipeRef.current.locked) {
-      // Decide direction: if vertical movement > horizontal, cancel swipe
-      if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) {
-        swipeRef.current.cancelled = true;
-        setSwipeState(null);
+    // Cancel long press if finger moved before activation
+    if (touchData.current && !touchData.current.isActive) {
+      const dx = Math.abs(touch.clientX - touchData.current.startX);
+      const dy = Math.abs(touch.clientY - touchData.current.startY);
+      if (dx > 8 || dy > 8) {
+        if (longPressTimer.current) clearTimeout(longPressTimer.current);
+        touchData.current = null;
         return;
       }
-      if (Math.abs(dx) > 10) {
-        swipeRef.current.locked = true;
+    }
+
+    if (!touchData.current?.isActive || !dragState) return;
+    
+    e.preventDefault(); // Prevent scroll while dragging
+
+    const offsetX = touch.clientX - touchData.current.startX;
+    const offsetY = touch.clientY - touchData.current.startY;
+
+    // Determine which column we're over
+    let targetColId: string | null = null;
+    for (const col of columns) {
+      const el = columnRefs.current[col.id];
+      if (!el) continue;
+      const rect = el.getBoundingClientRect();
+      if (touch.clientX >= rect.left && touch.clientX <= rect.right) {
+        targetColId = col.id;
+        break;
       }
     }
-    
-    if (swipeRef.current.locked) {
-      swipeRef.current.currentX = touch.clientX;
-      // Resistance effect: reduce offset as it grows
-      const raw = touch.clientX - swipeRef.current.startX;
-      const offset = raw > 0 ? Math.min(raw, 120) : Math.max(raw, -120);
-      setSwipeState({ taskId: swipeRef.current.taskId, offsetX: offset });
-    }
+
+    setDragState(prev => prev ? {
+      ...prev,
+      currentX: touch.clientX,
+      currentY: touch.clientY,
+      offsetX,
+      offsetY,
+      targetColId
+    } : null);
   };
 
-  const handleTouchEnd = (taskId: string, columnId: string) => {
-    if (!swipeRef.current || swipeRef.current.cancelled) {
-      swipeRef.current = null;
-      return;
+  const handleTouchEnd = () => {
+    if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    
+    if (dragState && touchData.current?.isActive && dragState.targetColId && dragState.targetColId !== dragState.originColId) {
+      onMoveTask(dragState.taskId, dragState.targetColId);
+      try { window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success'); } catch {}
     }
     
-    const dx = swipeRef.current.currentX - swipeRef.current.startX;
-    const threshold = 80;
-    
-    if (Math.abs(dx) > threshold) {
-      const direction = dx > 0 ? 'right' : 'left';
-      const colIndex = columns.findIndex(c => c.id === columnId);
-      const targetCol = direction === 'right' ? columns[colIndex + 1] : columns[colIndex - 1];
-      
-      if (targetCol) {
-        onMoveTask(taskId, targetCol.id);
-        try { window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('medium'); } catch {}
-      }
-    }
-    
-    swipeRef.current = null;
-    setSwipeState(null);
+    touchData.current = null;
+    setDragState(null);
   };
 
   // Auto-scroll to column with search results
@@ -405,7 +437,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   };
 
   return (
-    <div ref={scrollContainerRef} className={`flex overflow-x-auto h-full p-4 gap-5 snap-x snap-mandatory no-scrollbar ${swipeState ? 'overflow-x-hidden !snap-none' : ''}`}>
+    <div ref={scrollContainerRef} className={`flex overflow-x-auto h-full p-4 gap-5 snap-x snap-mandatory no-scrollbar ${dragState ? '!overflow-x-hidden !snap-none' : ''}`}>
       {columns.map((column, index) => {
         const isFirst = index === 0;
         const isLast = index === columns.length - 1;
@@ -414,7 +446,11 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
         <div 
           key={column.id} 
           ref={el => { columnRefs.current[column.id] = el; }}
-          className="min-w-[85vw] md:min-w-[320px] flex flex-col snap-center h-full"
+          className={`min-w-[85vw] md:min-w-[320px] flex flex-col snap-center h-full transition-all duration-200 ${
+            dragState && dragState.targetColId === column.id && dragState.originColId !== column.id 
+              ? 'ring-2 ring-blue-500/50 rounded-3xl bg-blue-500/5' 
+              : ''
+          }`}
           onDragOver={e => e.preventDefault()}
           onDrop={e => {
             const draggedId = e.dataTransfer.getData('taskId') || draggedTaskId;
@@ -518,18 +554,15 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                     if (draggedId) onMoveTask(draggedId, column.id, task.id);
                     setDropTargetId(null);
                   }}
-                  onTouchStart={e => handleTouchStart(e, task.id)}
+                  onTouchStart={e => handleTouchStart(e, task.id, column.id)}
                   onTouchMove={handleTouchMove}
-                  onTouchEnd={() => handleTouchEnd(task.id, column.id)}
-                  className={`relative transition-all ${swipeState?.taskId === task.id ? 'duration-0' : 'duration-200'} ${dropTargetId === task.id ? 'scale-105' : ''} ${isMenuOpen ? 'z-[100]' : 'z-0'}`}
-                  style={{
-                    transform: swipeState?.taskId === task.id 
-                      ? `translateX(${swipeState.offsetX}px) rotate(${swipeState.offsetX * 0.03}deg)` 
-                      : undefined,
-                    opacity: swipeState?.taskId === task.id 
-                      ? 1 - Math.abs(swipeState.offsetX) / 300 
-                      : undefined,
-                  }}
+                  onTouchEnd={handleTouchEnd}
+                  className={`relative transition-all ${dragState?.taskId === task.id ? 'duration-0 z-[200]' : 'duration-200'} ${dropTargetId === task.id ? 'scale-105' : ''} ${isMenuOpen ? 'z-[100]' : 'z-0'}`}
+                  style={dragState?.taskId === task.id ? {
+                    transform: `translate(${dragState.offsetX}px, ${dragState.offsetY}px) scale(1.05) rotate(${dragState.offsetX * 0.02}deg)`,
+                    opacity: 0.9,
+                    pointerEvents: 'none' as const,
+                  } : undefined}
                 >
                   <div 
                     draggable={isDraggable} 
@@ -539,10 +572,10 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                        relative tg-secondary-bg p-5 rounded-[28px] shadow-sm border border-gray-100/10 flex flex-col gap-3 
                        transition-all overflow-hidden min-h-[140px]
                        ${isDraggable ? 'active:scale-[0.98] cursor-grab active:cursor-grabbing' : 'cursor-default'}
-                       ${swipeState?.taskId === task.id && Math.abs(swipeState.offsetX) > 60 ? 'border-blue-500/30' : ''}
+                       ${dragState?.taskId === task.id ? 'shadow-2xl ring-2 ring-blue-500/40' : ''}
                     `}
                     onClick={() => {
-                        if (swipeState?.taskId === task.id) return; // Prevent click after swipe
+                        if (dragState) return;
                         if (isMenuOpen) setActiveTaskMenuId(null);
                         else onEditTask(task);
                     }}
