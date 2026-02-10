@@ -162,156 +162,6 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const columnRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-  // --- LONG PRESS DRAG STATE ---
-  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const autoScrollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
-  const touchData = useRef<{
-    startX: number;
-    startY: number;
-    taskId: string;
-    columnId: string;
-    isActive: boolean;
-    cardRect: DOMRect | null;
-  } | null>(null);
-  const [dragState, setDragState] = useState<{
-    taskId: string;
-    originColId: string;
-    currentX: number;
-    currentY: number;
-    offsetX: number;
-    offsetY: number;
-    targetColId: string | null;
-  } | null>(null);
-
-  const LONG_PRESS_DELAY = 300;
-  const AUTO_SCROLL_ZONE = 60; // px from edge to trigger auto-scroll
-  const AUTO_SCROLL_SPEED = 8;
-
-  // Prevent page scroll during drag
-  useEffect(() => {
-    if (!dragState) return;
-    const prevent = (e: TouchEvent) => { e.preventDefault(); };
-    document.addEventListener('touchmove', prevent, { passive: false });
-    return () => document.removeEventListener('touchmove', prevent);
-  }, [dragState]);
-
-  // Auto-scroll columns when dragging near edges
-  const startAutoScroll = (clientX: number) => {
-    if (autoScrollTimer.current) clearInterval(autoScrollTimer.current);
-    const container = scrollContainerRef.current;
-    if (!container) return;
-
-    const rect = container.getBoundingClientRect();
-    const leftEdge = clientX - rect.left;
-    const rightEdge = rect.right - clientX;
-
-    if (leftEdge < AUTO_SCROLL_ZONE || rightEdge < AUTO_SCROLL_ZONE) {
-      const direction = leftEdge < AUTO_SCROLL_ZONE ? -1 : 1;
-      autoScrollTimer.current = setInterval(() => {
-        container.scrollLeft += direction * AUTO_SCROLL_SPEED;
-      }, 16);
-    } else {
-      if (autoScrollTimer.current) { clearInterval(autoScrollTimer.current); autoScrollTimer.current = null; }
-    }
-  };
-
-  const stopAutoScroll = () => {
-    if (autoScrollTimer.current) { clearInterval(autoScrollTimer.current); autoScrollTimer.current = null; }
-  };
-
-  const handleTouchStart = (e: React.TouchEvent, taskId: string, columnId: string) => {
-    const touch = e.touches[0];
-    const cardEl = (e.currentTarget as HTMLElement);
-    touchData.current = {
-      startX: touch.clientX,
-      startY: touch.clientY,
-      taskId,
-      columnId,
-      isActive: false,
-      cardRect: cardEl.getBoundingClientRect()
-    };
-
-    longPressTimer.current = setTimeout(() => {
-      if (!touchData.current) return;
-      touchData.current.isActive = true;
-      try { window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('medium'); } catch {}
-      setDragState({
-        taskId,
-        originColId: columnId,
-        currentX: touchData.current.startX,
-        currentY: touchData.current.startY,
-        offsetX: 0,
-        offsetY: 0,
-        targetColId: null
-      });
-    }, LONG_PRESS_DELAY);
-  };
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    const touch = e.touches[0];
-    
-    // Cancel long press if finger moved before activation
-    if (touchData.current && !touchData.current.isActive) {
-      const dx = Math.abs(touch.clientX - touchData.current.startX);
-      const dy = Math.abs(touch.clientY - touchData.current.startY);
-      if (dx > 8 || dy > 8) {
-        if (longPressTimer.current) clearTimeout(longPressTimer.current);
-        touchData.current = null;
-        return;
-      }
-    }
-
-    if (!touchData.current?.isActive || !dragState) return;
-
-    const offsetX = touch.clientX - touchData.current.startX;
-    const offsetY = touch.clientY - touchData.current.startY;
-
-    // Auto-scroll columns
-    startAutoScroll(touch.clientX);
-
-    // Determine which column we're over
-    let targetColId: string | null = null;
-    for (const col of columns) {
-      const el = columnRefs.current[col.id];
-      if (!el) continue;
-      const rect = el.getBoundingClientRect();
-      if (touch.clientX >= rect.left && touch.clientX <= rect.right) {
-        targetColId = col.id;
-        break;
-      }
-    }
-
-    setDragState(prev => prev ? {
-      ...prev,
-      currentX: touch.clientX,
-      currentY: touch.clientY,
-      offsetX,
-      offsetY,
-      targetColId
-    } : null);
-  };
-
-  const handleTouchEnd = () => {
-    if (longPressTimer.current) clearTimeout(longPressTimer.current);
-    stopAutoScroll();
-    
-    if (dragState && touchData.current?.isActive && dragState.targetColId && dragState.targetColId !== dragState.originColId) {
-      onMoveTask(dragState.taskId, dragState.targetColId);
-      try { window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success'); } catch {}
-      
-      // Auto-scroll to target column after drop
-      const targetEl = columnRefs.current[dragState.targetColId];
-      if (targetEl) {
-        setTimeout(() => {
-          targetEl.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-        }, 100);
-      }
-    }
-    
-    touchData.current = null;
-    setDragState(null);
-  };
-
   // Auto-scroll to column with search results
   useEffect(() => {
     if (scrollToColumnId && columnRefs.current[scrollToColumnId] && scrollContainerRef.current) {
@@ -485,7 +335,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   };
 
   return (
-    <div ref={scrollContainerRef} className={`flex overflow-x-auto h-full p-4 gap-5 snap-x snap-mandatory no-scrollbar ${dragState ? '!overflow-x-hidden !snap-none' : ''}`}>
+    <div ref={scrollContainerRef} className="flex overflow-x-auto h-full p-4 gap-5 snap-x snap-mandatory no-scrollbar">
       {columns.map((column, index) => {
         const isFirst = index === 0;
         const isLast = index === columns.length - 1;
@@ -494,11 +344,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
         <div 
           key={column.id} 
           ref={el => { columnRefs.current[column.id] = el; }}
-          className={`min-w-[85vw] md:min-w-[320px] flex flex-col snap-center h-full transition-all duration-200 ${
-            dragState && dragState.targetColId === column.id && dragState.originColId !== column.id 
-              ? 'ring-2 ring-blue-500/50 rounded-3xl bg-blue-500/5' 
-              : ''
-          }`}
+          className="min-w-[85vw] md:min-w-[320px] flex flex-col snap-center h-full"
           onDragOver={e => e.preventDefault()}
           onDrop={e => {
             const draggedId = e.dataTransfer.getData('taskId') || draggedTaskId;
@@ -602,15 +448,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                     if (draggedId) onMoveTask(draggedId, column.id, task.id);
                     setDropTargetId(null);
                   }}
-                  onTouchStart={e => handleTouchStart(e, task.id, column.id)}
-                  onTouchMove={handleTouchMove}
-                  onTouchEnd={handleTouchEnd}
-                  className={`relative transition-all ${dragState?.taskId === task.id ? 'duration-0 z-[200]' : 'duration-200'} ${dropTargetId === task.id ? 'scale-105' : ''} ${isMenuOpen ? 'z-[100]' : 'z-0'}`}
-                  style={dragState?.taskId === task.id ? {
-                    transform: `translate(${dragState.offsetX}px, ${dragState.offsetY}px) scale(1.05) rotate(${dragState.offsetX * 0.02}deg)`,
-                    opacity: 0.9,
-                    pointerEvents: 'none' as const,
-                  } : undefined}
+                  className={`relative transition-all duration-200 ${dropTargetId === task.id ? 'scale-105' : ''} ${isMenuOpen ? 'z-[100]' : 'z-0'}`}
                 >
                   <div 
                     draggable={isDraggable} 
@@ -620,10 +458,8 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                        relative tg-secondary-bg p-5 rounded-[28px] shadow-sm border border-gray-100/10 flex flex-col gap-3 
                        transition-all overflow-hidden min-h-[140px]
                        ${isDraggable ? 'active:scale-[0.98] cursor-grab active:cursor-grabbing' : 'cursor-default'}
-                       ${dragState?.taskId === task.id ? 'shadow-2xl ring-2 ring-blue-500/40' : ''}
                     `}
                     onClick={() => {
-                        if (dragState) return;
                         if (isMenuOpen) setActiveTaskMenuId(null);
                         else onEditTask(task);
                     }}
