@@ -1,5 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Task, TaskStatus, Column } from '../types';
+import {
+  DndContext,
+  DragOverlay,
+  closestCenter,
+  PointerSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  DragStartEvent,
+  DragEndEvent,
+  DragOverEvent,
+} from '@dnd-kit/core';
+import { useSortable, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface KanbanBoardProps {
   tasks: Task[];
@@ -144,34 +158,107 @@ const NAV_COLORS_COVER: Record<TaskStatus, string> = {
   'done': 'text-green-300 bg-green-500/20'
 };
 
+// --- SORTABLE TASK CARD WRAPPER ---
+const SortableTaskCard: React.FC<{ id: string; disabled?: boolean; children: React.ReactNode }> = ({ id, disabled, children }) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ 
+    id,
+    disabled,
+  });
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    touchAction: 'manipulation',
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+      {children}
+    </div>
+  );
+};
+
+// --- COLUMN DROP ZONE (for dropping into empty columns) ---
+const ColumnDropZone: React.FC<{ id: string; isEmpty: boolean; isOver: boolean }> = ({ id, isEmpty, isOver }) => {
+  const { setNodeRef } = useSortable({ id, data: { type: 'column' } });
+
+  if (!isEmpty && !isOver) return null;
+
+  return (
+    <div 
+      ref={setNodeRef}
+      className={`min-h-[60px] rounded-2xl border-2 border-dashed transition-all duration-200 flex items-center justify-center ${
+        isOver ? 'border-blue-500/50 bg-blue-500/10' : 'border-transparent'
+      }`}
+    >
+      {isOver && <span className="text-[10px] font-bold text-blue-500 animate-pulse">Отпусти здесь</span>}
+    </div>
+  );
+};
+
 export const KanbanBoard: React.FC<KanbanBoardProps> = ({ 
   tasks, columns, onUpdateColumns, onDeleteColumn, onMoveTask, onEditTask, onDeleteTask, onQuickAdd, onCopyTask, scrollToColumnId 
 }) => {
-  const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
-  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
-  
   const [isAddingColumn, setIsAddingColumn] = useState(false);
   const [newColTitle, setNewColTitle] = useState('');
-  
   const [activeMenuColId, setActiveMenuColId] = useState<string | null>(null);
-  
-  // 🔥 ЛОКАЛЬНОЕ СОСТОЯНИЕ ДЛЯ РЕДАКТИРОВАНИЯ НАЗВАНИЯ КОЛОНКИ
   const [editingColId, setEditingColId] = useState<string | null>(null);
   const [editingColTitle, setEditingColTitle] = useState('');
+  const [activeTaskMenuId, setActiveTaskMenuId] = useState<string | null>(null);
+  const [copyingTaskId, setCopyingTaskId] = useState<string | null>(null);
+  const [copyTitle, setCopyTitle] = useState('');
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const columnRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-  // Auto-scroll to column with search results
-  useEffect(() => {
-    if (scrollToColumnId && columnRefs.current[scrollToColumnId] && scrollContainerRef.current) {
-      columnRefs.current[scrollToColumnId]?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-    }
-  }, [scrollToColumnId]);
+  // --- @dnd-kit ---
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  const [overColumnId, setOverColumnId] = useState<string | null>(null);
 
-  const [activeTaskMenuId, setActiveTaskMenuId] = useState<string | null>(null);
-  const [copyingTaskId, setCopyingTaskId] = useState<string | null>(null);
-  const [copyTitle, setCopyTitle] = useState('');
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } })
+  );
+
+  const activeDragTask = activeDragId ? tasks.find(t => t.id === activeDragId) : null;
+
+  const handleDndDragStart = (event: DragStartEvent) => {
+    setActiveDragId(event.active.id as string);
+    setActiveTaskMenuId(null);
+    try { window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('medium'); } catch {}
+  };
+
+  const handleDndDragOver = (event: DragOverEvent) => {
+    const { over } = event;
+    if (!over) { setOverColumnId(null); return; }
+    
+    // over can be a task id or a column id
+    const overId = over.id as string;
+    const overTask = tasks.find(t => t.id === overId);
+    const colId = overTask ? overTask.columnId : columns.find(c => c.id === overId)?.id || null;
+    setOverColumnId(colId);
+  };
+
+  const handleDndDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveDragId(null);
+    setOverColumnId(null);
+    
+    if (!over) return;
+    
+    const draggedId = active.id as string;
+    const overId = over.id as string;
+    
+    // Determine target column
+    const overTask = tasks.find(t => t.id === overId);
+    const targetColId = overTask ? overTask.columnId : columns.find(c => c.id === overId)?.id;
+    
+    if (!targetColId) return;
+    
+    // Move task to target column (and position before overTask if dropping on a task)
+    onMoveTask(draggedId, targetColId, overTask ? overTask.id : undefined);
+    try { window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success'); } catch {}
+  };
 
   const handleAddColumn = () => {
     if (!newColTitle.trim()) { setIsAddingColumn(false); return; }
@@ -267,26 +354,6 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
       }
   };
 
-  const handleDragStart = (e: React.DragEvent, taskId: string) => {
-    setDraggedTaskId(taskId);
-    e.dataTransfer.setData('taskId', taskId);
-    e.dataTransfer.effectAllowed = 'move';
-    
-    const target = e.currentTarget as HTMLElement;
-    setTimeout(() => {
-        target.style.opacity = '0.4'; 
-        target.style.transform = 'scale(0.95)';
-    }, 0);
-  };
-
-  const handleDragEnd = (e: React.DragEvent) => {
-    setDraggedTaskId(null);
-    setDropTargetId(null);
-    const target = e.currentTarget as HTMLElement;
-    target.style.opacity = '1';
-    target.style.transform = 'scale(1)';
-  };
-
   const stopProp = (e: React.BaseSyntheticEvent) => {
       e.stopPropagation();
   };
@@ -334,7 +401,21 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
     );
   };
 
+  // Auto-scroll to column with search results
+  useEffect(() => {
+    if (scrollToColumnId && columnRefs.current[scrollToColumnId] && scrollContainerRef.current) {
+      columnRefs.current[scrollToColumnId]?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    }
+  }, [scrollToColumnId]);
+
   return (
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragStart={handleDndDragStart}
+      onDragOver={handleDndDragOver}
+      onDragEnd={handleDndDragEnd}
+    >
     <div ref={scrollContainerRef} className="flex overflow-x-auto h-full p-4 gap-5 snap-x snap-mandatory no-scrollbar">
       {columns.map((column, index) => {
         const isFirst = index === 0;
@@ -344,12 +425,10 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
         <div 
           key={column.id} 
           ref={el => { columnRefs.current[column.id] = el; }}
-          className="min-w-[85vw] md:min-w-[320px] flex flex-col snap-center h-full"
-          onDragOver={e => e.preventDefault()}
-          onDrop={e => {
-            const draggedId = e.dataTransfer.getData('taskId') || draggedTaskId;
-            if (draggedId) onMoveTask(draggedId, column.id);
-          }}
+          className={`min-w-[85vw] md:min-w-[320px] flex flex-col snap-center h-full transition-colors duration-200 rounded-3xl ${
+            overColumnId === column.id && activeDragId && !tasks.filter(t => t.columnId === column.id).find(t => t.id === activeDragId)
+              ? 'ring-2 ring-blue-500/30 bg-blue-500/5' : ''
+          }`}
         >
           <div className={`mb-4 h-[48px] px-5 border-l-4 ${TYPE_COLORS[column.type]} tg-secondary-bg rounded-r-2xl flex justify-between items-center shadow-sm shrink-0 relative z-[60]`}>
             {editingColId === column.id ? (
@@ -426,6 +505,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
           </div>
           
           <div className="flex flex-col gap-4 flex-1 pb-24 min-h-[500px]">
+            <SortableContext items={tasks.filter(t => t.columnId === column.id).map(t => t.id)} strategy={verticalListSortingStrategy}>
             {tasks.filter(t => t.columnId === column.id).map(task => {
               const activeCover = task.coverData || task.fileData;
               const hasCover = !!activeCover;
@@ -438,28 +518,18 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
               const commentsCount = task.comments?.length || 0;
 
               return (
-                <div key={task.id} className="flex flex-col gap-2"> 
+                <SortableTaskCard key={task.id} id={task.id} disabled={!isDraggable}>
+                <div className="flex flex-col gap-2"> 
                 <div 
-                  onDragOver={e => { e.preventDefault(); e.stopPropagation(); setDropTargetId(task.id); }}
-                  onDragLeave={() => setDropTargetId(null)}
-                  onDrop={e => {
-                    e.preventDefault(); e.stopPropagation();
-                    const draggedId = e.dataTransfer.getData('taskId') || draggedTaskId;
-                    if (draggedId) onMoveTask(draggedId, column.id, task.id);
-                    setDropTargetId(null);
-                  }}
-                  className={`relative transition-all duration-200 ${dropTargetId === task.id ? 'scale-105' : ''} ${isMenuOpen ? 'z-[100]' : 'z-0'}`}
+                  className={`relative transition-all duration-200 ${isMenuOpen ? 'z-[100]' : 'z-0'} ${activeDragId === task.id ? 'opacity-30 scale-95' : ''}`}
                 >
                   <div 
-                    draggable={isDraggable} 
-                    onDragStart={e => handleDragStart(e, task.id)}
-                    onDragEnd={handleDragEnd}
                     className={`
                        relative tg-secondary-bg p-5 rounded-[28px] shadow-sm border border-gray-100/10 flex flex-col gap-3 
-                       transition-all overflow-hidden min-h-[140px]
-                       ${isDraggable ? 'active:scale-[0.98] cursor-grab active:cursor-grabbing' : 'cursor-default'}
+                       transition-all overflow-hidden min-h-[140px] cursor-default
                     `}
                     onClick={() => {
+                        if (activeDragId) return;
                         if (isMenuOpen) setActiveTaskMenuId(null);
                         else onEditTask(task);
                     }}
@@ -623,8 +693,12 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                     </div>
                 )}
                 </div>
+                </SortableTaskCard>
               );
             })}
+            </SortableContext>
+            
+            <ColumnDropZone id={column.id} isEmpty={tasks.filter(t => t.columnId === column.id).length === 0} isOver={overColumnId === column.id && !!activeDragId} />
             
             <button 
               onClick={() => onQuickAdd(column.type, column.id)} 
@@ -673,5 +747,15 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
 
       {(activeMenuColId || activeTaskMenuId) && <div className="fixed inset-0 z-[55]" onClick={() => { setActiveMenuColId(null); setActiveTaskMenuId(null); }} />}
     </div>
+
+    <DragOverlay dropAnimation={{ duration: 200, easing: 'ease-out' }}>
+      {activeDragTask && (
+        <div className="tg-secondary-bg p-5 rounded-[28px] shadow-2xl border-2 border-blue-500/30 min-h-[80px] max-w-[85vw] md:max-w-[320px] opacity-90 rotate-[2deg]">
+          <h3 className="font-bold text-[15px] tg-text truncate">{activeDragTask.title}</h3>
+          {activeDragTask.description && <p className="text-[11px] tg-hint mt-1 truncate">{activeDragTask.description}</p>}
+        </div>
+      )}
+    </DragOverlay>
+    </DndContext>
   );
 };
