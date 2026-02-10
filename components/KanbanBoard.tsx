@@ -5,6 +5,7 @@ import {
   DragOverlay,
   closestCenter,
   PointerSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   DragStartEvent,
@@ -158,7 +159,7 @@ const NAV_COLORS_COVER: Record<TaskStatus, string> = {
 };
 
 // --- SORTABLE TASK CARD WRAPPER ---
-const SortableTaskCard: React.FC<{ id: string; disabled?: boolean; children: React.ReactNode }> = ({ id, disabled, children }) => {
+const SortableTaskCard: React.FC<{ id: string; disabled?: boolean; children: (dragHandleProps: Record<string, any>) => React.ReactNode }> = ({ id, disabled, children }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ 
     id,
     disabled,
@@ -167,12 +168,14 @@ const SortableTaskCard: React.FC<{ id: string; disabled?: boolean; children: Rea
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
-    touchAction: 'manipulation',
+    opacity: isDragging ? 0.3 : 1,
+    scale: isDragging ? '0.95' : '1',
   };
 
+  // Pass listeners as dragHandleProps — only the handle element will trigger drag
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      {children}
+    <div ref={setNodeRef} style={style} {...attributes}>
+      {children({ ...listeners })}
     </div>
   );
 };
@@ -215,7 +218,8 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   const [overColumnId, setOverColumnId] = useState<string | null>(null);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 0, tolerance: 0 } })
   );
 
   const activeDragTask = activeDragId ? tasks.find(t => t.id === activeDragId) : null;
@@ -517,6 +521,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
 
               return (
                 <SortableTaskCard key={task.id} id={task.id} disabled={!isDraggable}>
+                {(dragHandleProps) => (
                 <div className="flex flex-col gap-2"> 
                 <div 
                   className={`relative transition-all duration-200 ${isMenuOpen ? 'z-[100]' : 'z-0'}`}
@@ -532,6 +537,20 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                         else onEditTask(task);
                     }}
                   >
+                    {/* Drag handle — only this triggers drag */}
+                    <div 
+                      {...dragHandleProps}
+                      className={`absolute top-2 left-1/2 -translate-x-1/2 z-30 p-1 rounded-lg cursor-grab active:cursor-grabbing touch-none ${
+                        hasCover ? 'text-white/30 hover:text-white/60' : 'text-gray-400/30 hover:text-gray-400/60'
+                      } transition-colors`}
+                      onClick={e => e.stopPropagation()}
+                    >
+                      <svg width="24" height="8" viewBox="0 0 24 8" fill="currentColor">
+                        <circle cx="4" cy="2" r="1.5"/><circle cx="12" cy="2" r="1.5"/><circle cx="20" cy="2" r="1.5"/>
+                        <circle cx="4" cy="6" r="1.5"/><circle cx="12" cy="6" r="1.5"/><circle cx="20" cy="6" r="1.5"/>
+                      </svg>
+                    </div>
+
                     {task.color && task.color !== 'default' && (
                        <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${COLOR_MAP[task.color] || 'bg-blue-500'} z-20`} />
                     )}
@@ -691,6 +710,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                     </div>
                 )}
                 </div>
+                )}
                 </SortableTaskCard>
               );
             })}
