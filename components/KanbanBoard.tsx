@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Task, TaskStatus, Column } from '../types';
 
 interface KanbanBoardProps {
@@ -12,6 +12,7 @@ interface KanbanBoardProps {
   onQuickAdd: (status: TaskStatus, columnId: string) => void;
   onCopyTask: (originalTaskId: string, newTitle: string) => void;
   onDragEnd: (draggedId: string, targetColId: string, targetId?: string) => void;
+  scrollToColumnId?: string | null;
 }
 
 // --- ХЕЛПЕРЫ ДЛЯ ЦВЕТОВ ---
@@ -144,7 +145,7 @@ const NAV_COLORS_COVER: Record<TaskStatus, string> = {
 };
 
 export const KanbanBoard: React.FC<KanbanBoardProps> = ({ 
-  tasks, columns, onUpdateColumns, onDeleteColumn, onMoveTask, onEditTask, onDeleteTask, onQuickAdd, onCopyTask 
+  tasks, columns, onUpdateColumns, onDeleteColumn, onMoveTask, onEditTask, onDeleteTask, onQuickAdd, onCopyTask, scrollToColumnId 
 }) => {
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
@@ -157,6 +158,16 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   // 🔥 ЛОКАЛЬНОЕ СОСТОЯНИЕ ДЛЯ РЕДАКТИРОВАНИЯ НАЗВАНИЯ КОЛОНКИ
   const [editingColId, setEditingColId] = useState<string | null>(null);
   const [editingColTitle, setEditingColTitle] = useState('');
+
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const columnRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  // Auto-scroll to column with search results
+  useEffect(() => {
+    if (scrollToColumnId && columnRefs.current[scrollToColumnId] && scrollContainerRef.current) {
+      columnRefs.current[scrollToColumnId]?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    }
+  }, [scrollToColumnId]);
 
   const [activeTaskMenuId, setActiveTaskMenuId] = useState<string | null>(null);
   const [copyingTaskId, setCopyingTaskId] = useState<string | null>(null);
@@ -324,7 +335,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   };
 
   return (
-    <div className="flex overflow-x-auto h-full p-4 gap-5 snap-x snap-mandatory no-scrollbar">
+    <div ref={scrollContainerRef} className="flex overflow-x-auto h-full p-4 gap-5 snap-x snap-mandatory no-scrollbar">
       {columns.map((column, index) => {
         const isFirst = index === 0;
         const isLast = index === columns.length - 1;
@@ -332,6 +343,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
         return (
         <div 
           key={column.id} 
+          ref={el => { columnRefs.current[column.id] = el; }}
           className="min-w-[85vw] md:min-w-[320px] flex flex-col snap-center h-full"
           onDragOver={e => e.preventDefault()}
           onDrop={e => {
@@ -413,7 +425,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
             </div>
           </div>
           
-          <div className="flex flex-col gap-4 flex-1 overflow-y-auto no-scrollbar pb-4 min-h-0">
+          <div className="flex flex-col gap-4 flex-1 pb-24 min-h-[500px]">
             {tasks.filter(t => t.columnId === column.id).map(task => {
               const activeCover = task.coverData || task.fileData;
               const hasCover = !!activeCover;
@@ -446,7 +458,6 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                        relative tg-secondary-bg p-5 rounded-[28px] shadow-sm border border-gray-100/10 flex flex-col gap-3 
                        transition-all overflow-hidden min-h-[140px]
                        ${isDraggable ? 'active:scale-[0.98] cursor-grab active:cursor-grabbing' : 'cursor-default'}
-                       ${hasCover ? 'cover-preserve' : ''}
                     `}
                     onClick={() => {
                         if (isMenuOpen) setActiveTaskMenuId(null);

@@ -736,6 +736,7 @@ const handleAutoSaveHabit = async (updatedHabit: Habit) => {
             onCopyTask={handleCopyTask} 
             onQuickAdd={(s, cId) => { setEditingTask({ id:'', title:'', description:'', date:toLocalDateString(new Date()), status:s, columnId: cId, checklists: [], comments: []} as Task); setIsTaskModalOpen(true); }} 
             onDragEnd={() => {}} 
+            scrollToColumnId={searchQuery && filteredTasks.length > 0 ? filteredTasks[0].columnId : null}
           />
         )}
        {view === 'calendar' && <CalendarView 
