@@ -164,12 +164,14 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
 
   // --- LONG PRESS DRAG STATE ---
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoScrollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const touchData = useRef<{
     startX: number;
     startY: number;
     taskId: string;
     columnId: string;
-    isActive: boolean; // long press activated
+    isActive: boolean;
+    cardRect: DOMRect | null;
   } | null>(null);
   const [dragState, setDragState] = useState<{
     taskId: string;
@@ -182,15 +184,51 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   } | null>(null);
 
   const LONG_PRESS_DELAY = 300;
+  const AUTO_SCROLL_ZONE = 60; // px from edge to trigger auto-scroll
+  const AUTO_SCROLL_SPEED = 8;
+
+  // Prevent page scroll during drag
+  useEffect(() => {
+    if (!dragState) return;
+    const prevent = (e: TouchEvent) => { e.preventDefault(); };
+    document.addEventListener('touchmove', prevent, { passive: false });
+    return () => document.removeEventListener('touchmove', prevent);
+  }, [dragState]);
+
+  // Auto-scroll columns when dragging near edges
+  const startAutoScroll = (clientX: number) => {
+    if (autoScrollTimer.current) clearInterval(autoScrollTimer.current);
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const rect = container.getBoundingClientRect();
+    const leftEdge = clientX - rect.left;
+    const rightEdge = rect.right - clientX;
+
+    if (leftEdge < AUTO_SCROLL_ZONE || rightEdge < AUTO_SCROLL_ZONE) {
+      const direction = leftEdge < AUTO_SCROLL_ZONE ? -1 : 1;
+      autoScrollTimer.current = setInterval(() => {
+        container.scrollLeft += direction * AUTO_SCROLL_SPEED;
+      }, 16);
+    } else {
+      if (autoScrollTimer.current) { clearInterval(autoScrollTimer.current); autoScrollTimer.current = null; }
+    }
+  };
+
+  const stopAutoScroll = () => {
+    if (autoScrollTimer.current) { clearInterval(autoScrollTimer.current); autoScrollTimer.current = null; }
+  };
 
   const handleTouchStart = (e: React.TouchEvent, taskId: string, columnId: string) => {
     const touch = e.touches[0];
+    const cardEl = (e.currentTarget as HTMLElement);
     touchData.current = {
       startX: touch.clientX,
       startY: touch.clientY,
       taskId,
       columnId,
-      isActive: false
+      isActive: false,
+      cardRect: cardEl.getBoundingClientRect()
     };
 
     longPressTimer.current = setTimeout(() => {
@@ -224,11 +262,12 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
     }
 
     if (!touchData.current?.isActive || !dragState) return;
-    
-    e.preventDefault(); // Prevent scroll while dragging
 
     const offsetX = touch.clientX - touchData.current.startX;
     const offsetY = touch.clientY - touchData.current.startY;
+
+    // Auto-scroll columns
+    startAutoScroll(touch.clientX);
 
     // Determine which column we're over
     let targetColId: string | null = null;
@@ -254,10 +293,19 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
 
   const handleTouchEnd = () => {
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    stopAutoScroll();
     
     if (dragState && touchData.current?.isActive && dragState.targetColId && dragState.targetColId !== dragState.originColId) {
       onMoveTask(dragState.taskId, dragState.targetColId);
       try { window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success'); } catch {}
+      
+      // Auto-scroll to target column after drop
+      const targetEl = columnRefs.current[dragState.targetColId];
+      if (targetEl) {
+        setTimeout(() => {
+          targetEl.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+        }, 100);
+      }
     }
     
     touchData.current = null;
