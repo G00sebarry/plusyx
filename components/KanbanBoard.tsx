@@ -5,7 +5,6 @@ import {
   DragOverlay,
   closestCenter,
   PointerSensor,
-  TouchSensor,
   useSensor,
   useSensors,
   DragStartEvent,
@@ -216,8 +215,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   const [overColumnId, setOverColumnId] = useState<string | null>(null);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } })
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   );
 
   const activeDragTask = activeDragId ? tasks.find(t => t.id === activeDragId) : null;
@@ -521,7 +519,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                 <SortableTaskCard key={task.id} id={task.id} disabled={!isDraggable}>
                 <div className="flex flex-col gap-2"> 
                 <div 
-                  className={`relative transition-all duration-200 ${isMenuOpen ? 'z-[100]' : 'z-0'} ${activeDragId === task.id ? 'opacity-30 scale-95' : ''}`}
+                  className={`relative transition-all duration-200 ${isMenuOpen ? 'z-[100]' : 'z-0'}`}
                 >
                   <div 
                     className={`
