@@ -54,6 +54,8 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
   const [selectedAchievement, setSelectedAchievement] = useState<{habitId: string, achievement: Achievement} | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, habitId: string, date: string } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const savedScrollRef = useRef<number | null>(null);
   const [draggedHabitId, setDraggedHabitId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const [freezeWarnings, setFreezeWarnings] = useState<Set<string>>(new Set());
@@ -72,6 +74,20 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Восстановление скролла после ререндера
+  useEffect(() => {
+    if (savedScrollRef.current !== null && scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = savedScrollRef.current;
+      savedScrollRef.current = null;
+    }
+  });
+
+  const saveScrollPosition = () => {
+    if (scrollContainerRef.current) {
+      savedScrollRef.current = scrollContainerRef.current.scrollTop;
+    }
+  };
 
   // Проверка на 3 заморозки подряд
   useEffect(() => {
@@ -585,6 +601,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
       newValue = true;
     }
     
+    saveScrollPosition();
     onToggleHabit(habit.id, dateStr, newValue);
   };
 
@@ -600,6 +617,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     if (status === 'full') val = true;
     if (status === 'mini') val = 'mini';
     if (status === 'freeze') val = 'freeze';
+    saveScrollPosition();
     onToggleHabit(contextMenu.habitId, contextMenu.date, val);
     setContextMenu(null);
   };
@@ -1249,7 +1267,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto no-scrollbar animate-in fade-in duration-300 relative pb-20">
+    <div ref={scrollContainerRef} className="flex flex-col h-full overflow-y-auto no-scrollbar animate-in fade-in duration-300 relative pb-20">
       
       {/* Табы */}
       <div className="px-5 py-2 sticky top-0 z-30 backdrop-blur-md bg-gradient-to-b from-[var(--tg-theme-bg-color)] to-transparent">
