@@ -78,6 +78,7 @@ export interface Habit {
   frequency: {
     type: 'daily' | 'specific' | 'flexible';
     days: number[];
+    customDates?: string[];
   };
 
   // 🔥 ИСТОРИЯ — теперь только простые значения

@@ -134,6 +134,9 @@ export const HabitModal: React.FC<HabitModalProps> = ({
   const [color, setColor] = useState('bg-blue-500');
   const [emoji, setEmoji] = useState('🔥');
   const [selectedDays, setSelectedDays] = useState<number[]>([1, 2, 3, 4, 5, 6, 0]);
+  const [customDates, setCustomDates] = useState<string[]>([]);
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(() => { const n = new Date(); return new Date(n.getFullYear(), n.getMonth(), 1); });
   const [isCustomEmoji, setIsCustomEmoji] = useState(false);
 
   const [isAtomicMode, setIsAtomicMode] = useState(() => {
@@ -213,6 +216,7 @@ export const HabitModal: React.FC<HabitModalProps> = ({
       } else {
         setSelectedDays([1, 2, 3, 4, 5, 6, 0]);
       }
+      setCustomDates(initialHabit.frequency?.customDates || []);
       setFileData(initialHabit.fileData || '');
       setCoverPosition(initialHabit.coverPosition ?? 50);
       setCoverIntensity(initialHabit.coverIntensity ?? 60);
@@ -235,6 +239,8 @@ export const HabitModal: React.FC<HabitModalProps> = ({
   const resetForm = () => {
     setTitle(''); setDescription(''); setColor('bg-blue-500'); setEmoji('🔥');
     setSelectedDays([1, 2, 3, 4, 5, 6, 0]);
+    setCustomDates([]);
+    setCalendarOpen(false);
     setFileData(''); setCoverPosition(50); setCoverIntensity(60);
     setIdentity(''); setTriggerEvent(''); setMiniAction('');
     setNotes([]);
@@ -256,7 +262,7 @@ export const HabitModal: React.FC<HabitModalProps> = ({
       notes,
       color,
       emoji,
-      frequency: { type: isEveryDay ? 'daily' : 'specific', days: selectedDays },
+      frequency: { type: isEveryDay ? 'daily' : 'specific', days: selectedDays, customDates },
       history: initialHabit?.history || {},
       fileData,
       coverPosition,
@@ -289,7 +295,7 @@ export const HabitModal: React.FC<HabitModalProps> = ({
       setSaveStatus('saved');
     }, 1000);
     return () => { if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current); };
-  }, [title, description, color, emoji, selectedDays, fileData, coverPosition, coverIntensity, identity, triggerEvent, miniAction, notes, reminderEnabled, reminderTime, isAtomicMode]);
+  }, [title, description, color, emoji, selectedDays, customDates, fileData, coverPosition, coverIntensity, identity, triggerEvent, miniAction, notes, reminderEnabled, reminderTime, isAtomicMode]);
 
   const toggleDay = (dayIndex: number) => {
     if (selectedDays.includes(dayIndex)) {
@@ -357,9 +363,9 @@ export const HabitModal: React.FC<HabitModalProps> = ({
   };
 
   const getFrequencyLabel = () => {
-    if (selectedDays.length === 7) return 'Каждый день';
-    if (selectedDays.length === 5 && !selectedDays.includes(0) && !selectedDays.includes(6)) return 'По будням';
-    return 'Выбранные дни';
+    const base = selectedDays.length === 7 ? 'Каждый день' : selectedDays.length === 5 && !selectedDays.includes(0) && !selectedDays.includes(6) ? 'По будням' : 'Выбранные дни';
+    if (customDates.length > 0) return `${base} + ${customDates.length} дат`;
+    return base;
   };
 
   const handleConnectTelegram = async () => {
@@ -729,6 +735,113 @@ export const HabitModal: React.FC<HabitModalProps> = ({
                 )
               })}
             </div>
+
+            {/* Calendar button */}
+            <button
+              type="button"
+              onClick={() => setCalendarOpen(!calendarOpen)}
+              className={`flex items-center justify-center gap-2 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border ${
+                calendarOpen 
+                  ? 'bg-white/10 text-white border-white/20' 
+                  : 'bg-black/5 tg-hint border-white/5 hover:bg-white/5'
+              }`}
+            >
+              📅 {calendarOpen ? 'Скрыть календарь' : 'Выбрать даты'}
+              {customDates.length > 0 && (
+                <span className="bg-[var(--tg-theme-button-color)] text-white text-[8px] px-1.5 py-0.5 rounded-full">{customDates.length}</span>
+              )}
+            </button>
+
+            {/* Expandable calendar */}
+            {calendarOpen && (() => {
+              const year = calendarMonth.getFullYear();
+              const month = calendarMonth.getMonth();
+              const firstDay = new Date(year, month, 1).getDay();
+              const daysInMonth = new Date(year, month + 1, 0).getDate();
+              const monthNames = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+              const dayLabels = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+              
+              // Shift so Monday=0
+              const startOffset = (firstDay + 6) % 7;
+              const cells: (number | null)[] = [];
+              for (let i = 0; i < startOffset; i++) cells.push(null);
+              for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+              while (cells.length % 7 !== 0) cells.push(null);
+
+              const toggleDate = (day: number) => {
+                const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                setCustomDates(prev => 
+                  prev.includes(dateStr) ? prev.filter(d => d !== dateStr) : [...prev, dateStr]
+                );
+              };
+
+              const isScheduledDay = (day: number) => {
+                const date = new Date(year, month, day);
+                return selectedDays.includes(date.getDay());
+              };
+
+              return (
+                <div className="bg-black/5 rounded-2xl border border-white/5 p-3 animate-in slide-in-from-top-2 duration-200">
+                  {/* Month navigation */}
+                  <div className="flex justify-between items-center mb-3">
+                    <button type="button" onClick={() => setCalendarMonth(new Date(year, month - 1, 1))} className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/10 transition-all tg-hint">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="15 18 9 12 15 6"/></svg>
+                    </button>
+                    <span className="text-[11px] font-black tg-text uppercase tracking-widest">{monthNames[month]} {year}</span>
+                    <button type="button" onClick={() => setCalendarMonth(new Date(year, month + 1, 1))} className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/10 transition-all tg-hint">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="9 18 15 12 9 6"/></svg>
+                    </button>
+                  </div>
+
+                  {/* Day headers */}
+                  <div className="grid grid-cols-7 gap-1 mb-1">
+                    {dayLabels.map(dl => (
+                      <div key={dl} className="text-[8px] font-bold tg-hint text-center py-1">{dl}</div>
+                    ))}
+                  </div>
+
+                  {/* Day cells */}
+                  <div className="grid grid-cols-7 gap-1">
+                    {cells.map((day, i) => {
+                      if (day === null) return <div key={`empty-${i}`} />;
+                      
+                      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                      const isCustom = customDates.includes(dateStr);
+                      const isScheduled = isScheduledDay(day);
+                      const today = new Date();
+                      const isToday = day === today.getDate() && month === today.getMonth() && year === today.getFullYear();
+
+                      return (
+                        <button
+                          key={day}
+                          type="button"
+                          onClick={() => toggleDate(day)}
+                          className={`aspect-square rounded-xl flex items-center justify-center text-[11px] font-bold transition-all relative ${
+                            isCustom 
+                              ? 'bg-white text-black shadow-lg scale-105' 
+                              : isScheduled 
+                                ? 'bg-white/10 text-white/40' 
+                                : 'text-gray-600 hover:bg-white/5'
+                          } ${isToday ? 'ring-1 ring-[var(--tg-theme-button-color)]' : ''}`}
+                        >
+                          {day}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {customDates.length > 0 && (
+                    <button 
+                      type="button" 
+                      onClick={() => setCustomDates([])} 
+                      className="w-full mt-2 py-1.5 text-[9px] font-bold text-red-400 hover:text-red-300 uppercase tracking-widest transition-colors"
+                    >
+                      Сбросить все даты
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
           </div>
 
           <div className="flex flex-col gap-2">
