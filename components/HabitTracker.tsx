@@ -100,13 +100,20 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     setFreezeWarnings(newWarnings);
   }, [habits]);
 
-  // Авто-скролл к сегодняшнему дню на мобилке
+  // Авто-скролл к сегодняшнему дню на мобилке (только при смене таба, не при каждом обновлении)
+  const initialScrollDone = useRef(false);
   useEffect(() => {
+    initialScrollDone.current = false;
+  }, [activeTab]);
+  
+  useEffect(() => {
+    if (initialScrollDone.current) return;
     const timer = setTimeout(() => {
       const todaySlots = document.querySelectorAll('[data-today="true"]');
       todaySlots.forEach(el => {
         el.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
       });
+      initialScrollDone.current = true;
     }, 300);
     return () => clearTimeout(timer);
   }, [habits, activeTab]);
