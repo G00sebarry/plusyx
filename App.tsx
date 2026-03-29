@@ -273,6 +273,7 @@ const App: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const mainRef = useRef<HTMLDivElement>(null);
   
   const [editingTask, setEditingTask] = useState<Task | undefined>(undefined);
   const [editingHabit, setEditingHabit] = useState<Habit | undefined>(undefined);
@@ -522,6 +523,9 @@ const handleAutoSaveHabit = async (updatedHabit: Habit) => {
   const handleToggleHabit = async (id: string, date: string, value: boolean | 'mini' | 'freeze') => {
   if (!userId) return;
   
+  // Сохраняем позицию скролла
+  const scrollTop = mainRef.current?.scrollTop ?? 0;
+  
   // Находим привычку и создаём обновлённую версию
   const habit = habits.find(h => h.id === id);
   if (!habit) return;
@@ -537,6 +541,11 @@ const handleAutoSaveHabit = async (updatedHabit: Habit) => {
   
   // Обновляем стейт
   setHabits(prev => prev.map(h => h.id === id ? updatedHabit : h));
+  
+  // Восстанавливаем скролл после ререндера
+  requestAnimationFrame(() => {
+    if (mainRef.current) mainRef.current.scrollTop = scrollTop;
+  });
   
   window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
   
@@ -716,7 +725,7 @@ const handleAutoSaveHabit = async (updatedHabit: Habit) => {
         )}
       </header>
       {isCreateMenuOpen && <div className="fixed inset-0 z-[140]" onClick={() => setIsCreateMenuOpen(false)} />}
-      <main className="flex-1 overflow-y-auto pb-24 relative z-10">
+      <main ref={mainRef} className="flex-1 overflow-y-auto pb-24 relative z-10">
         {searchQuery && (
           <div className="px-5 py-2 flex items-center gap-2 tg-secondary-bg/50 border-b border-gray-400/5">
             <span className="text-[10px] font-bold tg-hint">Найдено:</span>
