@@ -176,8 +176,12 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ tasks, habits, colum
   const goToday = () => setCurrentDate(new Date());
 
   const isHabitScheduledForDate = (habit: Habit, date: Date) => {
-    const dayOfWeek = date.getDay();
-    return habit.frequency.days.includes(dayOfWeek);
+    if (habit.frequency.days.includes(date.getDay())) return true;
+    if (habit.frequency.customDates && habit.frequency.customDates.length > 0) {
+      const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+      return habit.frequency.customDates.includes(dateStr);
+    }
+    return false;
   };
 
   const getTasksForDate = (dateStr: string) => tasks.filter(t => t.date === dateStr);
