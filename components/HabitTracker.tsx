@@ -131,6 +131,12 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     return `${day}.${month}`;
   };
 
+  // День релевантен если запланирован ИЛИ уже есть отметка в истории
+  const isDateRelevant = (habit: Habit, date: Date): boolean => {
+    if (isDateScheduled(habit, date)) return true;
+    return habit.history[formatDate(date)] !== undefined;
+  };
+
   const toggleExpanded = (habitId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setExpandedHabits(prev => {
@@ -199,7 +205,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
       const checkDate = new Date(today);
       checkDate.setDate(checkDate.getDate() - i);
       
-      if (!isDateScheduled(habit, checkDate)) continue;
+      if (!isDateRelevant(habit, checkDate)) continue;
       
       const ds = formatDate(checkDate);
       const val = habit.history[ds];
@@ -222,7 +228,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     const checkDate = new Date(today);
     
     for (let i = 0; i < 365; i++) {
-      if (!isDateScheduled(habit, checkDate)) {
+      if (!isDateRelevant(habit, checkDate)) {
         checkDate.setDate(checkDate.getDate() - 1);
         continue;
       }
@@ -257,7 +263,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     for (const dateStr of sortedDates) {
       const date = new Date(dateStr);
       
-      if (!isDateScheduled(habit, date)) continue;
+      if (!isDateRelevant(habit, date)) continue;
       
       const val = habit.history[dateStr];
       
@@ -276,7 +282,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
           checkDate.setDate(checkDate.getDate() + 1);
           
           while (checkDate < date) {
-            if (isDateScheduled(habit, checkDate)) {
+            if (isDateRelevant(habit, checkDate)) {
               isConsecutive = false;
               break;
             }
@@ -326,7 +332,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
       const date = new Date(today);
       date.setDate(date.getDate() - i);
       
-      if (!isDateScheduled(habit, date)) continue;
+      if (!isDateRelevant(habit, date)) continue;
       
       const key = formatDate(date);
       const val = habit.history[key];
@@ -373,7 +379,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
       for (let d = 1; d <= daysInMonth; d++) {
         const date = new Date(year, month, d);
         
-        if (isDateScheduled(habit, date)) {
+        if (isDateRelevant(habit, date)) {
           scheduledDays++;
           const val = habit.history[formatDate(date)];
           if (val === 'freeze') continue; // Заморозка не учитывается
@@ -407,7 +413,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     for (let d = 1; d <= daysInMonth; d++) {
       const date = new Date(year, month, d);
       
-      if (isDateScheduled(habit, date)) {
+      if (isDateRelevant(habit, date)) {
         scheduledDays++;
         const ds = formatDate(date);
         const val = habit.history[ds];
@@ -704,7 +710,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
       if (!date) return 'bg-transparent';
       const ds = formatDate(date);
       const val = habit.history[ds];
-      const isScheduled = isDateScheduled(habit, date);
+      const isScheduled = isDateRelevant(habit, date);
       
       if (!isScheduled) return hasCover ? 'bg-white/5' : 'bg-gray-500/10';
       if (!val) return hasCover ? 'bg-white/20' : 'bg-gray-500/30';
@@ -727,7 +733,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     for (let d = 1; d <= daysInMonth; d++) {
       const date = new Date(year, month, d);
       
-      if (isDateScheduled(habit, date)) {
+      if (isDateRelevant(habit, date)) {
         const ds = formatDate(date);
         const val = habit.history[ds];
         
@@ -867,7 +873,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     for (let i = 0; i < days; i++) {
       const date = new Date(todayCheck);
       date.setDate(date.getDate() - i);
-      if (!isDateScheduled(habit, date)) continue;
+      if (!isDateRelevant(habit, date)) continue;
       const key = formatDate(date);
       const val = habit.history[key];
       if (val === 'mini') miniCount++;
@@ -893,7 +899,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
       date.setDate(date.getDate() - i);
       const key = formatDate(date);
       const val = habit.history[key];
-      const scheduled = isDateScheduled(habit, date);
+      const scheduled = isDateRelevant(habit, date);
       heatmapData.push({
         date: key,
         value: scheduled ? (val ? String(val) : 'missed') : null,
@@ -909,7 +915,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
       date.setDate(date.getDate() - i);
       const key = formatDate(date);
       const val = habit.history[key];
-      const scheduled = isDateScheduled(habit, date);
+      const scheduled = isDateRelevant(habit, date);
       const dayLabel = date.getDate().toString();
       
       if (!scheduled) {
@@ -1207,7 +1213,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     
     for (let d = 1; d <= lastDayOfMonth; d++) {
       const date = new Date(now.getFullYear(), now.getMonth(), d);
-      if (isDateScheduled(habit, date)) {
+      if (isDateRelevant(habit, date)) {
         daysToRender.push(date);
       }
     }
