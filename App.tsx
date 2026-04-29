@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { KanbanBoard } from './components/KanbanBoard';
-import { CalendarView } from './components/CalendarView';
+import { CalendarView } from './components/calendar';
 import { BottomNav } from './components/BottomNav';
 import { TaskModal } from './components/TaskModal';
 import { HabitTracker } from './components/HabitTracker';
@@ -308,7 +308,7 @@ const [wallpaperPosition, setWallpaperPosition] = useState<number>(50);
 
     checkAuth();
 
-    const { data: { subscription } } = onAuthStateChange((event, session) => {
+    const { data: { subscription } } = onAuthStateChange((event: any, session: any) => {
       if (session?.user) {
         setUserId(session.user.id);
         setUserEmail(session.user.email || null);
@@ -743,28 +743,29 @@ const handleAutoSaveHabit = async (updatedHabit: Habit) => {
             onEditTask={setEditingTask} 
             onDeleteTask={setTaskToDelete} 
             onCopyTask={handleCopyTask} 
-            onQuickAdd={(s, cId) => { setEditingTask({ id:'', title:'', description:'', date:toLocalDateString(new Date()), status:s, columnId: cId, checklists: [], comments: []} as Task); setIsTaskModalOpen(true); }} 
+            onQuickAdd={(s, cId) => { setEditingTask({ id:'', title:'', description:'', date:toLocalDateString(new Date()), status:s, columnId: cId, checklists: [], comments: [], position: 0} as Task); setIsTaskModalOpen(true); }}
             onDragEnd={() => {}} 
             scrollToColumnId={searchQuery && filteredTasks.length > 0 ? filteredTasks[0].columnId : null}
           />
         )}
-       {view === 'calendar' && <CalendarView 
+      {view === 'calendar' && <CalendarView 
   tasks={filteredTasks} 
   habits={habits} 
   columns={columns}
   onEditTask={(t) => { setEditingTask(t); setIsTaskModalOpen(true); }} 
   onQuickAdd={(taskData) => {
-    const col = columns.find(c => c.id === taskData.columnId) || columns[0];
-    setEditingTask({ 
-      id: '', title: taskData.title || '', description: '', 
-      date: taskData.date || toLocalDateString(new Date()), 
-      time: taskData.time || '',
-      status: col?.type || 'todo', 
-      columnId: taskData.columnId || col?.id || 'col-todo', 
-      checklists: [], comments: [] 
-    } as Task);
-    setIsTaskModalOpen(true);
-  }}
+  const col = columns.find(c => c.id === taskData.columnId) || columns[0];
+  setEditingTask({ 
+    id: '', title: taskData.title || '', description: '', 
+    date: taskData.date || toLocalDateString(new Date()), 
+    time: taskData.time || '',
+    status: col?.type || 'todo', 
+    columnId: taskData.columnId || col?.id || 'col-todo', 
+    checklists: [], comments: [], position: 0
+  } as Task);
+  setIsTaskModalOpen(true);
+}}
+  onToggleHabit={handleToggleHabit}
 />}
         
         {view === 'tracker' && (
