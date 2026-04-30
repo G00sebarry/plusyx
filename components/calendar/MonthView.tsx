@@ -15,6 +15,7 @@ interface MonthViewProps {
   columns: Column[];
   onEditTask: (task: Task) => void;
   onOpenQuickAdd: (dateStr: string) => void;
+  onOpenDay: (date: Date) => void;
 }
 
 const weekdays = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
@@ -27,6 +28,7 @@ export const MonthView: React.FC<MonthViewProps> = ({
   columns,
   onEditTask,
   onOpenQuickAdd,
+  onOpenDay,
 }) => {
   const daysToDisplay = useMemo(() => {
     const year = currentDate.getFullYear();
@@ -49,7 +51,11 @@ export const MonthView: React.FC<MonthViewProps> = ({
 
   const handleCellClick = (e: React.MouseEvent, dateStr: string) => {
     const target = e.target as HTMLElement;
-    if (target.closest('[data-task-btn]') || target.closest('[data-habit-item]')) return;
+    if (
+      target.closest('[data-task-btn]') ||
+      target.closest('[data-habit-item]') ||
+      target.closest('[data-day-num]')
+    ) return;
     onOpenQuickAdd(dateStr);
   };
 
@@ -88,20 +94,25 @@ export const MonthView: React.FC<MonthViewProps> = ({
             `}
           >
             <div className="flex justify-between items-center px-0.5 mb-0.5">
-              <span
+              <button
+                data-day-num
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenDay(date);
+                }}
                 className={`
-                  text-[11px] md:text-[12px] font-black leading-none
+                  text-[11px] md:text-[12px] font-black leading-none transition-all hover:scale-110 active:scale-95
                   ${
                     isToday
                       ? 'bg-blue-500 text-white w-6 h-6 md:w-7 md:h-7 rounded-full flex items-center justify-center text-[10px] md:text-[11px]'
-                      : ''
+                      : 'hover:text-blue-500'
                   }
                   ${!isToday && isWeekend ? 'text-red-400/50' : ''}
                   ${!isToday && !isWeekend ? 'tg-text opacity-30' : ''}
                 `}
               >
                 {date.getDate()}
-              </span>
+              </button>
 
               {category === 'tasks' && (
                 <button

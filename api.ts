@@ -386,3 +386,52 @@ export const createTelegramToken = async (userId: string) => {
 
   return token;
 };
+
+// ═══════════════════════════════════════════════════════════
+// 📝 DAILY NOTES (заметки дня в карточке календаря)
+// ═══════════════════════════════════════════════════════════
+
+// Получить все заметки пользователя — карта date → text
+export const fetchDailyNotes = async (userId: string): Promise<Record<string, string>> => {
+  const { data, error } = await supabase
+    .from('daily_notes')
+    .select('date, text')
+    .eq('user_id', userId);
+
+  if (error) {
+    console.error('Error fetching daily notes:', error);
+    return {};
+  }
+
+  const map: Record<string, string> = {};
+  (data || []).forEach((row: { date: string; text: string }) => {
+    map[row.date] = row.text;
+  });
+  return map;
+};
+
+// Сохранить заметку на дату. Если text пустой — удаляем запись.
+export const saveDailyNote = async (userId: string, date: string, text: string) => {
+  if (!text.trim()) {
+    const { error } = await supabase
+      .from('daily_notes')
+      .delete()
+      .eq('user_id', userId)
+      .eq('date', date);
+    if (error) console.error('Error deleting daily note:', error);
+    return;
+  }
+
+  const { error } = await supabase
+    .from('daily_notes')
+    .upsert({
+      user_id: userId,
+      date,
+      text,
+      updated_at: new Date().toISOString()
+    }, {
+      onConflict: 'user_id,date'
+    });
+
+  if (error) console.error('Error saving daily note:', error);
+};

@@ -28,6 +28,7 @@ interface WeekListViewProps {
   onOpenQuickAdd: (dateStr: string) => void;
   onCycleHabit: (habitId: string, dateStr: string, current: boolean | 'mini' | 'freeze' | number | undefined) => void;
   onOpenHabitMenu: (x: number, y: number, habitId: string, dateStr: string) => void;
+  onOpenDay: (date: Date) => void;
 }
 
 const INITIAL_WEEKS_BEFORE = 8;
@@ -50,6 +51,7 @@ export const WeekListView: React.FC<WeekListViewProps> = ({
   onOpenQuickAdd,
   onCycleHabit,
   onOpenHabitMenu,
+  onOpenDay,
 }) => {
   // Список понедельников отсортированный по возрастанию
   const [weeks, setWeeks] = useState<Date[]>(() => {
@@ -224,6 +226,7 @@ export const WeekListView: React.FC<WeekListViewProps> = ({
                   onOpenQuickAdd={onOpenQuickAdd}
                   onCycleHabit={onCycleHabit}
                   onOpenHabitMenu={onOpenHabitMenu}
+                  onOpenDay={onOpenDay}
                 />
               ))}
             </div>
@@ -250,6 +253,7 @@ interface DayRowProps {
   onOpenQuickAdd: (dateStr: string) => void;
   onCycleHabit: (habitId: string, dateStr: string, current: boolean | 'mini' | 'freeze' | number | undefined) => void;
   onOpenHabitMenu: (x: number, y: number, habitId: string, dateStr: string) => void;
+  onOpenDay: (date: Date) => void;
 }
 
 const DayRow: React.FC<DayRowProps> = ({
@@ -264,6 +268,7 @@ const DayRow: React.FC<DayRowProps> = ({
   onOpenQuickAdd,
   onCycleHabit,
   onOpenHabitMenu,
+  onOpenDay,
 }) => {
   const dStr = toLocalDateString(date);
   const isToday = dStr === todayStr;
@@ -302,8 +307,11 @@ const DayRow: React.FC<DayRowProps> = ({
         ${accentClass} ${bgClass} ${opacityClass}
       `}
     >
-      {/* ── Левая колонка: день недели + число ───────────────── */}
-      <div className="flex flex-col">
+      {/* ── Левая колонка: день недели + число (кликабельна — открывает карточку дня) ───────────────── */}
+      <button
+        onClick={() => onOpenDay(date)}
+        className="flex flex-col text-left active:scale-95 transition-transform hover:opacity-80"
+      >
         <span
           className={`
             text-[9px] md:text-[10px] font-black uppercase tracking-widest
@@ -321,7 +329,7 @@ const DayRow: React.FC<DayRowProps> = ({
         >
           {date.getDate()}
         </span>
-      </div>
+      </button>
 
       {/* ── Правая колонка: чипы привычек + список задач ─────── */}
       <div className="flex flex-col gap-1.5 min-w-0">

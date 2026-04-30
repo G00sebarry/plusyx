@@ -11,6 +11,7 @@ import { MonthView } from './MonthView';
 import { WeekListView } from './WeekListView';
 import { QuickAddModal } from './QuickAddModal';
 import { HabitContextMenu } from './HabitContextMenu';
+import { DayCard } from './DayCard';
 
 type ViewMode = 'month' | 'week';
 type Category = 'tasks' | 'habits' | 'all';
@@ -23,6 +24,9 @@ interface CalendarViewProps {
   onQuickAdd: (task: Partial<Task>) => void;
   // Тоггл статуса привычки на конкретный день — та же сигнатура, что в HabitTracker
   onToggleHabit: (id: string, date: string, value: boolean | 'mini' | 'freeze') => void;
+  // Заметки дня (карта date → text). Опционально — если не передано, заметки будут пустыми.
+  dailyNotes?: Record<string, string>;
+  onSaveDailyNote?: (date: string, text: string) => Promise<void>;
 }
 
 const VIEW_STORAGE_KEY = 'plusyx_calendar_view';
@@ -35,6 +39,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   onEditTask,
   onQuickAdd,
   onToggleHabit,
+  dailyNotes,
+  onSaveDailyNote,
 }) => {
   // ── Состояние навигации ───────────────────────────────────
   const [view, setView] = useState<ViewMode>(() => {
@@ -56,6 +62,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   // ── QuickAdd и контекстное меню привычки ──────────────────
   const [quickAddDate, setQuickAddDate] = useState<string | null>(null);
   const [habitMenu, setHabitMenu] = useState<{ x: number; y: number; habitId: string; date: string } | null>(null);
+  // ── Открытая карточка дня ─────────────────────────────────
+  const [openedDay, setOpenedDay] = useState<Date | null>(null);
 
   // ── Сохранение настроек ───────────────────────────────────
   useEffect(() => { localStorage.setItem(VIEW_STORAGE_KEY, view); }, [view]);
@@ -222,6 +230,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
             columns={columns}
             onEditTask={onEditTask}
             onOpenQuickAdd={(d) => setQuickAddDate(d)}
+            onOpenDay={(d) => setOpenedDay(d)}
           />
         </div>
       ) : (
@@ -237,6 +246,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           onOpenQuickAdd={(d) => setQuickAddDate(d)}
           onCycleHabit={handleCycleHabit}
           onOpenHabitMenu={(x, y, habitId, date) => setHabitMenu({ x, y, habitId, date })}
+          onOpenDay={(d) => setOpenedDay(d)}
         />
       )}
 
@@ -255,6 +265,25 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           y={habitMenu.y}
           onClose={() => setHabitMenu(null)}
           onSelect={handleHabitMenuSelect}
+        />
+      )}
+
+      {openedDay && (
+        <DayCard
+          date={openedDay}
+          onClose={() => setOpenedDay(null)}
+          onChangeDate={(d) => setOpenedDay(d)}
+          tasks={tasks}
+          habits={habits}
+          columns={columns}
+          initialNote={dailyNotes?.[toLocalDateString(openedDay)] || ''}
+          onSaveNote={async (date, text) => {
+            if (onSaveDailyNote) await onSaveDailyNote(date, text);
+          }}
+          onEditTask={onEditTask}
+          onOpenQuickAdd={(d) => setQuickAddDate(d)}
+          onToggleHabit={onToggleHabit}
+          onOpenHabitMenu={(x, y, habitId, date) => setHabitMenu({ x, y, habitId, date })}
         />
       )}
     </div>
