@@ -202,6 +202,14 @@ export const DayCard: React.FC<DayCardProps> = ({
   const [draftText, setDraftText] = useState('');
   const draftRef = useRef<HTMLTextAreaElement>(null);
 
+  // Анимация slide-in-from-bottom только при первом открытии,
+  // не при смене даты стрелками/свайпом
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setMounted(true), 350);
+    return () => clearTimeout(t);
+  }, []);
+
   const handleAddNote = async () => {
     const text = draftText.trim();
     if (!text) return;
@@ -224,12 +232,12 @@ export const DayCard: React.FC<DayCardProps> = ({
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
       <div
-        className="
+        className={`
           relative w-full max-w-lg tg-bg
           rounded-t-[40px] sm:rounded-[32px] shadow-2xl
           flex flex-col max-h-[92vh] overflow-hidden
-          animate-in slide-in-from-bottom duration-300
-        "
+          ${mounted ? '' : 'animate-in slide-in-from-bottom duration-300'}
+        `}
         onClick={(e) => e.stopPropagation()}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}

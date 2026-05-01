@@ -163,14 +163,47 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 
   return (
     <div className="flex flex-col h-full animate-in fade-in duration-500 overflow-hidden">
-      {/* ── HEADER ──────────────────────────────────────────── */}
-      <div className="flex items-start justify-between px-4 md:px-5 pt-4 mb-3 gap-3">
-        <div className="flex flex-col min-w-0 flex-1">
-          <h2 className="text-xl font-black tg-text capitalize tracking-tighter truncate">
+      {/* ── HEADER (двухрядный) ──────────────────────────── */}
+      <div className="px-4 md:px-5 pt-4 mb-2">
+        {/* Ряд 1: заголовок + стрелки */}
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <h2 className="text-xl font-black tg-text capitalize tracking-tighter truncate min-w-0 flex-1">
             {headerLabel.split(' ').slice(0, -1).join(' ')}{' '}
             <span className="opacity-20">{headerLabel.split(' ').slice(-1)[0]}</span>
           </h2>
-          <div className="flex gap-3 md:gap-4 mt-1">
+          <div className="flex items-center gap-2 shrink-0">
+            {!isAtToday && (
+              <button
+                onClick={goToday}
+                className="px-3 py-1.5 text-[9px] font-black uppercase tracking-wider bg-blue-500/10 text-blue-500 rounded-xl hover:bg-blue-500/20 transition-all active:scale-95"
+              >
+                Сегодня
+              </button>
+            )}
+            <div className="flex items-center gap-0.5 tg-secondary-bg p-1 rounded-2xl">
+              <button
+                onClick={() => navigate(-1)}
+                className="w-8 h-8 flex items-center justify-center tg-text hover:bg-black/5 rounded-xl transition-all active:scale-90"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                  <polyline points="15 18 9 12 15 6" />
+                </svg>
+              </button>
+              <button
+                onClick={() => navigate(1)}
+                className="w-8 h-8 flex items-center justify-center tg-text hover:bg-black/5 rounded-xl transition-all active:scale-90"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                  <polyline points="9 18 15 12 9 6" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Ряд 2: категории слева + переключатель видов справа */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex gap-3 md:gap-4 min-w-0">
             <CategoryTab active={category === 'tasks'} accent="blue" onClick={() => setCategory('tasks')}>
               Задачи
             </CategoryTab>
@@ -181,41 +214,9 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               Всё
             </CategoryTab>
           </div>
-        </div>
-
-        <div className="flex items-center gap-2 shrink-0">
-          {/* Переключатель видов */}
-          <div className="flex tg-secondary-bg p-0.5 rounded-2xl">
+          <div className="flex tg-secondary-bg p-0.5 rounded-2xl shrink-0">
             <ViewTab active={view === 'month'} onClick={() => switchView('month')}>Мес</ViewTab>
             <ViewTab active={view === 'week'} onClick={() => switchView('week')}>Нед</ViewTab>
-          </div>
-
-          {!isAtToday && (
-            <button
-              onClick={goToday}
-              className="px-3 py-1.5 text-[9px] font-black uppercase tracking-wider bg-blue-500/10 text-blue-500 rounded-xl hover:bg-blue-500/20 transition-all active:scale-95"
-            >
-              Сегодня
-            </button>
-          )}
-
-          <div className="flex items-center gap-0.5 tg-secondary-bg p-1 rounded-2xl">
-            <button
-              onClick={() => navigate(-1)}
-              className="w-9 h-9 flex items-center justify-center tg-text hover:bg-black/5 rounded-xl transition-all active:scale-90"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                <polyline points="15 18 9 12 15 6" />
-              </svg>
-            </button>
-            <button
-              onClick={() => navigate(1)}
-              className="w-9 h-9 flex items-center justify-center tg-text hover:bg-black/5 rounded-xl transition-all active:scale-90"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                <polyline points="9 18 15 12 9 6" />
-              </svg>
-            </button>
           </div>
         </div>
       </div>
@@ -275,7 +276,12 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         <DayCard
           date={openedDay}
           onClose={() => setOpenedDay(null)}
-          onChangeDate={(d) => setOpenedDay(d)}
+          onChangeDate={(d) => {
+            setOpenedDay(d);
+            // Синхронизируем календарь под карточкой с днём в карточке
+            setCurrentDate(d);
+            if (view === 'week') setVisibleWeekMonday(getMondayOfWeek(d));
+          }}
           tasks={tasks}
           habits={habits}
           columns={columns}
@@ -283,7 +289,11 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           onAddNote={async (date, text) => { if (onAddDailyNote) await onAddDailyNote(date, text); }}
           onUpdateNote={async (noteId, text) => { if (onUpdateDailyNote) await onUpdateDailyNote(noteId, text); }}
           onDeleteNote={async (noteId) => { if (onDeleteDailyNote) await onDeleteDailyNote(noteId); }}
-          onEditTask={onEditTask}
+          onEditTask={(task) => {
+            // Закрываем карточку дня — иначе TaskModal окажется под ней
+            setOpenedDay(null);
+            onEditTask(task);
+          }}
           onOpenQuickAdd={(d) => setQuickAddDate(d)}
           onToggleHabit={onToggleHabit}
           onOpenHabitMenu={(x, y, habitId, date) => setHabitMenu({ x, y, habitId, date })}

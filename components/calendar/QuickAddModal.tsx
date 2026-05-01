@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Column } from '../../types';
 
 interface QuickAddModalProps {
@@ -53,7 +54,7 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
     return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
   })();
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[450] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
       <div
@@ -121,6 +122,7 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

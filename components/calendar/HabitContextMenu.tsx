@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 
 interface HabitContextMenuProps {
   x: number;
@@ -22,7 +23,7 @@ export const HabitContextMenu: React.FC<HabitContextMenuProps> = ({ x, y, onClos
     };
   }, [onClose]);
 
-  return (
+  return createPortal(
     <div
       ref={menuRef}
       className="fixed z-[500] w-40 bg-[#1c1c1e] rounded-2xl shadow-2xl border border-white/10 flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200"
@@ -56,6 +57,7 @@ export const HabitContextMenu: React.FC<HabitContextMenuProps> = ({ x, y, onClos
       >
         Сбросить
       </button>
-    </div>
+    </div>,
+    document.body
   );
 };
