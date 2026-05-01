@@ -177,8 +177,8 @@ export const DayCard: React.FC<DayCardProps> = ({
         await onSaveNote(dStr, v);
         noteInitialRef.current = v;
         setNoteStatus('saved');
-        // Через 2 сек убираем плашку «сохранено»
-        window.setTimeout(() => setNoteStatus('idle'), 2000);
+        // Через 3 сек убираем плашку «Saved»
+        window.setTimeout(() => setNoteStatus('idle'), 3000);
       } catch (err) {
         console.error('Save note error:', err);
         setNoteStatus('idle');
@@ -236,13 +236,16 @@ export const DayCard: React.FC<DayCardProps> = ({
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
-        {/* ── Шапка: ✕ + стрелки ── */}
-        <div className="flex items-center justify-between px-4 pt-3 pb-1 shrink-0">
+        {/* ── Шапка: ✕ + стрелки ── (sticky чтобы всегда была видна на мобиле) */}
+        <div
+          className="flex items-center justify-between px-4 pb-2 shrink-0 sticky top-0 z-10 tg-bg"
+          style={{ paddingTop: 'max(12px, env(safe-area-inset-top))' }}
+        >
           <button
             onClick={onClose}
-            className="w-9 h-9 flex items-center justify-center tg-text hover:bg-black/5 rounded-xl transition-all active:scale-90"
+            className="w-10 h-10 flex items-center justify-center tg-text hover:bg-black/5 rounded-xl transition-all active:scale-90 bg-black/5"
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <line x1="18" y1="6" x2="6" y2="18" />
               <line x1="6" y1="6" x2="18" y2="18" />
             </svg>
@@ -294,9 +297,12 @@ export const DayCard: React.FC<DayCardProps> = ({
                 </span>
               </div>
             </div>
-            <span className="text-[10px] font-black uppercase tracking-widest tg-hint opacity-40 mt-1.5 inline-block">
-              {MONTH_NAMES[date.getMonth()]} {date.getFullYear()}
-            </span>
+            {/* Месяц-год показываем только если контекстный лейбл его не содержит */}
+            {!ctx.text.includes(MONTH_NAMES[date.getMonth()]) && (
+              <span className="text-[10px] font-black uppercase tracking-widest tg-hint opacity-40 mt-1.5 inline-block">
+                {MONTH_NAMES[date.getMonth()]} {date.getFullYear()}
+              </span>
+            )}
           </div>
 
           {/* ── Мини-стата (только для прошлых и сегодняшних) ── */}
@@ -417,9 +423,19 @@ export const DayCard: React.FC<DayCardProps> = ({
           <Section
             title="Заметка дня"
             action={
-              <span className="text-[9px] tg-hint opacity-50 font-medium">
-                {noteStatus === 'saving' ? 'сохраняем…' : noteStatus === 'saved' ? 'сохранено' : ''}
-              </span>
+              noteStatus === 'saving' ? (
+                <span className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded-md bg-blue-500/10 text-blue-500">
+                  <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                  Saving
+                </span>
+              ) : noteStatus === 'saved' ? (
+                <span className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded-md bg-green-500/10 text-green-500">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  Saved
+                </span>
+              ) : null
             }
           >
             <textarea
