@@ -65,6 +65,7 @@ export const WeekListView: React.FC<WeekListViewProps> = ({
 
   const containerRef = useRef<HTMLDivElement>(null);
   const weekRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const dayRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   // Чтобы не дёргать onVisibleWeekChange лишний раз
   const lastReportedWeekRef = useRef<string>('');
 
@@ -72,16 +73,15 @@ export const WeekListView: React.FC<WeekListViewProps> = ({
 
   // ──────────────────────────────────────────────────────────
   // Скролл к anchorDate при смене scrollTrigger (нажали "Сегодня" / стрелку)
+  // Скроллим к самой дате, чтобы она была первой видимой строкой.
   // ──────────────────────────────────────────────────────────
   useLayoutEffect(() => {
-    const targetMonday = getMondayOfWeek(anchorDate);
-    const targetKey = weekKey(targetMonday);
-    const node = weekRefs.current.get(targetKey);
+    const targetDayKey = toLocalDateString(anchorDate);
+    const node = dayRefs.current.get(targetDayKey);
     const container = containerRef.current;
 
     if (!node || !container) return;
 
-    // Скроллим к началу целевой недели — она становится первой видимой строкой
     const containerRect = container.getBoundingClientRect();
     const nodeRect = node.getBoundingClientRect();
     const offset = nodeRect.top - containerRect.top + container.scrollTop;
@@ -89,12 +89,11 @@ export const WeekListView: React.FC<WeekListViewProps> = ({
   }, [scrollTrigger, anchorDate]);
 
   // ──────────────────────────────────────────────────────────
-  // На монтаже: мгновенно (без анимации) подскроллить к стартовой неделе
+  // На монтаже: мгновенно (без анимации) подскроллить к стартовому дню
   // ──────────────────────────────────────────────────────────
   useLayoutEffect(() => {
-    const targetMonday = getMondayOfWeek(anchorDate);
-    const targetKey = weekKey(targetMonday);
-    const node = weekRefs.current.get(targetKey);
+    const targetDayKey = toLocalDateString(anchorDate);
+    const node = dayRefs.current.get(targetDayKey);
     const container = containerRef.current;
     if (!node || !container) return;
 
@@ -210,23 +209,33 @@ export const WeekListView: React.FC<WeekListViewProps> = ({
               }}
               className="flex flex-col gap-1.5"
             >
-              {days.map(date => (
-                <DayRow
-                  key={toLocalDateString(date)}
-                  date={date}
-                  todayStr={todayStr}
-                  showHabits={showHabits}
-                  showTasks={showTasks}
-                  habits={habits}
-                  columns={columns}
-                  tasks={tasksByDate.get(toLocalDateString(date)) || []}
-                  onEditTask={onEditTask}
-                  onOpenQuickAdd={onOpenQuickAdd}
-                  onCycleHabit={onCycleHabit}
-                  onOpenHabitMenu={onOpenHabitMenu}
-                  onOpenDay={onOpenDay}
-                />
-              ))}
+              {days.map(date => {
+                const dStr = toLocalDateString(date);
+                return (
+                  <div
+                    key={dStr}
+                    ref={node => {
+                      if (node) dayRefs.current.set(dStr, node);
+                      else dayRefs.current.delete(dStr);
+                    }}
+                  >
+                    <DayRow
+                      date={date}
+                      todayStr={todayStr}
+                      showHabits={showHabits}
+                      showTasks={showTasks}
+                      habits={habits}
+                      columns={columns}
+                      tasks={tasksByDate.get(dStr) || []}
+                      onEditTask={onEditTask}
+                      onOpenQuickAdd={onOpenQuickAdd}
+                      onCycleHabit={onCycleHabit}
+                      onOpenHabitMenu={onOpenHabitMenu}
+                      onOpenDay={onOpenDay}
+                    />
+                  </div>
+                );
+              })}
             </div>
           );
         })}
