@@ -15,7 +15,8 @@ import {
   fetchAntiHabits, saveAntiHabitToDb, deleteAntiHabitFromDb, saveAntiHabitsOrderToDb,
   getCurrentSession, signInWithGoogle, signOut, onAuthStateChange,
   fetchUserSettings, saveUserSettings,
-  fetchDailyNotes, saveDailyNote
+  fetchDailyNotes, addDailyNote, updateDailyNote, deleteDailyNote,
+  DailyNote
 } from './api';
 
 const toLocalDateString = (date: Date) => {
@@ -264,7 +265,7 @@ const App: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [habits, setHabits] = useState<Habit[]>([]);
   const [antiHabits, setAntiHabits] = useState<AntiHabit[]>([]);
-  const [dailyNotes, setDailyNotes] = useState<Record<string, string>>({});
+  const [dailyNotes, setDailyNotes] = useState<DailyNote[]>([]);
   
   // --- UI MODALS ---
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
@@ -349,7 +350,8 @@ const [wallpaperPosition, setWallpaperPosition] = useState<number>(50);
         setTasks(dbTasks);
         setHabits(dbHabits);
         setAntiHabits(dbAntiHabits);
-        setDailyNotes(dbNotes);
+        // dbNotes приходит как Record<date, DailyNote[]> — сплющиваем
+        setDailyNotes(Object.values(dbNotes).flat());
         
         if (dbSettings) {
           if (dbSettings.wallpaper) setWallpaper(dbSettings.wallpaper);
@@ -557,16 +559,21 @@ const handleAutoSaveHabit = async (updatedHabit: Habit) => {
   await saveHabitToDb(updatedHabit, userId);
 };
 
-  // --- DAILY NOTES ---
-  const handleSaveDailyNote = async (date: string, text: string) => {
+  // --- DAILY NOTES (журнал заметок дня) ---
+  const handleAddDailyNote = async (date: string, text: string) => {
     if (!userId) return;
-    await saveDailyNote(userId, date, text);
-    setDailyNotes(prev => {
-      const next = { ...prev };
-      if (text.trim()) next[date] = text;
-      else delete next[date];
-      return next;
-    });
+    const note = await addDailyNote(userId, date, text);
+    if (note) setDailyNotes(prev => [...prev, note]);
+  };
+
+  const handleUpdateDailyNote = async (noteId: string, text: string) => {
+    await updateDailyNote(noteId, text);
+    setDailyNotes(prev => prev.map(n => n.id === noteId ? { ...n, text } : n));
+  };
+
+  const handleDeleteDailyNote = async (noteId: string) => {
+    await deleteDailyNote(noteId);
+    setDailyNotes(prev => prev.filter(n => n.id !== noteId));
   };
 
   const handleReorderHabits = async (newHabits: Habit[]) => {
@@ -781,7 +788,9 @@ const handleAutoSaveHabit = async (updatedHabit: Habit) => {
 }}
   onToggleHabit={handleToggleHabit}
   dailyNotes={dailyNotes}
-  onSaveDailyNote={handleSaveDailyNote}
+  onAddDailyNote={handleAddDailyNote}
+  onUpdateDailyNote={handleUpdateDailyNote}
+  onDeleteDailyNote={handleDeleteDailyNote}
 />}
         
         {view === 'tracker' && (

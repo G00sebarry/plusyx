@@ -6,6 +6,7 @@ import {
   isHabitScheduledForDate,
   nextHabitValue,
 } from './calendarUtils';
+import { DailyNote } from '../../api';
 
 interface DayCardProps {
   date: Date;
@@ -16,11 +17,12 @@ interface DayCardProps {
   habits: Habit[];
   columns: Column[];
 
-  // Заметка дня — текст и сохранялка
-  initialNote: string;
-  onSaveNote: (date: string, text: string) => Promise<void>;
+  // Журнал заметок дня
+  notes: DailyNote[];
+  onAddNote: (date: string, text: string) => Promise<void>;
+  onUpdateNote: (noteId: string, text: string) => Promise<void>;
+  onDeleteNote: (noteId: string) => Promise<void>;
 
-  // Те же хендлеры что в WeekListView
   onEditTask: (task: Task) => void;
   onOpenQuickAdd: (dateStr: string) => void;
   onToggleHabit: (id: string, date: string, value: boolean | 'mini' | 'freeze') => void;
@@ -37,7 +39,6 @@ const MONTH_NAMES = [
   'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
 ];
 
-// Контекстный лейбл: «Сегодня» / «Вчера» / «Завтра» / «Через N дней» / «N дней назад»
 const getContextLabel = (date: Date): { text: string; tone: 'today' | 'past' | 'future' } => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -65,8 +66,17 @@ const pluralDays = (n: number): string => {
   return 'дней';
 };
 
+const pluralNotes = (n: number): string => {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod100 >= 11 && mod100 <= 14) return 'записей';
+  if (mod10 === 1) return 'запись';
+  if (mod10 >= 2 && mod10 <= 4) return 'записи';
+  return 'записей';
+};
+
 const SWIPE_THRESHOLD = 80;
-const NOTE_AUTOSAVE_MS = 1000;
+const LONG_PRESS_MS = 500;
 
 export const DayCard: React.FC<DayCardProps> = ({
   date,
@@ -75,8 +85,10 @@ export const DayCard: React.FC<DayCardProps> = ({
   tasks,
   habits,
   columns,
-  initialNote,
-  onSaveNote,
+  notes,
+  onAddNote,
+  onUpdateNote,
+  onDeleteNote,
   onEditTask,
   onOpenQuickAdd,
   onToggleHabit,
@@ -85,15 +97,10 @@ export const DayCard: React.FC<DayCardProps> = ({
   const dStr = toLocalDateString(date);
   const ctx = getContextLabel(date);
 
-  // Привычки этого дня (запланированные)
   const dayHabits = habits
     .filter(h => isHabitScheduledForDate(h, date))
-    .map(h => ({
-      habit: h,
-      status: getHabitStatusForDate(h, date),
-    }));
+    .map(h => ({ habit: h, status: getHabitStatusForDate(h, date) }));
 
-  // Задачи этого дня, отсортированные по времени
   const dayTasks = [...tasks]
     .filter(t => t.date === dStr)
     .sort((a, b) => {
@@ -114,7 +121,6 @@ export const DayCard: React.FC<DayCardProps> = ({
   const touchStartYRef = useRef<number | null>(null);
 
   const handleTouchStart = (e: React.TouchEvent) => {
-    // Не запускаем свайп на интерактивных элементах (textarea, input, button, кнопках привычек/задач)
     const target = e.target as HTMLElement;
     if (target.closest('textarea, input, button, [data-no-swipe]')) {
       touchStartXRef.current = null;
@@ -134,13 +140,6 @@ export const DayCard: React.FC<DayCardProps> = ({
     touchStartXRef.current = null;
     touchStartYRef.current = null;
 
-    // Свайп вниз — закрываем карточку (только если жест явно вертикальный и достаточно длинный)
-    if (dy > 120 && Math.abs(dy) > Math.abs(dx) * 1.5) {
-      onClose();
-      return;
-    }
-
-    // Горизонтальный свайп — смена дня
     if (Math.abs(dy) > Math.abs(dx)) return;
     if (Math.abs(dx) < SWIPE_THRESHOLD) return;
 
@@ -155,51 +154,18 @@ export const DayCard: React.FC<DayCardProps> = ({
     onChangeDate(newDate);
   };
 
-  // ── Закрытие по Escape ─────────────────────────────────────
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
-      if (e.key === 'ArrowLeft') goToDay(-1);
-      if (e.key === 'ArrowRight') goToDay(1);
+      if (e.key === 'ArrowLeft' && !(e.target as HTMLElement)?.closest?.('textarea, input')) goToDay(-1);
+      if (e.key === 'ArrowRight' && !(e.target as HTMLElement)?.closest?.('textarea, input')) goToDay(1);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date]);
 
-  // ── Заметка дня + автосохранение ───────────────────────────
-  const [noteText, setNoteText] = useState(initialNote);
-  const [noteStatus, setNoteStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
-  const noteTimerRef = useRef<number | null>(null);
-  const noteInitialRef = useRef(initialNote);
-
-  // Когда меняется день — обновляем initial и сбрасываем
-  useEffect(() => {
-    setNoteText(initialNote);
-    noteInitialRef.current = initialNote;
-    setNoteStatus('idle');
-  }, [initialNote, dStr]);
-
-  const onNoteChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const v = e.target.value;
-    setNoteText(v);
-    if (noteTimerRef.current !== null) clearTimeout(noteTimerRef.current);
-    setNoteStatus('saving');
-    noteTimerRef.current = window.setTimeout(async () => {
-      try {
-        await onSaveNote(dStr, v);
-        noteInitialRef.current = v;
-        setNoteStatus('saved');
-        // Через 3 сек убираем плашку «Saved»
-        window.setTimeout(() => setNoteStatus('idle'), 3000);
-      } catch (err) {
-        console.error('Save note error:', err);
-        setNoteStatus('idle');
-      }
-    }, NOTE_AUTOSAVE_MS);
-  };
-
-  // ── Тоггл цикла привычки + хаптик ──────────────────────────
+  // ── Тоггл цикла привычки ──────────────────────────────────
   const handleHabitToggle = useCallback(
     (habit: Habit) => {
       window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
@@ -217,7 +183,7 @@ export const DayCard: React.FC<DayCardProps> = ({
     longPressTimer.current = window.setTimeout(() => {
       longPressFiredRef.current = true;
       onOpenHabitMenu(x, y, habit.id, dStr);
-    }, 500);
+    }, LONG_PRESS_MS);
   };
 
   const cancelLongPress = () => {
@@ -227,74 +193,99 @@ export const DayCard: React.FC<DayCardProps> = ({
     }
   };
 
-  // ──────────────────────────────────────────────────────────
+  // ── Журнал заметок ─────────────────────────────────────────
+  const dayNotes = (notes || [])
+    .filter(n => n.date === dStr)
+    .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+
+  const [draftText, setDraftText] = useState('');
+  const draftRef = useRef<HTMLTextAreaElement>(null);
+
+  const handleAddNote = async () => {
+    const text = draftText.trim();
+    if (!text) return;
+    setDraftText('');
+    if (draftRef.current) draftRef.current.style.height = 'auto';
+    await onAddNote(dStr, text);
+  };
+
+  const handleDraftInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setDraftText(e.target.value);
+    e.target.style.height = 'auto';
+    e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
+  };
+
   return (
     <div
-      className="fixed inset-0 z-[400] flex md:items-center md:justify-center md:p-4"
+      className="fixed inset-0 z-[400] flex items-center justify-center p-3 md:p-4"
       onClick={onClose}
     >
-      {/* Затемнение */}
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" />
 
-      {/* Карточка */}
       <div
         className="
-          relative tg-bg overflow-hidden
-          w-full h-full md:h-auto md:max-h-[90vh] md:w-full md:max-w-md
-          md:rounded-[28px] md:shadow-2xl md:border md:border-gray-400/10
-          flex flex-col
-          animate-in slide-in-from-bottom md:zoom-in-95 md:slide-in-from-bottom-0 fade-in duration-300
+          relative tg-bg rounded-[28px] shadow-2xl border border-gray-400/10
+          w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden
+          animate-in zoom-in-95 fade-in duration-200
         "
         onClick={(e) => e.stopPropagation()}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
-        {/* Скроллируемый контент */}
-        <div className="flex-1 overflow-y-auto no-scrollbar pb-8">
-          {/* ── ШАПКА: ✕ + стрелки. Sticky внутри скролла — всегда видна сверху ── */}
-          <div className="sticky top-0 z-20 tg-bg flex items-center justify-between px-4 pt-4 pb-3">
-            <button
-              onClick={onClose}
-              aria-label="Закрыть"
-              className="w-11 h-11 flex items-center justify-center rounded-full bg-black/10 hover:bg-black/20 active:scale-90 transition-all tg-text"
-            >
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
-            <div className="flex items-center gap-1 tg-secondary-bg p-1 rounded-2xl">
+        {/* ── ШАПКА ── */}
+        <div className="flex items-center justify-between px-4 pt-4 pb-2 shrink-0">
+          <span className="text-[10px] font-black uppercase tracking-widest tg-hint opacity-60">
+            Карточка дня
+          </span>
+          <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-0.5 tg-secondary-bg p-0.5 rounded-xl">
               <button
                 onClick={() => goToDay(-1)}
-                className="w-8 h-8 flex items-center justify-center tg-text hover:bg-black/5 rounded-xl transition-all active:scale-90"
+                className="w-7 h-7 flex items-center justify-center tg-text hover:bg-black/5 rounded-lg transition-all active:scale-90"
+                aria-label="Предыдущий день"
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
                   <polyline points="15 18 9 12 15 6" />
                 </svg>
               </button>
               <button
                 onClick={() => goToDay(1)}
-                className="w-8 h-8 flex items-center justify-center tg-text hover:bg-black/5 rounded-xl transition-all active:scale-90"
+                className="w-7 h-7 flex items-center justify-center tg-text hover:bg-black/5 rounded-lg transition-all active:scale-90"
+                aria-label="Следующий день"
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
                   <polyline points="9 18 15 12 9 6" />
                 </svg>
               </button>
             </div>
+            <button
+              onClick={onClose}
+              aria-label="Закрыть"
+              className="w-9 h-9 flex items-center justify-center rounded-xl bg-black/5 hover:bg-black/10 active:scale-90 transition-all tg-text"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
           </div>
-          {/* ── Большое число + день недели ── */}
-          <div className="px-5 pt-2 pb-4">
+        </div>
+
+        {/* Скролл */}
+        <div className="flex-1 overflow-y-auto no-scrollbar pb-4">
+          {/* Большое число */}
+          <div className="px-5 pt-1 pb-3">
             <div className="flex items-baseline gap-3">
               <span
                 className={`
-                  text-[64px] font-black leading-none tracking-tighter
+                  text-[56px] font-black leading-none tracking-tighter
                   ${ctx.tone === 'today' ? 'tg-text' : 'tg-text opacity-70'}
                 `}
               >
                 {date.getDate()}
               </span>
               <div className="flex flex-col">
-                <span className="text-base font-bold tg-text leading-tight">
+                <span className="text-[15px] font-bold tg-text leading-tight">
                   {WEEKDAY_FULL[date.getDay()]}
                 </span>
                 <span
@@ -307,7 +298,6 @@ export const DayCard: React.FC<DayCardProps> = ({
                 </span>
               </div>
             </div>
-            {/* Месяц-год показываем только если контекстный лейбл его не содержит */}
             {!ctx.text.includes(MONTH_NAMES[date.getMonth()]) && (
               <span className="text-[10px] font-black uppercase tracking-widest tg-hint opacity-40 mt-1.5 inline-block">
                 {MONTH_NAMES[date.getMonth()]} {date.getFullYear()}
@@ -315,29 +305,19 @@ export const DayCard: React.FC<DayCardProps> = ({
             )}
           </div>
 
-          {/* ── Мини-стата (только для прошлых и сегодняшних) ── */}
+          {/* Мини-стата */}
           {ctx.tone !== 'future' && (dayHabits.length > 0 || dayTasks.length > 0) && (
             <div className="px-5 pb-4 flex gap-2.5">
               {dayHabits.length > 0 && (
-                <StatChip
-                  label="Привычки"
-                  done={habitsDone}
-                  total={dayHabits.length}
-                  color="green"
-                />
+                <StatChip label="Привычки" done={habitsDone} total={dayHabits.length} color="green" />
               )}
               {dayTasks.length > 0 && (
-                <StatChip
-                  label="Задачи"
-                  done={tasksDone}
-                  total={dayTasks.length}
-                  color="blue"
-                />
+                <StatChip label="Задачи" done={tasksDone} total={dayTasks.length} color="blue" />
               )}
             </div>
           )}
 
-          {/* ── Привычки ── */}
+          {/* Привычки */}
           {dayHabits.length > 0 && (
             <Section title="Привычки" hint="тап — статус · удержание — меню">
               <div className="flex flex-col gap-1.5">
@@ -372,7 +352,7 @@ export const DayCard: React.FC<DayCardProps> = ({
             </Section>
           )}
 
-          {/* ── Задачи ── */}
+          {/* Задачи */}
           <Section
             title="Задачи"
             action={
@@ -410,10 +390,7 @@ export const DayCard: React.FC<DayCardProps> = ({
                       <span className="text-[10px] tg-hint font-bold min-w-[36px] tabular-nums">
                         {task.time || '—'}
                       </span>
-                      <span
-                        className="w-1.5 h-1.5 rounded-full shrink-0"
-                        style={{ backgroundColor: dotColor }}
-                      />
+                      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: dotColor }} />
                       <span
                         className={`
                           text-[13px] tg-text font-medium flex-1 truncate
@@ -429,36 +406,68 @@ export const DayCard: React.FC<DayCardProps> = ({
             )}
           </Section>
 
-          {/* ── Заметка дня ── */}
+          {/* Журнал заметок */}
           <Section
-            title="Заметка дня"
+            title="Журнал дня"
             action={
-              noteStatus === 'saving' ? (
-                <span className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded-md bg-blue-500/10 text-blue-500">
-                  <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                  Saving
-                </span>
-              ) : noteStatus === 'saved' ? (
-                <span className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded-md bg-green-500/10 text-green-500">
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5">
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
-                  Saved
+              dayNotes.length > 0 ? (
+                <span className="text-[9px] tg-hint opacity-50 font-bold">
+                  {dayNotes.length} {pluralNotes(dayNotes.length)}
                 </span>
               ) : null
             }
           >
-            <textarea
-              value={noteText}
-              onChange={onNoteChange}
-              placeholder="Что было сегодня? Мысли, наблюдения, планы…"
-              rows={4}
-              className="
-                w-full tg-secondary-bg tg-text rounded-2xl px-4 py-3 text-[13px] leading-relaxed
-                outline-none border border-gray-400/10 focus:border-blue-500/40 transition-colors
-                resize-none placeholder:tg-hint placeholder:opacity-40
-              "
-            />
+            {dayNotes.length > 0 && (
+              <div className="flex flex-col gap-1 mb-2">
+                {dayNotes.map(note => (
+                  <NoteRow
+                    key={note.id}
+                    note={note}
+                    onUpdate={onUpdateNote}
+                    onDelete={onDeleteNote}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Поле ввода */}
+            <div className="flex items-end gap-2 px-2 py-1.5 bg-black/5 rounded-2xl border border-blue-500/0 focus-within:border-blue-500/30 transition-colors">
+              <textarea
+                ref={draftRef}
+                value={draftText}
+                onChange={handleDraftInput}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleAddNote();
+                  }
+                }}
+                placeholder={dayNotes.length === 0 ? 'Записать первую мысль дня…' : 'Записать ещё…'}
+                rows={1}
+                className="
+                  flex-1 bg-transparent tg-text outline-none resize-none
+                  text-[13px] leading-relaxed py-1.5 px-2
+                  placeholder:tg-hint placeholder:opacity-40
+                "
+                style={{ minHeight: 28, maxHeight: 120 }}
+              />
+              <button
+                onClick={handleAddNote}
+                disabled={!draftText.trim()}
+                className={`
+                  w-9 h-9 flex items-center justify-center rounded-xl shrink-0 transition-all
+                  ${draftText.trim()
+                    ? 'bg-blue-500 text-white hover:bg-blue-600 active:scale-90'
+                    : 'bg-black/5 text-gray-400 cursor-not-allowed'}
+                `}
+                aria-label="Добавить заметку"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                  <line x1="12" y1="19" x2="12" y2="5" />
+                  <polyline points="5 12 12 5 19 12" />
+                </svg>
+              </button>
+            </div>
           </Section>
         </div>
       </div>
@@ -467,7 +476,161 @@ export const DayCard: React.FC<DayCardProps> = ({
 };
 
 // ════════════════════════════════════════════════════════════════
-// Helpers — Section, StatChip, HabitRow
+// NoteRow — одна запись журнала
+// ════════════════════════════════════════════════════════════════
+
+interface NoteRowProps {
+  note: DailyNote;
+  onUpdate: (noteId: string, text: string) => Promise<void>;
+  onDelete: (noteId: string) => Promise<void>;
+}
+
+const NoteRow: React.FC<NoteRowProps> = ({ note, onUpdate, onDelete }) => {
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(note.text);
+  const [showDelete, setShowDelete] = useState(false);
+  const longPressTimer = useRef<number | null>(null);
+  const longPressFiredRef = useRef(false);
+  const editRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => { setText(note.text); }, [note.text]);
+
+  useEffect(() => {
+    if (editing && editRef.current) {
+      editRef.current.focus();
+      editRef.current.style.height = 'auto';
+      editRef.current.style.height = `${editRef.current.scrollHeight}px`;
+      const len = editRef.current.value.length;
+      editRef.current.setSelectionRange(len, len);
+    }
+  }, [editing]);
+
+  const startLongPress = () => {
+    longPressFiredRef.current = false;
+    longPressTimer.current = window.setTimeout(() => {
+      longPressFiredRef.current = true;
+      window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('medium');
+      setShowDelete(true);
+    }, LONG_PRESS_MS);
+  };
+
+  const cancelLongPress = () => {
+    if (longPressTimer.current !== null) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+
+  const handleClick = () => {
+    if (longPressFiredRef.current) {
+      longPressFiredRef.current = false;
+      return;
+    }
+    if (showDelete) {
+      setShowDelete(false);
+      return;
+    }
+    setEditing(true);
+  };
+
+  const handleSave = async () => {
+    const trimmed = text.trim();
+    if (!trimmed) {
+      await onDelete(note.id);
+      return;
+    }
+    if (trimmed !== note.text) {
+      await onUpdate(note.id, trimmed);
+    }
+    setEditing(false);
+  };
+
+  const handleDelete = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setShowDelete(false);
+    await onDelete(note.id);
+  };
+
+  if (editing) {
+    return (
+      <div className="flex gap-2.5 p-2.5 bg-black/5 rounded-xl border border-blue-500/30" data-no-swipe>
+        <span className="text-[9px] font-black tg-hint opacity-60 min-w-[36px] pt-1 tabular-nums">
+          {note.time}
+        </span>
+        <textarea
+          ref={editRef}
+          value={text}
+          onChange={(e) => {
+            setText(e.target.value);
+            e.target.style.height = 'auto';
+            e.target.style.height = `${Math.min(e.target.scrollHeight, 200)}px`;
+          }}
+          onBlur={handleSave}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              setText(note.text);
+              setEditing(false);
+            }
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              handleSave();
+            }
+          }}
+          className="
+            flex-1 bg-transparent tg-text outline-none resize-none
+            text-[12px] leading-relaxed
+          "
+          style={{ minHeight: 20 }}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      data-no-swipe
+      onClick={handleClick}
+      onTouchStart={startLongPress}
+      onTouchEnd={cancelLongPress}
+      onTouchMove={cancelLongPress}
+      onMouseDown={(e) => e.button === 0 && startLongPress()}
+      onMouseUp={cancelLongPress}
+      onMouseLeave={cancelLongPress}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        setShowDelete(true);
+      }}
+      className={`
+        flex gap-2.5 p-2.5 rounded-xl cursor-pointer select-none transition-all
+        ${showDelete
+          ? 'bg-red-500/10 border border-red-500/30'
+          : 'tg-secondary-bg hover:bg-black/5 border border-transparent'}
+      `}
+    >
+      <span className="text-[9px] font-black tg-hint opacity-60 min-w-[36px] pt-1 tabular-nums">
+        {note.time}
+      </span>
+      <span className="flex-1 text-[12px] leading-relaxed tg-text whitespace-pre-wrap break-words">
+        {note.text}
+      </span>
+      {showDelete && (
+        <button
+          onClick={handleDelete}
+          className="w-7 h-7 flex items-center justify-center bg-red-500 text-white rounded-lg shrink-0 active:scale-90 transition-all hover:bg-red-600"
+          aria-label="Удалить заметку"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      )}
+    </div>
+  );
+};
+
+// ════════════════════════════════════════════════════════════════
+// Хелперы — Section, StatChip, HabitRow
 // ════════════════════════════════════════════════════════════════
 
 const Section: React.FC<{
@@ -479,9 +642,7 @@ const Section: React.FC<{
   <div className="px-5 pb-5">
     <div className="flex items-baseline justify-between mb-2.5">
       <div className="flex items-baseline gap-2">
-        <span className="text-[10px] font-black uppercase tracking-widest tg-hint">
-          {title}
-        </span>
+        <span className="text-[10px] font-black uppercase tracking-widest tg-hint">{title}</span>
         {hint && <span className="text-[9px] tg-hint opacity-40">{hint}</span>}
       </div>
       {action}
@@ -490,31 +651,23 @@ const Section: React.FC<{
   </div>
 );
 
-const StatChip: React.FC<{
-  label: string;
-  done: number;
-  total: number;
-  color: 'green' | 'blue';
-}> = ({ label, done, total, color }) => {
+const StatChip: React.FC<{ label: string; done: number; total: number; color: 'green' | 'blue' }> = ({
+  label, done, total, color,
+}) => {
   const pct = total > 0 ? (done / total) * 100 : 0;
   const barColor = color === 'green' ? 'bg-green-500' : 'bg-blue-500';
   const numColor = color === 'green' ? 'text-green-500' : 'text-blue-500';
   return (
     <div className="flex-1 tg-secondary-bg rounded-2xl px-3 py-2.5">
       <div className="flex items-baseline justify-between mb-1.5">
-        <span className="text-[9px] font-bold tg-hint opacity-60 uppercase tracking-wider">
-          {label}
-        </span>
+        <span className="text-[9px] font-bold tg-hint opacity-60 uppercase tracking-wider">{label}</span>
         <span className="text-[13px] font-black tabular-nums">
           <span className={numColor}>{done}</span>
           <span className="tg-hint opacity-40">/{total}</span>
         </span>
       </div>
       <div className="h-1 bg-black/10 rounded-full overflow-hidden">
-        <div
-          className={`h-full ${barColor} rounded-full transition-all duration-500`}
-          style={{ width: `${pct}%` }}
-        />
+        <div className={`h-full ${barColor} rounded-full transition-all duration-500`} style={{ width: `${pct}%` }} />
       </div>
     </div>
   );
@@ -583,9 +736,7 @@ const HabitRow: React.FC<HabitRowProps> = ({
       <span className={`flex-1 text-[13px] font-bold text-left tg-text ${status === 'pending' ? 'opacity-60' : ''}`}>
         {habit.title}
       </span>
-      <div
-        className={`text-[9px] font-black tracking-wider px-2 py-1 rounded-md uppercase shrink-0 ${badgeBg}`}
-      >
+      <div className={`text-[9px] font-black tracking-wider px-2 py-1 rounded-md uppercase shrink-0 ${badgeBg}`}>
         {badgeText}
       </div>
     </button>

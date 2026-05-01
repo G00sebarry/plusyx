@@ -388,50 +388,83 @@ export const createTelegramToken = async (userId: string) => {
 };
 
 // ═══════════════════════════════════════════════════════════
-// 📝 DAILY NOTES (заметки дня в карточке календаря)
+// 📝 DAILY NOTES (заметки-журнал дня в карточке календаря)
+// Каждая запись отдельной строкой с временем создания
 // ═══════════════════════════════════════════════════════════
 
-// Получить все заметки пользователя — карта date → text
-export const fetchDailyNotes = async (userId: string): Promise<Record<string, string>> => {
+export interface DailyNote {
+  id: string;
+  date: string;
+  time: string;
+  text: string;
+  created_at: string;
+}
+
+// Получить все заметки пользователя сгруппированные по дате
+export const fetchDailyNotes = async (userId: string): Promise<Record<string, DailyNote[]>> => {
   const { data, error } = await supabase
     .from('daily_notes')
-    .select('date, text')
-    .eq('user_id', userId);
+    .select('id, date, time, text, created_at')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: true });
 
   if (error) {
     console.error('Error fetching daily notes:', error);
     return {};
   }
 
-  const map: Record<string, string> = {};
-  (data || []).forEach((row: { date: string; text: string }) => {
-    map[row.date] = row.text;
+  const map: Record<string, DailyNote[]> = {};
+  (data || []).forEach((row: DailyNote) => {
+    if (!map[row.date]) map[row.date] = [];
+    map[row.date].push(row);
   });
   return map;
 };
 
-// Сохранить заметку на дату. Если text пустой — удаляем запись.
-export const saveDailyNote = async (userId: string, date: string, text: string) => {
-  if (!text.trim()) {
-    const { error } = await supabase
-      .from('daily_notes')
-      .delete()
-      .eq('user_id', userId)
-      .eq('date', date);
-    if (error) console.error('Error deleting daily note:', error);
-    return;
-  }
+// Создать новую заметку. Время = текущее HH:MM.
+export const addDailyNote = async (userId: string, date: string, text: string): Promise<DailyNote | null> => {
+  if (!text.trim()) return null;
 
-  const { error } = await supabase
+  const now = new Date();
+  const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+  const { data, error } = await supabase
     .from('daily_notes')
-    .upsert({
+    .insert({
       user_id: userId,
       date,
-      text,
-      updated_at: new Date().toISOString()
-    }, {
-      onConflict: 'user_id,date'
-    });
+      time,
+      text: text.trim()
+    })
+    .select()
+    .single();
 
-  if (error) console.error('Error saving daily note:', error);
+  if (error) {
+    console.error('Error adding daily note:', error);
+    return null;
+  }
+  return data as DailyNote;
+};
+
+// Обновить текст существующей заметки
+export const updateDailyNote = async (noteId: string, text: string) => {
+  const { error } = await supabase
+    .from('daily_notes')
+    .update({
+      text: text.trim(),
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', noteId);
+
+  if (error) console.error('Error updating daily note:', error);
+};
+
+// Удалить заметку
+export const deleteDailyNote = async (noteId: string) => {
+  const { error } = await supabase
+    .from('daily_notes')
+    .delete()
+    .eq('id', noteId);
+
+  if (error) console.error('Error deleting daily note:', error);
 };

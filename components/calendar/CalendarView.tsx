@@ -22,11 +22,12 @@ interface CalendarViewProps {
   columns: Column[];
   onEditTask: (task: Task) => void;
   onQuickAdd: (task: Partial<Task>) => void;
-  // Тоггл статуса привычки на конкретный день — та же сигнатура, что в HabitTracker
   onToggleHabit: (id: string, date: string, value: boolean | 'mini' | 'freeze') => void;
-  // Заметки дня (карта date → text). Опционально — если не передано, заметки будут пустыми.
-  dailyNotes?: Record<string, string>;
-  onSaveDailyNote?: (date: string, text: string) => Promise<void>;
+  // Журнал заметок дня
+  dailyNotes?: import('../../api').DailyNote[];
+  onAddDailyNote?: (date: string, text: string) => Promise<void>;
+  onUpdateDailyNote?: (noteId: string, text: string) => Promise<void>;
+  onDeleteDailyNote?: (noteId: string) => Promise<void>;
 }
 
 const VIEW_STORAGE_KEY = 'plusyx_calendar_view';
@@ -40,7 +41,9 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   onQuickAdd,
   onToggleHabit,
   dailyNotes,
-  onSaveDailyNote,
+  onAddDailyNote,
+  onUpdateDailyNote,
+  onDeleteDailyNote,
 }) => {
   // ── Состояние навигации ───────────────────────────────────
   const [view, setView] = useState<ViewMode>(() => {
@@ -276,10 +279,10 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           tasks={tasks}
           habits={habits}
           columns={columns}
-          initialNote={dailyNotes?.[toLocalDateString(openedDay)] || ''}
-          onSaveNote={async (date, text) => {
-            if (onSaveDailyNote) await onSaveDailyNote(date, text);
-          }}
+          notes={dailyNotes || []}
+          onAddNote={async (date, text) => { if (onAddDailyNote) await onAddDailyNote(date, text); }}
+          onUpdateNote={async (noteId, text) => { if (onUpdateDailyNote) await onUpdateDailyNote(noteId, text); }}
+          onDeleteNote={async (noteId) => { if (onDeleteDailyNote) await onDeleteDailyNote(noteId); }}
           onEditTask={onEditTask}
           onOpenQuickAdd={(d) => setQuickAddDate(d)}
           onToggleHabit={onToggleHabit}
