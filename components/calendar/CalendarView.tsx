@@ -62,6 +62,14 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   // Триггер для принудительной прокрутки в WeekListView (увеличивается при нажатии стрелок/Сегодня)
   const [scrollTrigger, setScrollTrigger] = useState(0);
 
+  // При входе в календарь всегда показываем сегодня — никаких "запомнили месяц назад"
+  useEffect(() => {
+    const today = new Date();
+    setCurrentDate(today);
+    setVisibleWeekMonday(getMondayOfWeek(today));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ── QuickAdd и контекстное меню привычки ──────────────────
   const [quickAddDate, setQuickAddDate] = useState<string | null>(null);
   const [habitMenu, setHabitMenu] = useState<{ x: number; y: number; habitId: string; date: string } | null>(null);

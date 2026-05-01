@@ -235,7 +235,7 @@ export const DayCard: React.FC<DayCardProps> = ({
         className={`
           relative w-full max-w-lg tg-bg
           rounded-t-[40px] sm:rounded-[32px] shadow-2xl
-          flex flex-col max-h-[92vh] overflow-hidden
+          flex flex-col h-[92vh] sm:h-auto sm:max-h-[92vh] overflow-hidden
           ${mounted ? '' : 'animate-in slide-in-from-bottom duration-300'}
         `}
         onClick={(e) => e.stopPropagation()}

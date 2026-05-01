@@ -254,11 +254,13 @@ const App: React.FC = () => {
   const [userName, setUserName] = useState<string | null>(null);
 
   // --- UI ---
-  const [view, setView] = useState<ViewType>(() => {
-    const savedView = localStorage.getItem('plusyx_current_view');
-    return (savedView as ViewType) || 'kanban';
-  });
+  // Всегда стартуем с доски — чтобы привычка открывать приложение приводила
+  // к одному и тому же месту, а не к тому где юзер был в прошлый раз.
+  const [view, setView] = useState<ViewType>('kanban');
   const [isLoading, setIsLoading] = useState(true);
+
+  // Чистим устаревший ключ запоминания view (раньше сохраняли последний открытый раздел)
+  useEffect(() => { localStorage.removeItem('plusyx_current_view'); }, []);
 
   // --- ДАННЫЕ ---
   const [columns, setColumns] = useState<Column[]>(DEFAULT_COLUMNS);
@@ -325,11 +327,6 @@ const [wallpaperPosition, setWallpaperPosition] = useState<number>(50);
 
     return () => subscription.unsubscribe();
   }, []);
-
-  // --- SAVE VIEW ---
-  useEffect(() => {
-    localStorage.setItem('plusyx_current_view', view);
-  }, [view]);
 
   // --- 🔥 ЗАГРУЗКА ДАННЫХ ---
   useEffect(() => {
