@@ -81,12 +81,11 @@ export const WeekListView: React.FC<WeekListViewProps> = ({
 
     if (!node || !container) return;
 
-    // Помещаем целевую неделю в верхнюю треть видимой области
+    // Скроллим к началу целевой недели — она становится первой видимой строкой
     const containerRect = container.getBoundingClientRect();
     const nodeRect = node.getBoundingClientRect();
     const offset = nodeRect.top - containerRect.top + container.scrollTop;
-    const desiredFromTop = containerRect.height * 0.25;
-    container.scrollTo({ top: offset - desiredFromTop, behavior: 'smooth' });
+    container.scrollTo({ top: offset, behavior: 'smooth' });
   }, [scrollTrigger, anchorDate]);
 
   // ──────────────────────────────────────────────────────────
@@ -102,8 +101,7 @@ export const WeekListView: React.FC<WeekListViewProps> = ({
     const containerRect = container.getBoundingClientRect();
     const nodeRect = node.getBoundingClientRect();
     const offset = nodeRect.top - containerRect.top + container.scrollTop;
-    const desiredFromTop = containerRect.height * 0.25;
-    container.scrollTop = offset - desiredFromTop;
+    container.scrollTop = offset;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -146,8 +144,8 @@ export const WeekListView: React.FC<WeekListViewProps> = ({
       });
     }
 
-    // Определяем видимую неделю — ту, чей верх ближе всего к четверти высоты вьюпорта
-    const probeY = container.getBoundingClientRect().top + viewportH * 0.25;
+    // Определяем видимую неделю — ту, чей верх ближе всего к верху вьюпорта
+    const probeY = container.getBoundingClientRect().top + 20;
     let bestKey = '';
     let bestDist = Infinity;
     weekRefs.current.forEach((node, key) => {
