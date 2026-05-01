@@ -127,7 +127,13 @@ export const DayCard: React.FC<DayCardProps> = ({
     touchStartXRef.current = null;
     touchStartYRef.current = null;
 
-    // Игнорируем если жест больше вертикальный чем горизонтальный
+    // Свайп вниз — закрываем карточку (только если жест явно вертикальный и достаточно длинный)
+    if (dy > 120 && Math.abs(dy) > Math.abs(dx) * 1.5) {
+      onClose();
+      return;
+    }
+
+    // Горизонтальный свайп — смена дня
     if (Math.abs(dy) > Math.abs(dx)) return;
     if (Math.abs(dx) < SWIPE_THRESHOLD) return;
 
@@ -233,23 +239,34 @@ export const DayCard: React.FC<DayCardProps> = ({
           animate-in slide-in-from-bottom md:zoom-in-95 md:slide-in-from-bottom-0 fade-in duration-300
         "
         onClick={(e) => e.stopPropagation()}
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
       >
-        {/* ── Шапка: ✕ + стрелки ── (sticky чтобы всегда была видна на мобиле) */}
-        <div
-          className="flex items-center justify-between px-4 pb-2 shrink-0 sticky top-0 z-10 tg-bg"
-          style={{ paddingTop: 'max(12px, env(safe-area-inset-top))' }}
+        {/* Floating ✕ — всегда видна, поверх всего, в безопасной зоне */}
+        <button
+          onClick={onClose}
+          aria-label="Закрыть"
+          className="
+            absolute z-30 right-3 w-11 h-11 flex items-center justify-center
+            rounded-full bg-black/40 backdrop-blur-md text-white
+            shadow-lg active:scale-90 transition-all hover:bg-black/60
+          "
+          style={{ top: 'max(12px, env(safe-area-inset-top))' }}
         >
-          <button
-            onClick={onClose}
-            className="w-10 h-10 flex items-center justify-center tg-text hover:bg-black/5 rounded-xl transition-all active:scale-90 bg-black/5"
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+
+        {/* ── Шапка: drag-handle + стрелки ── */}
+        <div
+          className="flex items-center justify-between px-4 pb-2 shrink-0 relative"
+          style={{ paddingTop: 'max(20px, env(safe-area-inset-top))' }}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+        >
+          {/* Drag-индикатор для мобилы (показывает что можно свайпнуть вниз) */}
+          <div className="md:hidden w-12 h-1 rounded-full bg-white/30 absolute left-1/2 -translate-x-1/2 top-2 pointer-events-none" />
+
           <div className="flex items-center gap-1 tg-secondary-bg p-1 rounded-2xl">
             <button
               onClick={() => goToDay(-1)}
@@ -268,6 +285,9 @@ export const DayCard: React.FC<DayCardProps> = ({
               </svg>
             </button>
           </div>
+
+          {/* Невидимый spacer чтобы стрелки не уезжали под floating ✕ */}
+          <div className="w-11 h-11" aria-hidden />
         </div>
 
         {/* Скроллируемый контент */}
