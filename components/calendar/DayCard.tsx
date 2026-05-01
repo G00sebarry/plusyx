@@ -217,28 +217,24 @@ export const DayCard: React.FC<DayCardProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-[400] md:flex md:items-center md:justify-center md:p-4"
+      className="fixed inset-0 z-[400] flex items-end justify-center sm:items-center"
       onClick={onClose}
     >
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" />
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
       <div
         className="
-          relative tg-bg
-          w-full h-full md:h-auto md:max-h-[90vh] md:max-w-md
-          md:rounded-[28px] md:shadow-2xl md:border md:border-gray-400/10
-          flex flex-col overflow-hidden
-          animate-in slide-in-from-bottom md:zoom-in-95 md:slide-in-from-bottom-0 fade-in duration-200
+          relative w-full max-w-lg tg-bg
+          rounded-t-[40px] sm:rounded-[32px] shadow-2xl
+          flex flex-col max-h-[92vh] overflow-hidden
+          animate-in slide-in-from-bottom duration-300
         "
         onClick={(e) => e.stopPropagation()}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
         {/* ── ШАПКА ── */}
-        <div
-          className="flex items-center justify-between px-4 pb-2 shrink-0"
-          style={{ paddingTop: 'max(16px, env(safe-area-inset-top))' }}
-        >
+        <div className="flex items-center justify-between px-5 pt-5 pb-3 shrink-0">
           <span className="text-[10px] font-black uppercase tracking-widest tg-hint opacity-60">
             Карточка дня
           </span>
@@ -277,10 +273,7 @@ export const DayCard: React.FC<DayCardProps> = ({
         </div>
 
         {/* Скролл */}
-        <div
-          className="flex-1 overflow-y-auto no-scrollbar"
-          style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}
-        >
+        <div className="flex-1 overflow-y-auto no-scrollbar pb-12">
           {/* Большое число */}
           <div className="px-5 pt-1 pb-3">
             <div className="flex items-baseline gap-3">
