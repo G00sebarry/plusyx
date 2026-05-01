@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Task, Habit, Column } from '../../types';
 import {
   toLocalDateString,
@@ -215,7 +216,7 @@ export const DayCard: React.FC<DayCardProps> = ({
     e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
   };
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-[400] flex items-end justify-center sm:items-center"
       onClick={onClose}
@@ -472,7 +473,8 @@ export const DayCard: React.FC<DayCardProps> = ({
           </Section>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
