@@ -114,6 +114,13 @@ export const DayCard: React.FC<DayCardProps> = ({
   const touchStartYRef = useRef<number | null>(null);
 
   const handleTouchStart = (e: React.TouchEvent) => {
+    // Не запускаем свайп на интерактивных элементах (textarea, input, button, кнопках привычек/задач)
+    const target = e.target as HTMLElement;
+    if (target.closest('textarea, input, button, [data-no-swipe]')) {
+      touchStartXRef.current = null;
+      touchStartYRef.current = null;
+      return;
+    }
     const t = e.touches[0];
     touchStartXRef.current = t.clientX;
     touchStartYRef.current = t.clientY;
@@ -239,59 +246,42 @@ export const DayCard: React.FC<DayCardProps> = ({
           animate-in slide-in-from-bottom md:zoom-in-95 md:slide-in-from-bottom-0 fade-in duration-300
         "
         onClick={(e) => e.stopPropagation()}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
       >
-        {/* Floating ✕ — всегда видна, поверх всего, в безопасной зоне */}
-        <button
-          onClick={onClose}
-          aria-label="Закрыть"
-          className="
-            absolute z-30 right-3 w-11 h-11 flex items-center justify-center
-            rounded-full bg-black/40 backdrop-blur-md text-white
-            shadow-lg active:scale-90 transition-all hover:bg-black/60
-          "
-          style={{ top: 'max(12px, env(safe-area-inset-top))' }}
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-            <line x1="18" y1="6" x2="6" y2="18" />
-            <line x1="6" y1="6" x2="18" y2="18" />
-          </svg>
-        </button>
-
-        {/* ── Шапка: drag-handle + стрелки ── */}
-        <div
-          className="flex items-center justify-between px-4 pb-2 shrink-0 relative"
-          style={{ paddingTop: 'max(20px, env(safe-area-inset-top))' }}
-          onTouchStart={handleTouchStart}
-          onTouchEnd={handleTouchEnd}
-        >
-          {/* Drag-индикатор для мобилы (показывает что можно свайпнуть вниз) */}
-          <div className="md:hidden w-12 h-1 rounded-full bg-white/30 absolute left-1/2 -translate-x-1/2 top-2 pointer-events-none" />
-
-          <div className="flex items-center gap-1 tg-secondary-bg p-1 rounded-2xl">
-            <button
-              onClick={() => goToDay(-1)}
-              className="w-8 h-8 flex items-center justify-center tg-text hover:bg-black/5 rounded-xl transition-all active:scale-90"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                <polyline points="15 18 9 12 15 6" />
-              </svg>
-            </button>
-            <button
-              onClick={() => goToDay(1)}
-              className="w-8 h-8 flex items-center justify-center tg-text hover:bg-black/5 rounded-xl transition-all active:scale-90"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                <polyline points="9 18 15 12 9 6" />
-              </svg>
-            </button>
-          </div>
-
-          {/* Невидимый spacer чтобы стрелки не уезжали под floating ✕ */}
-          <div className="w-11 h-11" aria-hidden />
-        </div>
-
         {/* Скроллируемый контент */}
         <div className="flex-1 overflow-y-auto no-scrollbar pb-8">
+          {/* ── ШАПКА: ✕ + стрелки. Sticky внутри скролла — всегда видна сверху ── */}
+          <div className="sticky top-0 z-20 tg-bg flex items-center justify-between px-4 pt-4 pb-3">
+            <button
+              onClick={onClose}
+              aria-label="Закрыть"
+              className="w-11 h-11 flex items-center justify-center rounded-full bg-black/10 hover:bg-black/20 active:scale-90 transition-all tg-text"
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+            <div className="flex items-center gap-1 tg-secondary-bg p-1 rounded-2xl">
+              <button
+                onClick={() => goToDay(-1)}
+                className="w-8 h-8 flex items-center justify-center tg-text hover:bg-black/5 rounded-xl transition-all active:scale-90"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                  <polyline points="15 18 9 12 15 6" />
+                </svg>
+              </button>
+              <button
+                onClick={() => goToDay(1)}
+                className="w-8 h-8 flex items-center justify-center tg-text hover:bg-black/5 rounded-xl transition-all active:scale-90"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                  <polyline points="9 18 15 12 9 6" />
+                </svg>
+              </button>
+            </div>
+          </div>
           {/* ── Большое число + день недели ── */}
           <div className="px-5 pt-2 pb-4">
             <div className="flex items-baseline gap-3">
