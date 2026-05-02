@@ -32,8 +32,8 @@ interface WeekListViewProps {
   onOpenDay: (date: Date) => void;
 }
 
-const INITIAL_WEEKS_BEFORE = 0;       // Прошлые недели не грузим — подгружаются скроллом вверх
-const INITIAL_WEEKS_AFTER = 12;       // Грузим недели вперёд от текущей
+const INITIAL_WEEKS_BEFORE = 8;       // Прошлые недели грузим, чтоб юзер мог листать назад
+const INITIAL_WEEKS_AFTER = 12;       // И будущие — для прокрутки вперёд
 const LOAD_MORE_THRESHOLD = 4;        // Когда осталось меньше N недель до края — подгружаем
 const LOAD_BATCH = 8;                  // Сколько недель добавлять за раз
 const LONG_PRESS_MS = 500;
@@ -221,12 +221,8 @@ export const WeekListView: React.FC<WeekListViewProps> = ({
             const days = daysOfWeek(monday);
             const key = weekKey(monday);
 
-            // Прячем дни ДО anchorDate ТОЛЬКО в той неделе, где anchorDate содержится.
-            const anchorStr = toLocalDateString(anchorDate);
-            const weekContainsAnchor = days.some(d => toLocalDateString(d) === anchorStr);
-            const visibleDays = weekContainsAnchor
-              ? days.filter(d => toLocalDateString(d) >= anchorStr)
-              : days;
+            // Все 7 дней недели рендерятся как есть. Сегодня будет первой видимой строкой
+            // за счёт скролла к ноде в ref-callback ниже.
 
             return (
               <div
@@ -237,7 +233,7 @@ export const WeekListView: React.FC<WeekListViewProps> = ({
                 }}
                 className="flex flex-col gap-2"
               >
-                {visibleDays.map(date => {
+                {days.map(date => {
                   const dStr = toLocalDateString(date);
 
                   // Плашка месяца появляется перед днём, если:
