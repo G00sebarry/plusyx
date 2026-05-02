@@ -254,15 +254,12 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
       </div>
 
       {/* ── КОНТЕНТ ─────────────────────────────────────────── */}
-      {/* ДЕСКТОП ≥1024px: трёхпанельный дашборд */}
+      {/* ДЕСКТОП ≥1024px: двухколоночный дашборд (Сетка + Карточка дня) */}
       <div className="hidden lg:flex flex-1 min-h-0">
         <DesktopLayout
           currentDate={currentDate}
           onPrevMonth={() => navigate(-1)}
           onNextMonth={() => navigate(1)}
-          weekAnchorDate={todayDateRef}
-          onWeekVisibleChange={noop}
-          scrollTrigger={scrollTrigger}
           category={category}
           tasks={tasks}
           habits={habits}
@@ -276,7 +273,6 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           onDeleteNote={async (noteId) => { if (onDeleteDailyNote) await onDeleteDailyNote(noteId); }}
           onEditTask={onEditTask}
           onOpenQuickAdd={(d) => setQuickAddDate(d)}
-          onCycleHabit={handleCycleHabit}
           onToggleHabit={onToggleHabit}
           onOpenHabitMenu={(x, y, habitId, date) => setHabitMenu({ x, y, habitId, date })}
         />

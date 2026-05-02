@@ -17,6 +17,10 @@ interface MonthHeatmapGridProps {
   /** @deprecated Стрелки месяца теперь в общем хедере календаря */
   onNextMonth?: () => void;
   onSelectDay: (date: Date) => void;
+  /** Текущий выбранный день — подсвечивается обводкой в сетке */
+  selectedDay?: Date;
+  /** На десктопе показываем превью названий задач в ячейке. На мобиле — нет, мало места */
+  showTaskPreview?: boolean;
 }
 
 const WEEKDAYS = ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'];
@@ -72,6 +76,8 @@ export const MonthHeatmapGrid: React.FC<MonthHeatmapGridProps> = ({
   habits,
   columns,
   onSelectDay,
+  selectedDay,
+  showTaskPreview,
 }) => {
   // Строим 6 рядов × 7 дней — стандартная сетка месяца
   const cells = useMemo(() => {
@@ -136,26 +142,34 @@ export const MonthHeatmapGrid: React.FC<MonthHeatmapGridProps> = ({
           const isWeekend = date.getDay() === 0 || date.getDay() === 6;
           const dayTasks = tasksByDate.get(dStr) || [];
           const density = computeHabitDensity(date, habits);
+          const isSelected = selectedDay && dStr === toLocalDateString(selectedDay) && !isToday;
 
-          // Не больше 4 точек, остальные — компактным «+N»
-          const visibleTasks = dayTasks.slice(0, 4);
-          const hiddenCount = dayTasks.length - visibleTasks.length;
+          // Для превью текстом показываем 2 названия + "+N ещё"
+          const previewTasks = dayTasks.slice(0, 2);
+          const hiddenCount = dayTasks.length - previewTasks.length;
+
+          // Цвет рамки: сегодня — синяя, выбранный — белая полупрозрачная
+          const ringClass = isToday
+            ? 'ring-2 ring-blue-500 ring-offset-0'
+            : isSelected
+            ? 'ring-2 ring-white/30 ring-offset-0'
+            : '';
 
           return (
             <button
               key={dStr}
               onClick={() => onSelectDay(date)}
               className={`
-                rounded-lg p-1.5 flex flex-col justify-between text-left min-w-0 min-h-0
+                rounded-lg ${showTaskPreview ? 'p-1.5' : 'p-1.5'} flex flex-col text-left min-w-0 min-h-0
                 transition-all hover:scale-[1.04] hover:z-10 active:scale-95
                 ${heatmapBg(density, isCurrentMonth, isFuture)}
-                ${isToday ? 'ring-2 ring-blue-500 ring-offset-0' : ''}
+                ${ringClass}
                 ${!isCurrentMonth ? 'opacity-40' : ''}
               `}
             >
               <span
                 className={`
-                  text-[11px] font-bold leading-none
+                  text-[11px] font-bold leading-none shrink-0
                   ${isToday ? 'text-white' : ''}
                   ${!isToday && density >= 0.75 ? 'text-white/90' : ''}
                   ${!isToday && density < 0.75 && isWeekend && isCurrentMonth ? 'text-red-400/70' : ''}
@@ -165,19 +179,48 @@ export const MonthHeatmapGrid: React.FC<MonthHeatmapGridProps> = ({
                 {date.getDate()}
               </span>
 
-              {/* Точки задач снизу */}
-              {visibleTasks.length > 0 && (
-                <div className="flex gap-[2px] flex-wrap items-end">
-                  {visibleTasks.map(t => (
-                    <span
-                      key={t.id}
-                      className={`w-[5px] h-[5px] rounded-full ${dotColorForTask(t, columns)}`}
-                    />
-                  ))}
-                  {hiddenCount > 0 && (
-                    <span className="text-[8px] font-bold tg-hint opacity-70 ml-0.5">+{hiddenCount}</span>
-                  )}
-                </div>
+              {showTaskPreview ? (
+                /* ── ДЕСКТОП: превью названий задач ── */
+                previewTasks.length > 0 && (
+                  <div className="mt-auto w-full overflow-hidden">
+                    {previewTasks.map(t => (
+                      <div
+                        key={t.id}
+                        className={`
+                          text-[9px] leading-[1.25] truncate
+                          ${isToday ? 'text-white/95 font-medium' : ''}
+                          ${!isToday && density >= 0.75 ? 'text-white/80' : ''}
+                          ${!isToday && density < 0.75 ? 'tg-text opacity-60' : ''}
+                        `}
+                      >
+                        {t.title}
+                      </div>
+                    ))}
+                    {hiddenCount > 0 && (
+                      <div className={`
+                        text-[8px] leading-[1.25] truncate font-medium
+                        ${isToday ? 'text-white/60' : 'tg-hint opacity-50'}
+                      `}>
+                        +{hiddenCount} ещё
+                      </div>
+                    )}
+                  </div>
+                )
+              ) : (
+                /* ── МОБИЛА: точки задач ── */
+                dayTasks.length > 0 && (
+                  <div className="mt-auto flex gap-[2px] flex-wrap items-end">
+                    {dayTasks.slice(0, 4).map(t => (
+                      <span
+                        key={t.id}
+                        className={`w-[5px] h-[5px] rounded-full ${dotColorForTask(t, columns)}`}
+                      />
+                    ))}
+                    {dayTasks.length - 4 > 0 && (
+                      <span className="text-[8px] font-bold tg-hint opacity-70 ml-0.5">+{dayTasks.length - 4}</span>
+                    )}
+                  </div>
+                )
               )}
             </button>
           );
