@@ -11,7 +11,14 @@ import { DailyNote } from '../../api';
 
 interface DayCardProps {
   date: Date;
-  onClose: () => void;
+  /**
+   * 'modal' — плавающая модалка через portal (мобила)
+   * 'inline' — встроенная панель (десктоп v3)
+   * По умолчанию 'modal' для обратной совместимости.
+   */
+  mode?: 'modal' | 'inline';
+  /** В inline-режиме можно не передавать — закрыть нельзя, карточка всегда видна */
+  onClose?: () => void;
   onChangeDate: (newDate: Date) => void;
 
   tasks: Task[];
@@ -81,6 +88,7 @@ const LONG_PRESS_MS = 500;
 
 export const DayCard: React.FC<DayCardProps> = ({
   date,
+  mode = 'modal',
   onClose,
   onChangeDate,
   tasks,
@@ -157,14 +165,15 @@ export const DayCard: React.FC<DayCardProps> = ({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      // Escape закрывает только в modal-режиме (в inline закрыть нельзя)
+      if (e.key === 'Escape' && mode === 'modal' && onClose) onClose();
       if (e.key === 'ArrowLeft' && !(e.target as HTMLElement)?.closest?.('textarea, input')) goToDay(-1);
       if (e.key === 'ArrowRight' && !(e.target as HTMLElement)?.closest?.('textarea, input')) goToDay(1);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [date]);
+  }, [date, mode]);
 
   // ── Тоггл цикла привычки ──────────────────────────────────
   const handleHabitToggle = useCallback(
@@ -224,50 +233,53 @@ export const DayCard: React.FC<DayCardProps> = ({
     e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
   };
 
-  return createPortal(
+  // ──────────────────────────────────────────────────────────
+  // Контент карточки (одинаковый для modal и inline)
+  // ──────────────────────────────────────────────────────────
+  const cardBody = (
     <div
-      className="fixed inset-0 z-[400] flex items-end justify-center sm:items-center"
-      onClick={onClose}
+      className={
+        mode === 'inline'
+          ? `relative w-full h-full tg-bg rounded-3xl flex flex-col overflow-hidden border border-gray-400/10`
+          : `
+              relative w-full max-w-lg tg-bg
+              rounded-t-[40px] sm:rounded-[32px] shadow-2xl
+              flex flex-col h-[92vh] sm:h-auto sm:max-h-[92vh] overflow-hidden
+              ${mounted ? '' : 'animate-in slide-in-from-bottom duration-300'}
+            `
+      }
+      onClick={mode === 'modal' ? (e) => e.stopPropagation() : undefined}
+      onTouchStart={mode === 'modal' ? handleTouchStart : undefined}
+      onTouchEnd={mode === 'modal' ? handleTouchEnd : undefined}
     >
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-
-      <div
-        className={`
-          relative w-full max-w-lg tg-bg
-          rounded-t-[40px] sm:rounded-[32px] shadow-2xl
-          flex flex-col h-[92vh] sm:h-auto sm:max-h-[92vh] overflow-hidden
-          ${mounted ? '' : 'animate-in slide-in-from-bottom duration-300'}
-        `}
-        onClick={(e) => e.stopPropagation()}
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
-      >
-        {/* ── ШАПКА ── */}
-        <div className="flex items-center justify-between px-5 pt-5 pb-3 shrink-0">
-          <span className="text-[10px] font-black uppercase tracking-widest tg-hint opacity-60">
-            Карточка дня
-          </span>
-          <div className="flex items-center gap-1.5">
-            <div className="flex items-center gap-0.5 tg-secondary-bg p-0.5 rounded-xl">
-              <button
-                onClick={() => goToDay(-1)}
-                className="w-7 h-7 flex items-center justify-center tg-text hover:bg-black/5 rounded-lg transition-all active:scale-90"
-                aria-label="Предыдущий день"
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                  <polyline points="15 18 9 12 15 6" />
-                </svg>
-              </button>
-              <button
-                onClick={() => goToDay(1)}
-                className="w-7 h-7 flex items-center justify-center tg-text hover:bg-black/5 rounded-lg transition-all active:scale-90"
-                aria-label="Следующий день"
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                  <polyline points="9 18 15 12 9 6" />
-                </svg>
-              </button>
-            </div>
+      {/* ── ШАПКА ── */}
+      <div className="flex items-center justify-between px-5 pt-5 pb-3 shrink-0">
+        <span className="text-[10px] font-black uppercase tracking-widest tg-hint opacity-60">
+          Карточка дня
+        </span>
+        <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-0.5 tg-secondary-bg p-0.5 rounded-xl">
+            <button
+              onClick={() => goToDay(-1)}
+              className="w-7 h-7 flex items-center justify-center tg-text hover:bg-black/5 rounded-lg transition-all active:scale-90"
+              aria-label="Предыдущий день"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+            </button>
+            <button
+              onClick={() => goToDay(1)}
+              className="w-7 h-7 flex items-center justify-center tg-text hover:bg-black/5 rounded-lg transition-all active:scale-90"
+              aria-label="Следующий день"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+            </button>
+          </div>
+          {/* В inline-режиме крестика нет — карточка всегда видна */}
+          {mode === 'modal' && onClose && (
             <button
               onClick={onClose}
               aria-label="Закрыть"
@@ -278,22 +290,37 @@ export const DayCard: React.FC<DayCardProps> = ({
                 <line x1="6" y1="6" x2="18" y2="18" />
               </svg>
             </button>
-          </div>
+          )}
         </div>
+      </div>
 
-        {/* Скролл */}
-        <div className="flex-1 overflow-y-auto no-scrollbar pb-12">
+      {/* Скролл */}
+      <div className="flex-1 overflow-y-auto no-scrollbar pb-12">
           {/* Большое число */}
           <div className="px-5 pt-1 pb-3">
             <div className="flex items-baseline gap-3">
-              <span
-                className={`
-                  text-[56px] font-black leading-none tracking-tighter
-                  ${ctx.tone === 'today' ? 'tg-text' : 'tg-text opacity-70'}
-                `}
-              >
-                {date.getDate()}
-              </span>
+              <div className="flex flex-col items-center">
+                <span
+                  className={`
+                    text-[56px] font-black leading-none tracking-tighter
+                    ${ctx.tone === 'today' ? 'tg-text' : 'tg-text opacity-70'}
+                  `}
+                >
+                  {date.getDate()}
+                </span>
+                <span
+                  className={`
+                    font-black uppercase tg-text text-center w-full mt-1 leading-none tracking-wide
+                    ${MONTH_NAMES[date.getMonth()].length <= 3 ? 'text-[14px]'
+                      : MONTH_NAMES[date.getMonth()].length <= 4 ? 'text-[12px]'
+                      : MONTH_NAMES[date.getMonth()].length <= 5 ? 'text-[11px]'
+                      : MONTH_NAMES[date.getMonth()].length <= 6 ? 'text-[10px]'
+                      : 'text-[9px]'}
+                  `}
+                >
+                  {MONTH_NAMES[date.getMonth()]}
+                </span>
+              </div>
               <div className="flex flex-col">
                 <span className="text-[15px] font-bold tg-text leading-tight">
                   {WEEKDAY_FULL[date.getDay()]}
@@ -306,13 +333,11 @@ export const DayCard: React.FC<DayCardProps> = ({
                 >
                   {ctx.text}
                 </span>
+                <span className="text-[9px] font-bold tg-hint opacity-40 tracking-widest mt-0.5">
+                  {date.getFullYear()}
+                </span>
               </div>
             </div>
-            {!ctx.text.includes(MONTH_NAMES[date.getMonth()]) && (
-              <span className="text-[10px] font-black uppercase tracking-widest tg-hint opacity-40 mt-1.5 inline-block">
-                {MONTH_NAMES[date.getMonth()]} {date.getFullYear()}
-              </span>
-            )}
           </div>
 
           {/* Мини-стата */}
@@ -481,6 +506,26 @@ export const DayCard: React.FC<DayCardProps> = ({
           </Section>
         </div>
       </div>
+  );
+
+  // ──────────────────────────────────────────────────────────
+  // Inline-режим: возвращаем только карточку без портала и без затемнения
+  // ──────────────────────────────────────────────────────────
+  if (mode === 'inline') {
+    return cardBody;
+  }
+
+  // ──────────────────────────────────────────────────────────
+  // Modal-режим: оборачиваем в фон-затемнение и портал в body
+  // ──────────────────────────────────────────────────────────
+  const handleBackdropClick = () => { if (onClose) onClose(); };
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[400] flex items-end justify-center sm:items-center"
+      onClick={handleBackdropClick}
+    >
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={handleBackdropClick} />
+      {cardBody}
     </div>,
     document.body
   );

@@ -12,8 +12,10 @@ interface MonthHeatmapGridProps {
   tasks: Task[];
   habits: Habit[];
   columns: Column[];
-  onPrevMonth: () => void;
-  onNextMonth: () => void;
+  /** @deprecated Стрелки месяца теперь в общем хедере календаря */
+  onPrevMonth?: () => void;
+  /** @deprecated Стрелки месяца теперь в общем хедере календаря */
+  onNextMonth?: () => void;
   onSelectDay: (date: Date) => void;
 }
 
@@ -69,8 +71,6 @@ export const MonthHeatmapGrid: React.FC<MonthHeatmapGridProps> = ({
   tasks,
   habits,
   columns,
-  onPrevMonth,
-  onNextMonth,
   onSelectDay,
 }) => {
   // Строим 6 рядов × 7 дней — стандартная сетка месяца
@@ -103,36 +103,16 @@ export const MonthHeatmapGrid: React.FC<MonthHeatmapGridProps> = ({
   const currentYear = currentDate.getFullYear();
 
   return (
-    <div className="tg-secondary-bg rounded-3xl p-4 lg:p-5 flex flex-col h-full">
-      {/* Шапка месяца */}
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-sm font-bold tg-text">
+    <div className="flex flex-col h-full">
+      {/* Название месяца — компактное, без своих стрелок (они в общей шапке) */}
+      <div className="flex items-center justify-center mb-2">
+        <span className="text-[11px] font-black uppercase tracking-widest tg-text">
           {MONTH_NAMES[currentMonth]} <span className="opacity-30">{currentYear}</span>
         </span>
-        <div className="flex gap-0.5">
-          <button
-            onClick={onPrevMonth}
-            className="w-7 h-7 flex items-center justify-center tg-hint hover:tg-text hover:bg-black/5 rounded-lg transition-all active:scale-90"
-            aria-label="Прошлый месяц"
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-              <polyline points="15 18 9 12 15 6" />
-            </svg>
-          </button>
-          <button
-            onClick={onNextMonth}
-            className="w-7 h-7 flex items-center justify-center tg-hint hover:tg-text hover:bg-black/5 rounded-lg transition-all active:scale-90"
-            aria-label="Следующий месяц"
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-              <polyline points="9 18 15 12 9 6" />
-            </svg>
-          </button>
-        </div>
       </div>
 
       {/* Дни недели */}
-      <div className="grid grid-cols-7 gap-1 mb-2">
+      <div className="grid grid-cols-7 gap-1 mb-1.5">
         {WEEKDAYS.map((d, i) => (
           <div
             key={d}
@@ -146,8 +126,8 @@ export const MonthHeatmapGrid: React.FC<MonthHeatmapGridProps> = ({
         ))}
       </div>
 
-      {/* Сетка */}
-      <div className="grid grid-cols-7 gap-1 flex-1">
+      {/* Сетка — ячейки заполняют доступную высоту равномерно, без aspect-square */}
+      <div className="grid grid-cols-7 grid-rows-6 gap-1 flex-1 min-h-0">
         {cells.map(date => {
           const dStr = toLocalDateString(date);
           const isCurrentMonth = date.getMonth() === currentMonth;
@@ -166,7 +146,7 @@ export const MonthHeatmapGrid: React.FC<MonthHeatmapGridProps> = ({
               key={dStr}
               onClick={() => onSelectDay(date)}
               className={`
-                aspect-square rounded-xl p-1.5 flex flex-col justify-between text-left
+                rounded-lg p-1.5 flex flex-col justify-between text-left min-w-0 min-h-0
                 transition-all hover:scale-[1.04] hover:z-10 active:scale-95
                 ${heatmapBg(density, isCurrentMonth, isFuture)}
                 ${isToday ? 'ring-2 ring-blue-500 ring-offset-0' : ''}

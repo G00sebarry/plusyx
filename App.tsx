@@ -254,12 +254,29 @@ const App: React.FC = () => {
   const [userName, setUserName] = useState<string | null>(null);
 
   // --- UI ---
-  // Всегда стартуем с доски — чтобы привычка открывать приложение приводила
-  // к одному и тому же месту, а не к тому где юзер был в прошлый раз.
-  const [view, setView] = useState<ViewType>('kanban');
+  // sessionStorage живёт пока открыта вкладка:
+  //   • Закрыл вкладку → открыл сайт заново → главная (sessionStorage пустой → kanban)
+  //   • F5 / открыл по ссылке → та же страница (sessionStorage помнит view)
+  //   • Переход по табам внутри сайта → запоминается тут же
+  const VIEW_SESSION_KEY = 'plusyx_session_view';
+  const [view, setView] = useState<ViewType>(() => {
+    if (typeof window === 'undefined') return 'kanban';
+    try {
+      const saved = sessionStorage.getItem(VIEW_SESSION_KEY);
+      if (saved === 'kanban' || saved === 'tracker' || saved === 'calendar') {
+        return saved as ViewType;
+      }
+    } catch { /* ignore */ }
+    return 'kanban';
+  });
   const [isLoading, setIsLoading] = useState(true);
 
-  // Чистим устаревший ключ запоминания view (раньше сохраняли последний открытый раздел)
+  // Сохраняем view в sessionStorage при каждом изменении
+  useEffect(() => {
+    try { sessionStorage.setItem(VIEW_SESSION_KEY, view); } catch { /* ignore */ }
+  }, [view]);
+
+  // Чистим устаревший ключ из localStorage (если у кого-то остался)
   useEffect(() => { localStorage.removeItem('plusyx_current_view'); }, []);
 
   // --- ДАННЫЕ ---

@@ -77,6 +77,10 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   // ── Открытая карточка дня ─────────────────────────────────
   const [openedDay, setOpenedDay] = useState<Date | null>(null);
 
+  // ── Выбранный день для inline-карточки на десктопе.
+  //    По умолчанию — сегодня. Меняется кликом по дню в сетке/списке.
+  const [selectedDayDesktop, setSelectedDayDesktop] = useState<Date>(() => new Date());
+
   // ── Адаптивность: десктоп >= 1024px ───────────────────────
   const [isDesktopMQ, setIsDesktopMQ] = useState<boolean>(() =>
     typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches
@@ -245,24 +249,31 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
       </div>
 
       {/* ── КОНТЕНТ ─────────────────────────────────────────── */}
-      {/* ДЕСКТОП ≥1024px: двухколоночный дашборд */}
+      {/* ДЕСКТОП ≥1024px: трёхпанельный дашборд */}
       <div className="hidden lg:flex flex-1 min-h-0">
         <DesktopLayout
           currentDate={currentDate}
           onPrevMonth={() => navigate(-1)}
           onNextMonth={() => navigate(1)}
           weekAnchorDate={new Date()}
-          onWeekVisibleChange={() => { /* noop на десктопе — sticky-плашка не используется */ }}
+          onWeekVisibleChange={() => { /* noop на десктопе */ }}
           scrollTrigger={scrollTrigger}
           category={category}
           tasks={tasks}
           habits={habits}
           columns={columns}
+          // На десктопе клик по дню НЕ открывает модалку — только обновляет inline-карточку
+          selectedDay={selectedDayDesktop}
+          onSelectDay={setSelectedDayDesktop}
+          notes={dailyNotes || []}
+          onAddNote={async (date, text) => { if (onAddDailyNote) await onAddDailyNote(date, text); }}
+          onUpdateNote={async (noteId, text) => { if (onUpdateDailyNote) await onUpdateDailyNote(noteId, text); }}
+          onDeleteNote={async (noteId) => { if (onDeleteDailyNote) await onDeleteDailyNote(noteId); }}
           onEditTask={onEditTask}
           onOpenQuickAdd={(d) => setQuickAddDate(d)}
           onCycleHabit={handleCycleHabit}
+          onToggleHabit={onToggleHabit}
           onOpenHabitMenu={(x, y, habitId, date) => setHabitMenu({ x, y, habitId, date })}
-          onOpenDay={(d) => setOpenedDay(d)}
         />
       </div>
 
