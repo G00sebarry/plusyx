@@ -12,6 +12,7 @@ import { WeekListView } from './WeekListView';
 import { QuickAddModal } from './QuickAddModal';
 import { HabitContextMenu } from './HabitContextMenu';
 import { DayCard } from './DayCard';
+import { DesktopLayout } from './DesktopLayout';
 
 type ViewMode = 'month' | 'week';
 type Category = 'tasks' | 'habits' | 'all';
@@ -76,18 +77,30 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   // ── Открытая карточка дня ─────────────────────────────────
   const [openedDay, setOpenedDay] = useState<Date | null>(null);
 
+  // ── Адаптивность: десктоп >= 1024px ───────────────────────
+  const [isDesktopMQ, setIsDesktopMQ] = useState<boolean>(() =>
+    typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches
+  );
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)');
+    const handler = (e: MediaQueryListEvent) => setIsDesktopMQ(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+
   // ── Сохранение настроек ───────────────────────────────────
   useEffect(() => { localStorage.setItem(VIEW_STORAGE_KEY, view); }, [view]);
   useEffect(() => { localStorage.setItem(CATEGORY_STORAGE_KEY, category); }, [category]);
 
   // ── Навигация ─────────────────────────────────────────────
   const navigate = (direction: -1 | 1) => {
-    if (view === 'month') {
+    // На десктопе (≥1024px) стрелки всегда листают месяц — там слева сетка месяца
+    if (view === 'month' || isDesktopMQ) {
       const d = new Date(currentDate);
       d.setMonth(d.getMonth() + direction);
       setCurrentDate(d);
     } else {
-      // В неделе листаем по 4 недели за тап (быстрая навигация)
+      // На мобиле в неделя-виде листаем по 4 недели за тап (быстрая навигация)
       const newDate = addWeeks(currentDate, direction * 4);
       setCurrentDate(newDate);
       setScrollTrigger(t => t + 1);
@@ -160,12 +173,14 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   };
 
   // ── Заголовок ─────────────────────────────────────────────
-  const headerLabel = view === 'month'
+  // На десктопе всегда показываем месяц левой сетки.
+  // На мобиле — в зависимости от режима (Мес/Нед).
+  const headerLabel = (view === 'month' || isDesktopMQ)
     ? `${currentDate.toLocaleString('ru-RU', { month: 'long' })} ${currentDate.getFullYear()}`
     : weekMonthLabel(visibleWeekMonday);
 
   const todayStr = toLocalDateString(new Date());
-  const isAtToday = view === 'month'
+  const isAtToday = (view === 'month' || isDesktopMQ)
     ? currentDate.getMonth() === new Date().getMonth() && currentDate.getFullYear() === new Date().getFullYear()
     : toLocalDateString(visibleWeekMonday) === toLocalDateString(getMondayOfWeek(new Date()));
 
@@ -222,7 +237,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               Всё
             </CategoryTab>
           </div>
-          <div className="flex tg-secondary-bg p-0.5 rounded-2xl shrink-0">
+          <div className="flex tg-secondary-bg p-0.5 rounded-2xl shrink-0 lg:hidden">
             <ViewTab active={view === 'month'} onClick={() => switchView('month')}>Мес</ViewTab>
             <ViewTab active={view === 'week'} onClick={() => switchView('week')}>Нед</ViewTab>
           </div>
@@ -230,25 +245,14 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
       </div>
 
       {/* ── КОНТЕНТ ─────────────────────────────────────────── */}
-      {view === 'month' ? (
-        <div className="flex-1 overflow-y-auto no-scrollbar px-2 md:px-3 pb-24">
-          <MonthView
-            currentDate={currentDate}
-            // В месяце "all" сводим к "tasks" — иначе ячейки слишком плотные.
-            // Месяц для смешанного просмотра неудобен; для этого есть неделя.
-            category={category === 'habits' ? 'habits' : 'tasks'}
-            tasks={tasks}
-            habits={habits}
-            columns={columns}
-            onEditTask={onEditTask}
-            onOpenQuickAdd={(d) => setQuickAddDate(d)}
-            onOpenDay={(d) => setOpenedDay(d)}
-          />
-        </div>
-      ) : (
-        <WeekListView
-          anchorDate={currentDate}
-          onVisibleWeekChange={setVisibleWeekMonday}
+      {/* ДЕСКТОП ≥1024px: двухколоночный дашборд */}
+      <div className="hidden lg:flex flex-1 min-h-0">
+        <DesktopLayout
+          currentDate={currentDate}
+          onPrevMonth={() => navigate(-1)}
+          onNextMonth={() => navigate(1)}
+          weekAnchorDate={new Date()}
+          onWeekVisibleChange={() => { /* noop на десктопе — sticky-плашка не используется */ }}
           scrollTrigger={scrollTrigger}
           category={category}
           tasks={tasks}
@@ -260,7 +264,40 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           onOpenHabitMenu={(x, y, habitId, date) => setHabitMenu({ x, y, habitId, date })}
           onOpenDay={(d) => setOpenedDay(d)}
         />
-      )}
+      </div>
+
+      {/* МОБИЛА <1024px: один вид по выбору (Мес/Нед) */}
+      <div className="lg:hidden flex-1 flex flex-col min-h-0">
+        {view === 'month' ? (
+          <div className="flex-1 overflow-y-auto no-scrollbar px-2 md:px-3 pb-24">
+            <MonthView
+              currentDate={currentDate}
+              category={category === 'habits' ? 'habits' : 'tasks'}
+              tasks={tasks}
+              habits={habits}
+              columns={columns}
+              onEditTask={onEditTask}
+              onOpenQuickAdd={(d) => setQuickAddDate(d)}
+              onOpenDay={(d) => setOpenedDay(d)}
+            />
+          </div>
+        ) : (
+          <WeekListView
+            anchorDate={currentDate}
+            onVisibleWeekChange={setVisibleWeekMonday}
+            scrollTrigger={scrollTrigger}
+            category={category}
+            tasks={tasks}
+            habits={habits}
+            columns={columns}
+            onEditTask={onEditTask}
+            onOpenQuickAdd={(d) => setQuickAddDate(d)}
+            onCycleHabit={handleCycleHabit}
+            onOpenHabitMenu={(x, y, habitId, date) => setHabitMenu({ x, y, habitId, date })}
+            onOpenDay={(d) => setOpenedDay(d)}
+          />
+        )}
+      </div>
 
       {/* ── МОДАЛКИ ─────────────────────────────────────────── */}
       <QuickAddModal
