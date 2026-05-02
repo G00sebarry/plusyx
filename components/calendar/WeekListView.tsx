@@ -6,6 +6,7 @@ import {
   daysOfWeek,
   weekKey,
   addWeeks,
+  weekMonthLabel,
   getHabitStatusForDate,
   HABIT_CHIP_STYLE,
   TASK_STATUS_COLOR,
@@ -209,9 +210,18 @@ export const WeekListView: React.FC<WeekListViewProps> = ({
       className="flex-1 overflow-y-auto no-scrollbar px-2 md:px-3 pb-24"
     >
       <div className="flex flex-col gap-2">
-        {weeks.map(monday => {
+        {weeks.map((monday, weekIdx) => {
           const days = daysOfWeek(monday);
           const key = weekKey(monday);
+
+          // Показываем плашку с названием месяца, если:
+          //  - это самая первая неделя в списке, или
+          //  - в этой неделе сменился месяц по сравнению с предыдущей
+          const prevMonday = weekIdx > 0 ? weeks[weekIdx - 1] : null;
+          const showMonthLabel =
+            !prevMonday ||
+            monday.getMonth() !== prevMonday.getMonth() ||
+            monday.getFullYear() !== prevMonday.getFullYear();
 
           return (
             <div
@@ -222,6 +232,17 @@ export const WeekListView: React.FC<WeekListViewProps> = ({
               }}
               className="flex flex-col gap-2"
             >
+              {showMonthLabel && (
+                <div className="flex items-center gap-2 px-2 pt-2 pb-0.5 sticky top-0 z-10 tg-secondary-bg/95 backdrop-blur-sm">
+                  <span className="text-[11px] font-black uppercase tracking-widest tg-text">
+                    {weekMonthLabel(monday).split(' ').slice(0, -1).join(' ')}
+                  </span>
+                  <span className="text-[10px] font-bold tg-hint opacity-40">
+                    {weekMonthLabel(monday).split(' ').slice(-1)[0]}
+                  </span>
+                  <div className="flex-1 h-[1px] bg-gray-400/15 ml-1" />
+                </div>
+              )}
               {days.map(date => {
                 const dStr = toLocalDateString(date);
                 return (

@@ -33,6 +33,7 @@ interface CalendarViewProps {
 
 const VIEW_STORAGE_KEY = 'plusyx_calendar_view';
 const CATEGORY_STORAGE_KEY = 'plusyx_calendar_category';
+const noop = () => { /* пустой обработчик-заглушка */ };
 
 export const CalendarView: React.FC<CalendarViewProps> = ({
   tasks,
@@ -80,6 +81,10 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   // ── Выбранный день для inline-карточки на десктопе.
   //    По умолчанию — сегодня. Меняется кликом по дню в сетке/списке.
   const [selectedDayDesktop, setSelectedDayDesktop] = useState<Date>(() => new Date());
+
+  // ── Стабильная "сегодня" для расписания на десктопе. Создаётся ОДИН раз при монтировании,
+  //    чтобы не пересоздавать new Date() каждый рендер (это ломало скролл расписания).
+  const [todayDateRef] = useState<Date>(() => new Date());
 
   // ── Адаптивность: десктоп >= 1024px ───────────────────────
   const [isDesktopMQ, setIsDesktopMQ] = useState<boolean>(() =>
@@ -255,8 +260,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           currentDate={currentDate}
           onPrevMonth={() => navigate(-1)}
           onNextMonth={() => navigate(1)}
-          weekAnchorDate={new Date()}
-          onWeekVisibleChange={() => { /* noop на десктопе */ }}
+          weekAnchorDate={todayDateRef}
+          onWeekVisibleChange={noop}
           scrollTrigger={scrollTrigger}
           category={category}
           tasks={tasks}
