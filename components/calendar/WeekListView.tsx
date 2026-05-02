@@ -213,89 +213,98 @@ export const WeekListView: React.FC<WeekListViewProps> = ({
       className="flex-1 overflow-y-auto no-scrollbar px-2 md:px-3 pb-24"
     >
       <div className="flex flex-col gap-2">
-        {weeks.map((monday, weekIdx) => {
-          const days = daysOfWeek(monday);
-          const key = weekKey(monday);
+        {(() => {
+          // Предыдущий отрисованный день — для определения смены месяца "на стыке"
+          let prevRenderedDate: Date | null = null;
 
-          // Прячем дни ДО anchorDate ТОЛЬКО в той неделе, где anchorDate содержится.
-          // Так первая видимая строка списка — это сегодня. Когда юзер скроллит вверх,
-          // подгружаются предыдущие недели — они отображаются полностью.
-          const anchorStr = toLocalDateString(anchorDate);
-          const weekContainsAnchor = days.some(d => toLocalDateString(d) === anchorStr);
-          const visibleDays = weekContainsAnchor
-            ? days.filter(d => toLocalDateString(d) >= anchorStr)
-            : days;
+          return weeks.map((monday, weekIdx) => {
+            const days = daysOfWeek(monday);
+            const key = weekKey(monday);
 
-          // Показываем плашку с названием месяца, если:
-          //  - это самая первая неделя в списке, или
-          //  - в этой неделе сменился месяц по сравнению с предыдущей
-          const prevMonday = weekIdx > 0 ? weeks[weekIdx - 1] : null;
-          const showMonthLabel =
-            !prevMonday ||
-            monday.getMonth() !== prevMonday.getMonth() ||
-            monday.getFullYear() !== prevMonday.getFullYear();
+            // Прячем дни ДО anchorDate ТОЛЬКО в той неделе, где anchorDate содержится.
+            const anchorStr = toLocalDateString(anchorDate);
+            const weekContainsAnchor = days.some(d => toLocalDateString(d) === anchorStr);
+            const visibleDays = weekContainsAnchor
+              ? days.filter(d => toLocalDateString(d) >= anchorStr)
+              : days;
 
-          return (
-            <div
-              key={key}
-              ref={node => {
-                if (node) weekRefs.current.set(key, node);
-                else weekRefs.current.delete(key);
-              }}
-              className="flex flex-col gap-2"
-            >
-              {showMonthLabel && (
-                <div className="flex items-center gap-2 px-2 pt-2 pb-0.5 sticky top-0 z-10 tg-secondary-bg/95 backdrop-blur-sm">
-                  <span className="text-[11px] font-black uppercase tracking-widest tg-text">
-                    {weekMonthLabel(monday).split(' ').slice(0, -1).join(' ')}
-                  </span>
-                  <span className="text-[10px] font-bold tg-hint opacity-40">
-                    {weekMonthLabel(monday).split(' ').slice(-1)[0]}
-                  </span>
-                  <div className="flex-1 h-[1px] bg-gray-400/15 ml-1" />
-                </div>
-              )}
-              {visibleDays.map(date => {
-                const dStr = toLocalDateString(date);
-                return (
-                  <div
-                    key={dStr}
-                    ref={node => {
-                      if (node) {
-                        dayRefs.current.set(dStr, node);
-                        // Если это целевой день и мы ещё не скроллили — попробовать скроллить сейчас.
-                        // На десктопе это самый надёжный момент: нода точно в DOM.
-                        if (
-                          !initialScrollDoneRef.current &&
-                          dStr === toLocalDateString(anchorDate)
-                        ) {
-                          requestAnimationFrame(scrollToAnchor);
-                        }
-                      } else {
-                        dayRefs.current.delete(dStr);
-                      }
-                    }}
-                  >
-                    <DayRow
-                      date={date}
-                      todayStr={todayStr}
-                      showHabits={showHabits}
-                      showTasks={showTasks}
-                      habits={habits}
-                      columns={columns}
-                      tasks={tasksByDate.get(dStr) || []}
-                      onEditTask={onEditTask}
-                      onOpenQuickAdd={onOpenQuickAdd}
-                      onCycleHabit={onCycleHabit}
-                      onOpenHabitMenu={onOpenHabitMenu}
-                      onOpenDay={onOpenDay}
-                    />
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })}
+            return (
+              <div
+                key={key}
+                ref={node => {
+                  if (node) weekRefs.current.set(key, node);
+                  else weekRefs.current.delete(key);
+                }}
+                className="flex flex-col gap-2"
+              >
+                {visibleDays.map(date => {
+                  const dStr = toLocalDateString(date);
+
+                  // Плашка месяца появляется перед днём, если:
+                  //  - это самый первый отрисованный день в списке, или
+                  //  - у этого дня сменился месяц/год по сравнению с предыдущим отрисованным днём
+                  const showMonthLabel =
+                    !prevRenderedDate ||
+                    date.getMonth() !== prevRenderedDate.getMonth() ||
+                    date.getFullYear() !== prevRenderedDate.getFullYear();
+
+                  // Запоминаем для следующей итерации
+                  prevRenderedDate = date;
+
+                  const monthName = date.toLocaleString('ru-RU', { month: 'long' });
+                  const year = date.getFullYear();
+
+                  return (
+                    <React.Fragment key={dStr}>
+                      {showMonthLabel && (
+                        <div className="flex items-center gap-2 px-2 pt-2 pb-0.5 sticky top-0 z-10 tg-secondary-bg/95 backdrop-blur-sm">
+                          <span className="text-[11px] font-black uppercase tracking-widest tg-text">
+                            {monthName}
+                          </span>
+                          <span className="text-[10px] font-bold tg-hint opacity-40">
+                            {year}
+                          </span>
+                          <div className="flex-1 h-[1px] bg-gray-400/15 ml-1" />
+                        </div>
+                      )}
+                      <div
+                        ref={node => {
+                          if (node) {
+                            dayRefs.current.set(dStr, node);
+                            // Если это целевой день и мы ещё не скроллили — попробовать скроллить сейчас.
+                            if (
+                              !initialScrollDoneRef.current &&
+                              dStr === toLocalDateString(anchorDate)
+                            ) {
+                              requestAnimationFrame(scrollToAnchor);
+                            }
+                          } else {
+                            dayRefs.current.delete(dStr);
+                          }
+                        }}
+                      >
+                        <DayRow
+                          date={date}
+                          todayStr={todayStr}
+                          showHabits={showHabits}
+                          showTasks={showTasks}
+                          habits={habits}
+                          columns={columns}
+                          tasks={tasksByDate.get(dStr) || []}
+                          onEditTask={onEditTask}
+                          onOpenQuickAdd={onOpenQuickAdd}
+                          onCycleHabit={onCycleHabit}
+                          onOpenHabitMenu={onOpenHabitMenu}
+                          onOpenDay={onOpenDay}
+                        />
+                      </div>
+                    </React.Fragment>
+                  );
+                })}
+              </div>
+            );
+          });
+        })()}
       </div>
     </div>
   );
