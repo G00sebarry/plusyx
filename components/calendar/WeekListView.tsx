@@ -90,31 +90,34 @@ export const WeekListView: React.FC<WeekListViewProps> = ({
   }, [scrollTrigger, anchorDate]);
 
   // ──────────────────────────────────────────────────────────
-  // На монтаже: мгновенно подскроллить к стартовому дню.
-  // На десктопе бывает что layout ещё не имел высоты при первом проходе useLayoutEffect —
-  // делаем несколько попыток через requestAnimationFrame пока скролл не получится корректным.
+  // На монтаже: подскроллить к стартовому дню. Используем флаг,
+  // чтоб скроллить ровно один раз, как только целевая нода появится в DOM.
   // ──────────────────────────────────────────────────────────
-  useLayoutEffect(() => {
+  const initialScrollDoneRef = useRef(false);
+  const scrollToAnchor = useCallback(() => {
+    if (initialScrollDoneRef.current) return;
     const targetDayKey = toLocalDateString(anchorDate);
-    let attempts = 0;
-    const tryScroll = () => {
-      const node = dayRefs.current.get(targetDayKey);
-      const container = containerRef.current;
-      if (!node || !container) {
-        if (attempts++ < 10) requestAnimationFrame(tryScroll);
-        return;
+    const node = dayRefs.current.get(targetDayKey);
+    const container = containerRef.current;
+    if (!node || !container || container.clientHeight === 0) return;
+
+    const containerRect = container.getBoundingClientRect();
+    const nodeRect = node.getBoundingClientRect();
+    const offset = nodeRect.top - containerRect.top + container.scrollTop;
+    container.scrollTop = offset;
+    initialScrollDoneRef.current = true;
+  }, [anchorDate]);
+
+  // Делаем несколько попыток после монтирования
+  useLayoutEffect(() => {
+    let frame = 0;
+    const attempt = () => {
+      scrollToAnchor();
+      if (!initialScrollDoneRef.current && frame++ < 30) {
+        requestAnimationFrame(attempt);
       }
-      // Если контейнер ещё не имеет высоты — пробуем снова
-      if (container.clientHeight === 0 && attempts++ < 10) {
-        requestAnimationFrame(tryScroll);
-        return;
-      }
-      const containerRect = container.getBoundingClientRect();
-      const nodeRect = node.getBoundingClientRect();
-      const offset = nodeRect.top - containerRect.top + container.scrollTop;
-      container.scrollTop = offset;
     };
-    tryScroll();
+    attempt();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -249,8 +252,19 @@ export const WeekListView: React.FC<WeekListViewProps> = ({
                   <div
                     key={dStr}
                     ref={node => {
-                      if (node) dayRefs.current.set(dStr, node);
-                      else dayRefs.current.delete(dStr);
+                      if (node) {
+                        dayRefs.current.set(dStr, node);
+                        // Если это целевой день и мы ещё не скроллили — попробовать скроллить сейчас.
+                        // На десктопе это самый надёжный момент: нода точно в DOM.
+                        if (
+                          !initialScrollDoneRef.current &&
+                          dStr === toLocalDateString(anchorDate)
+                        ) {
+                          requestAnimationFrame(scrollToAnchor);
+                        }
+                      } else {
+                        dayRefs.current.delete(dStr);
+                      }
                     }}
                   >
                     <DayRow
