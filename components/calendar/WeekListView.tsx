@@ -89,18 +89,31 @@ export const WeekListView: React.FC<WeekListViewProps> = ({
   }, [scrollTrigger, anchorDate]);
 
   // ──────────────────────────────────────────────────────────
-  // На монтаже: мгновенно (без анимации) подскроллить к стартовому дню
+  // На монтаже: мгновенно подскроллить к стартовому дню.
+  // На десктопе бывает что layout ещё не имел высоты при первом проходе useLayoutEffect —
+  // делаем несколько попыток через requestAnimationFrame пока скролл не получится корректным.
   // ──────────────────────────────────────────────────────────
   useLayoutEffect(() => {
     const targetDayKey = toLocalDateString(anchorDate);
-    const node = dayRefs.current.get(targetDayKey);
-    const container = containerRef.current;
-    if (!node || !container) return;
-
-    const containerRect = container.getBoundingClientRect();
-    const nodeRect = node.getBoundingClientRect();
-    const offset = nodeRect.top - containerRect.top + container.scrollTop;
-    container.scrollTop = offset;
+    let attempts = 0;
+    const tryScroll = () => {
+      const node = dayRefs.current.get(targetDayKey);
+      const container = containerRef.current;
+      if (!node || !container) {
+        if (attempts++ < 10) requestAnimationFrame(tryScroll);
+        return;
+      }
+      // Если контейнер ещё не имеет высоты — пробуем снова
+      if (container.clientHeight === 0 && attempts++ < 10) {
+        requestAnimationFrame(tryScroll);
+        return;
+      }
+      const containerRect = container.getBoundingClientRect();
+      const nodeRect = node.getBoundingClientRect();
+      const offset = nodeRect.top - containerRect.top + container.scrollTop;
+      container.scrollTop = offset;
+    };
+    tryScroll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -195,7 +208,7 @@ export const WeekListView: React.FC<WeekListViewProps> = ({
       onScroll={handleScroll}
       className="flex-1 overflow-y-auto no-scrollbar px-2 md:px-3 pb-24"
     >
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-2">
         {weeks.map(monday => {
           const days = daysOfWeek(monday);
           const key = weekKey(monday);
@@ -207,7 +220,7 @@ export const WeekListView: React.FC<WeekListViewProps> = ({
                 if (node) weekRefs.current.set(key, node);
                 else weekRefs.current.delete(key);
               }}
-              className="flex flex-col gap-1.5"
+              className="flex flex-col gap-2"
             >
               {days.map(date => {
                 const dStr = toLocalDateString(date);
@@ -301,16 +314,19 @@ const DayRow: React.FC<DayRowProps> = ({
     ? 'border-l-gray-400/20'
     : 'border-l-gray-400/30';
 
+  // Заметные разделители между ячейками + hover-эффект с лёгким масштабированием
   const bgClass = isToday
-    ? 'bg-blue-500/5 ring-1 ring-inset ring-blue-500/15'
-    : 'tg-secondary-bg';
+    ? 'bg-blue-500/8 ring-1 ring-inset ring-blue-500/20 shadow-[0_2px_8px_-2px_rgba(59,130,246,0.15)]'
+    : 'tg-secondary-bg ring-1 ring-inset ring-gray-400/[0.08]';
 
   const opacityClass = isPast && !isToday ? 'opacity-70' : '';
 
   return (
     <div
       className={`
-        grid grid-cols-[56px_1fr] md:grid-cols-[72px_1fr] gap-3 px-3 py-2.5 rounded-2xl border-l-2 transition-all
+        grid grid-cols-[56px_1fr] md:grid-cols-[72px_1fr] gap-3 px-3 py-2.5 rounded-2xl border-l-2
+        transition-all duration-200 ease-out
+        hover:scale-[1.015] hover:ring-blue-500/30 hover:shadow-[0_4px_12px_-4px_rgba(0,0,0,0.3)]
         ${accentClass} ${bgClass} ${opacityClass}
       `}
     >
