@@ -32,8 +32,8 @@ interface WeekListViewProps {
   onOpenDay: (date: Date) => void;
 }
 
-const INITIAL_WEEKS_BEFORE = 8;
-const INITIAL_WEEKS_AFTER = 8;
+const INITIAL_WEEKS_BEFORE = 0;       // Прошлые недели не грузим — подгружаются скроллом вверх
+const INITIAL_WEEKS_AFTER = 12;       // Грузим недели вперёд от текущей
 const LOAD_MORE_THRESHOLD = 4;        // Когда осталось меньше N недель до края — подгружаем
 const LOAD_BATCH = 8;                  // Сколько недель добавлять за раз
 const LONG_PRESS_MS = 500;
@@ -217,6 +217,15 @@ export const WeekListView: React.FC<WeekListViewProps> = ({
           const days = daysOfWeek(monday);
           const key = weekKey(monday);
 
+          // Прячем дни ДО anchorDate ТОЛЬКО в той неделе, где anchorDate содержится.
+          // Так первая видимая строка списка — это сегодня. Когда юзер скроллит вверх,
+          // подгружаются предыдущие недели — они отображаются полностью.
+          const anchorStr = toLocalDateString(anchorDate);
+          const weekContainsAnchor = days.some(d => toLocalDateString(d) === anchorStr);
+          const visibleDays = weekContainsAnchor
+            ? days.filter(d => toLocalDateString(d) >= anchorStr)
+            : days;
+
           // Показываем плашку с названием месяца, если:
           //  - это самая первая неделя в списке, или
           //  - в этой неделе сменился месяц по сравнению с предыдущей
@@ -246,7 +255,7 @@ export const WeekListView: React.FC<WeekListViewProps> = ({
                   <div className="flex-1 h-[1px] bg-gray-400/15 ml-1" />
                 </div>
               )}
-              {days.map(date => {
+              {visibleDays.map(date => {
                 const dStr = toLocalDateString(date);
                 return (
                   <div
