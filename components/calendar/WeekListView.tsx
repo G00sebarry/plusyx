@@ -90,8 +90,8 @@ export const WeekListView: React.FC<WeekListViewProps> = ({
   }, [scrollTrigger, anchorDate]);
 
   // ──────────────────────────────────────────────────────────
-  // На монтаже: подскроллить к стартовому дню. Используем флаг,
-  // чтоб скроллить ровно один раз, как только целевая нода появится в DOM.
+  // На монтаже: подскроллить к стартовому дню. Используем ручной scrollTop
+  // с явным расчётом offset относительно контейнера. Проверяем что layout уже посчитан.
   // ──────────────────────────────────────────────────────────
   const initialScrollDoneRef = useRef(false);
   const scrollToAnchor = useCallback(() => {
@@ -99,21 +99,35 @@ export const WeekListView: React.FC<WeekListViewProps> = ({
     const targetDayKey = toLocalDateString(anchorDate);
     const node = dayRefs.current.get(targetDayKey);
     const container = containerRef.current;
+    // Должны существовать обе ноды и контейнер должен иметь реальную высоту
     if (!node || !container || container.clientHeight === 0) return;
+    // У ноды тоже должна быть высота — иначе layout ещё не посчитан
+    if (node.offsetHeight === 0) return;
 
-    const containerRect = container.getBoundingClientRect();
-    const nodeRect = node.getBoundingClientRect();
-    const offset = nodeRect.top - containerRect.top + container.scrollTop;
+    // offsetTop у ноды относительно offsetParent. Идём вверх до контейнера, суммируем.
+    let offset = 0;
+    let el: HTMLElement | null = node;
+    while (el && el !== container) {
+      offset += el.offsetTop;
+      el = el.offsetParent as HTMLElement | null;
+    }
+    // Если вообще не дошли до контейнера — fallback на bounding rect
+    if (!el) {
+      const cRect = container.getBoundingClientRect();
+      const nRect = node.getBoundingClientRect();
+      offset = nRect.top - cRect.top + container.scrollTop;
+    }
+
     container.scrollTop = offset;
     initialScrollDoneRef.current = true;
   }, [anchorDate]);
 
-  // Делаем несколько попыток после монтирования
+  // Делаем несколько попыток через rAF, пока скролл не получится
   useLayoutEffect(() => {
     let frame = 0;
     const attempt = () => {
       scrollToAnchor();
-      if (!initialScrollDoneRef.current && frame++ < 30) {
+      if (!initialScrollDoneRef.current && frame++ < 60) {
         requestAnimationFrame(attempt);
       }
     };
