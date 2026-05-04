@@ -23,6 +23,8 @@ interface MonthHeatmapGridProps {
   showTaskPreview?: boolean;
   /** Компактный режим для мобилки: меньше отступы, без легенды heatmap внизу */
   compact?: boolean;
+  /** Свёрнутый режим: показываем только одну неделю (с выбранным днём или сегодня) */
+  weekOnly?: boolean;
 }
 
 const WEEKDAYS = ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'];
@@ -81,9 +83,27 @@ export const MonthHeatmapGrid: React.FC<MonthHeatmapGridProps> = ({
   selectedDay,
   showTaskPreview,
   compact,
+  weekOnly,
 }) => {
-  // Строим 6 рядов × 7 дней — стандартная сетка месяца
+  // Строим ячейки. В обычном режиме — 6 рядов × 7 дней (полный месяц).
+  // В weekOnly — одна строка из 7 дней той недели где находится selectedDay
+  // (или сегодня, если selectedDay не передан или вне текущего месяца).
   const cells = useMemo(() => {
+    if (weekOnly) {
+      // Якорь — выбранный день, либо сегодня
+      const today = new Date();
+      const anchor = selectedDay && selectedDay.getMonth() === currentDate.getMonth()
+        ? selectedDay
+        : (today.getMonth() === currentDate.getMonth() ? today : new Date(currentDate.getFullYear(), currentDate.getMonth(), 1));
+      const monday = getMondayOfWeek(anchor);
+      const result: Date[] = [];
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(monday);
+        d.setDate(monday.getDate() + i);
+        result.push(d);
+      }
+      return result;
+    }
     const firstOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
     const gridStart = getMondayOfWeek(firstOfMonth);
     const result: Date[] = [];
@@ -93,7 +113,7 @@ export const MonthHeatmapGrid: React.FC<MonthHeatmapGridProps> = ({
       result.push(d);
     }
     return result;
-  }, [currentDate]);
+  }, [currentDate, weekOnly, selectedDay]);
 
   // Карта задач по дате
   const tasksByDate = useMemo(() => {
@@ -136,7 +156,7 @@ export const MonthHeatmapGrid: React.FC<MonthHeatmapGridProps> = ({
       </div>
 
       {/* Сетка — ячейки заполняют доступную высоту равномерно, без aspect-square */}
-      <div className="grid grid-cols-7 grid-rows-6 gap-1 flex-1 min-h-0">
+      <div className={`grid grid-cols-7 ${weekOnly ? '' : 'grid-rows-6 flex-1'} gap-1 min-h-0`}>
         {cells.map(date => {
           const dStr = toLocalDateString(date);
           const isCurrentMonth = date.getMonth() === currentMonth;
@@ -164,6 +184,7 @@ export const MonthHeatmapGrid: React.FC<MonthHeatmapGridProps> = ({
               onClick={() => onSelectDay(date)}
               className={`
                 rounded-lg ${showTaskPreview ? 'p-1.5' : 'p-1.5'} flex flex-col text-left min-w-0 min-h-0
+                ${weekOnly ? 'aspect-square' : ''}
                 transition-all hover:scale-[1.04] hover:z-10 active:scale-95
                 ${heatmapBg(density, isCurrentMonth, isFuture)}
                 ${ringClass}

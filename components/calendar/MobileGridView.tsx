@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Task, Habit, Column } from '../../types';
 import { DailyNote } from '../../api';
 import { MonthHeatmapGrid } from './MonthHeatmapGrid';
@@ -24,13 +24,16 @@ interface MobileGridViewProps {
   onOpenHabitMenu: (x: number, y: number, habitId: string, dateStr: string) => void;
 }
 
+const COLLAPSED_STORAGE_KEY = 'plusyx_mobile_grid_collapsed';
+
 /**
  * Мобильный вид календаря: сетка месяца сверху + карточка выбранного дня снизу.
- * Всё в одном вертикальном скроллящемся потоке, никакого переключателя видов.
+ *
+ * Сетку можно сворачивать до одной недели — кнопкой внизу сетки.
+ * Состояние "свёрнуто/развёрнуто" сохраняется в localStorage.
  *
  * - Сегодня выбран по умолчанию.
  * - Тап по дню в сетке → карточка снизу обновляется (без модалки).
- * - Прокрутка страницы скроллит сетку и карточку как один документ.
  */
 export const MobileGridView: React.FC<MobileGridViewProps> = ({
   currentDate,
@@ -48,21 +51,69 @@ export const MobileGridView: React.FC<MobileGridViewProps> = ({
   onToggleHabit,
   onOpenHabitMenu,
 }) => {
+  // Состояние свёрнутости сетки. Стартуем с того что сохранено в localStorage.
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(COLLAPSED_STORAGE_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+
+  // Сохраняем при изменении
+  useEffect(() => {
+    try {
+      localStorage.setItem(COLLAPSED_STORAGE_KEY, collapsed ? '1' : '0');
+    } catch { /* ignore */ }
+  }, [collapsed]);
+
   return (
     <div className="flex-1 overflow-y-auto no-scrollbar pb-24">
-      {/* ── СЕТКА МЕСЯЦА ── */}
+      {/* ── СЕТКА МЕСЯЦА (сворачивается) ── */}
       <div className="px-3 pb-3">
-        <div className="tg-secondary-bg rounded-2xl p-3" style={{ aspectRatio: '7/6' }}>
-          <MonthHeatmapGrid
-            currentDate={currentDate}
-            tasks={tasks}
-            habits={habits}
-            columns={columns}
-            onSelectDay={onSelectDay}
-            selectedDay={selectedDay}
-            showTaskPreview={false}
-            compact={true}
-          />
+        <div className="tg-secondary-bg rounded-2xl p-3">
+          <div
+            className="transition-all duration-300 ease-out"
+            style={{
+              // В развёрнутом виде — пропорция 7:6.5 (6 строк дней + дни недели).
+              // В свёрнутом — высота определяется aspect-square ячеек, не нужна.
+              aspectRatio: collapsed ? undefined : '7/6.5',
+            }}
+          >
+            <MonthHeatmapGrid
+              currentDate={currentDate}
+              tasks={tasks}
+              habits={habits}
+              columns={columns}
+              onSelectDay={onSelectDay}
+              selectedDay={selectedDay}
+              showTaskPreview={false}
+              compact={true}
+              weekOnly={collapsed}
+            />
+          </div>
+
+          {/* Кнопка-переключатель свернуть/развернуть */}
+          <button
+            onClick={() => setCollapsed(c => !c)}
+            className="w-full mt-2 py-1.5 flex items-center justify-center gap-1.5 tg-hint hover:tg-text active:scale-95 transition-all rounded-lg"
+            aria-label={collapsed ? 'Развернуть месяц' : 'Свернуть месяц'}
+          >
+            <span className="text-[9px] font-bold uppercase tracking-widest opacity-50">
+              {collapsed ? 'Развернуть месяц' : 'Свернуть'}
+            </span>
+            <svg
+              width="10"
+              height="10"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="3"
+              className={`opacity-50 transition-transform duration-300 ${collapsed ? '' : 'rotate-180'}`}
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
         </div>
       </div>
 
