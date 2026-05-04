@@ -21,6 +21,8 @@ interface MonthHeatmapGridProps {
   selectedDay?: Date;
   /** На десктопе показываем превью названий задач в ячейке. На мобиле — нет, мало места */
   showTaskPreview?: boolean;
+  /** Компактный режим для мобилки: меньше отступы, без легенды heatmap внизу */
+  compact?: boolean;
 }
 
 const WEEKDAYS = ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'];
@@ -78,6 +80,7 @@ export const MonthHeatmapGrid: React.FC<MonthHeatmapGridProps> = ({
   onSelectDay,
   selectedDay,
   showTaskPreview,
+  compact,
 }) => {
   // Строим 6 рядов × 7 дней — стандартная сетка месяца
   const cells = useMemo(() => {
@@ -227,18 +230,20 @@ export const MonthHeatmapGrid: React.FC<MonthHeatmapGridProps> = ({
         })}
       </div>
 
-      {/* Легенда */}
-      <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-400/10">
-        <span className="text-[8px] tg-hint opacity-40 tracking-widest font-bold">МЕНЬШЕ</span>
-        <div className="flex gap-1">
-          <div className="w-2.5 h-2.5 rounded-sm bg-black/[0.18]" />
-          <div className="w-2.5 h-2.5 rounded-sm bg-green-500/25" />
-          <div className="w-2.5 h-2.5 rounded-sm bg-green-500/45" />
-          <div className="w-2.5 h-2.5 rounded-sm bg-green-500/65" />
-          <div className="w-2.5 h-2.5 rounded-sm bg-green-500/85" />
+      {/* Легенда — только в полном режиме (на десктопе) */}
+      {!compact && (
+        <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-400/10">
+          <span className="text-[8px] tg-hint opacity-40 tracking-widest font-bold">МЕНЬШЕ</span>
+          <div className="flex gap-1">
+            <div className="w-2.5 h-2.5 rounded-sm bg-black/[0.18]" />
+            <div className="w-2.5 h-2.5 rounded-sm bg-green-500/25" />
+            <div className="w-2.5 h-2.5 rounded-sm bg-green-500/45" />
+            <div className="w-2.5 h-2.5 rounded-sm bg-green-500/65" />
+            <div className="w-2.5 h-2.5 rounded-sm bg-green-500/85" />
+          </div>
+          <span className="text-[8px] tg-hint opacity-40 tracking-widest font-bold">БОЛЬШЕ</span>
         </div>
-        <span className="text-[8px] tg-hint opacity-40 tracking-widest font-bold">БОЛЬШЕ</span>
-      </div>
+      )}
     </div>
   );
 };
