@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { ViewType } from '../types';
 
@@ -33,7 +32,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeView, onViewChange }
         onClick={() => onViewChange('tracker')}
         className={`flex flex-col items-center gap-1 transition-all duration-300 flex-1 ${getActiveColorClass('tracker')}`}
       >
-        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16z"/><path d="M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/><path d="M12 2v2"/><path d="M12 18v2"/><path d="M4.93 4.93l1.41 1.41"/><path d="M17.66 17.66l1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M7 16c.5-2 1.5-7 4-7 2 0 2 3 4 3 2.5 0 4.5-5 5-7"/></svg>
         <span className="text-[9px] font-black uppercase tracking-widest">Трекер</span>
       </button>
 
