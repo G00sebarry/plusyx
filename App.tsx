@@ -540,38 +540,77 @@ const handleAutoSaveHabit = async (updatedHabit: Habit) => {
     await saveHabitToDb(updatedHabit, userId);
     // НЕ закрываем модалку!
 };
+  // Очередь дебаунса для сохранения привычек: ключ — id привычки.
+  // Если за 400мс пришёл новый тап на ту же привычку — отменяем предыдущий
+  // запрос в БД и шлём только последнюю версию. Это спасает от race condition
+  // при быстрых последовательных тапах.
+  const habitSaveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const habitLatest = useRef<Record<string, Habit>>({});
+
   const handleToggleHabit = async (id: string, date: string, value: boolean | 'mini' | 'freeze') => {
-  if (!userId) return;
-  
-  // Сохраняем позицию скролла
-  const scrollTop = mainRef.current?.scrollTop ?? 0;
-  
-  // Находим привычку и создаём обновлённую версию
-  const habit = habits.find(h => h.id === id);
-  if (!habit) return;
-  
-  const newHistory = { ...habit.history };
-  if (value === false) {
-    delete newHistory[date];
-  } else {
-    newHistory[date] = value;
-  }
-  
-  const updatedHabit = { ...habit, history: newHistory };
-  
-  // Обновляем стейт
-  setHabits(prev => prev.map(h => h.id === id ? updatedHabit : h));
-  
-  // Восстанавливаем скролл после ререндера
-  requestAnimationFrame(() => {
-    if (mainRef.current) mainRef.current.scrollTop = scrollTop;
-  });
-  
-  window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
-  
-  // Сохраняем в БД
-  await saveHabitToDb(updatedHabit, userId);
-};
+    if (!userId) return;
+
+    // Сохраняем позицию скролла
+    const scrollTop = mainRef.current?.scrollTop ?? 0;
+
+    // ВАЖНО: получаем актуальную привычку через функциональный setState — иначе при
+    // быстрых последовательных тапах используется stale closure и предыдущие отметки затираются.
+    setHabits(prev => {
+      const habit = prev.find(h => h.id === id);
+      if (!habit) return prev;
+      const newHistory = { ...habit.history };
+      if (value === false) {
+        delete newHistory[date];
+      } else {
+        newHistory[date] = value;
+      }
+      const updatedHabit = { ...habit, history: newHistory };
+      // Запоминаем самую свежую версию, чтобы дебаунсер использовал её
+      habitLatest.current[id] = updatedHabit;
+      return prev.map(h => h.id === id ? updatedHabit : h);
+    });
+
+    // Восстанавливаем скролл после ререндера
+    requestAnimationFrame(() => {
+      if (mainRef.current) mainRef.current.scrollTop = scrollTop;
+    });
+
+    window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+
+    // Дебаунсим сохранение в БД per-habit:
+    // отменяем предыдущий таймер на эту привычку, ставим новый.
+    const prevTimer = habitSaveTimers.current[id];
+    if (prevTimer) clearTimeout(prevTimer);
+    habitSaveTimers.current[id] = setTimeout(async () => {
+      const latest = habitLatest.current[id];
+      if (!latest) return;
+      try {
+        await saveHabitToDb(latest, userId);
+      } catch (err) {
+        console.error('Не удалось сохранить привычку', id, err);
+      } finally {
+        delete habitSaveTimers.current[id];
+      }
+    }, 400);
+  };
+
+  // Если юзер закрывает вкладку или приложение когда есть несохранённые правки —
+  // отправляем их немедленно, чтобы не потерять отметки.
+  useEffect(() => {
+    const flushPendingHabits = () => {
+      Object.entries(habitLatest.current).forEach(([id, habit]) => {
+        // sendBeacon не подходит т.к. supabase-js не использует его, но
+        // запрос успеет уйти если страница не закрылась мгновенно.
+        if (userId) saveHabitToDb(habit, userId);
+      });
+    };
+    window.addEventListener('beforeunload', flushPendingHabits);
+    window.addEventListener('pagehide', flushPendingHabits);
+    return () => {
+      window.removeEventListener('beforeunload', flushPendingHabits);
+      window.removeEventListener('pagehide', flushPendingHabits);
+    };
+  }, [userId]);
 
   // --- DAILY NOTES (журнал заметок дня) ---
   const handleAddDailyNote = async (date: string, text: string) => {
