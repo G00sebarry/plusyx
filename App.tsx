@@ -11,7 +11,7 @@ import { supabase } from './supabaseClient';
 
 import { 
   fetchTasks, fetchColumns, saveTaskToDb, deleteTaskFromDb, saveColumnsToDb, saveTasksOrderToDb, deleteColumnFromDb,
-  fetchHabits, saveHabitToDb, deleteHabitFromDb, saveHabitsOrderToDb,
+  fetchHabits, saveHabitToDb, saveHabitHistoryToDb, deleteHabitFromDb, saveHabitsOrderToDb,
   fetchAntiHabits, saveAntiHabitToDb, deleteAntiHabitFromDb, saveAntiHabitsOrderToDb,
   getCurrentSession, signInWithGoogle, signOut, onAuthStateChange,
   fetchUserSettings, saveUserSettings,
@@ -540,12 +540,42 @@ const handleAutoSaveHabit = async (updatedHabit: Habit) => {
     await saveHabitToDb(updatedHabit, userId);
     // НЕ закрываем модалку!
 };
-  // Очередь дебаунса для сохранения привычек: ключ — id привычки.
-  // Если за 400мс пришёл новый тап на ту же привычку — отменяем предыдущий
-  // запрос в БД и шлём только последнюю версию. Это спасает от race condition
-  // при быстрых последовательных тапах.
-  const habitSaveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-  const habitLatest = useRef<Record<string, Habit>>({});
+  // Single-flight queue для сохранения истории привычек:
+  // для каждой привычки в любой момент максимум 1 запрос в полёте.
+  // Свежая версия history хранится в habitLatest. Если во время полёта прилетели
+  // новые тапы — после ответа отправляем ещё раз с финальной версией.
+  // Это убирает race condition и не плодит pending-запросы.
+  const habitInFlight = useRef<Record<string, boolean>>({});
+  const habitLatest = useRef<Record<string, Habit['history']>>({});
+
+  const flushHabitHistory = async (habitId: string) => {
+    if (!userId) return;
+    if (habitInFlight.current[habitId]) return; // уже идёт запрос
+    const latest = habitLatest.current[habitId];
+    if (!latest) return;
+
+    habitInFlight.current[habitId] = true;
+    try {
+      const result = await saveHabitHistoryToDb(habitId, userId, latest);
+      if (result?.error) {
+        // На ошибке оставляем latest, попробуем снова в следующем тапе
+        return;
+      }
+      // Успех: если за время полёта пришла НОВАЯ версия (отличается от той что только что сохранили),
+      // — шлём ещё раз. Иначе latest можно почистить.
+      const justSaved = latest;
+      const current = habitLatest.current[habitId];
+      if (current === justSaved) {
+        delete habitLatest.current[habitId];
+      }
+    } finally {
+      habitInFlight.current[habitId] = false;
+      // Если за время полёта обновили latest — отправляем свежую версию рекурсивно
+      if (habitLatest.current[habitId]) {
+        flushHabitHistory(habitId);
+      }
+    }
+  };
 
   const handleToggleHabit = async (id: string, date: string, value: boolean | 'mini' | 'freeze' | 'cycle') => {
     if (!userId) return;
@@ -580,8 +610,8 @@ const handleAutoSaveHabit = async (updatedHabit: Habit) => {
         newHistory[date] = nextValue;
       }
       const updatedHabit = { ...habit, history: newHistory };
-      // Запоминаем самую свежую версию, чтобы дебаунсер использовал её
-      habitLatest.current[id] = updatedHabit;
+      // Запоминаем самую свежую версию истории для очереди отправки
+      habitLatest.current[id] = newHistory;
       return prev.map(h => h.id === id ? updatedHabit : h);
     });
 
@@ -592,31 +622,19 @@ const handleAutoSaveHabit = async (updatedHabit: Habit) => {
 
     window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
 
-    // Дебаунсим сохранение в БД per-habit:
-    // отменяем предыдущий таймер на эту привычку, ставим новый.
-    const prevTimer = habitSaveTimers.current[id];
-    if (prevTimer) clearTimeout(prevTimer);
-    habitSaveTimers.current[id] = setTimeout(async () => {
-      const latest = habitLatest.current[id];
-      if (!latest) return;
-      try {
-        await saveHabitToDb(latest, userId);
-      } catch (err) {
-        console.error('Не удалось сохранить привычку', id, err);
-      } finally {
-        delete habitSaveTimers.current[id];
-      }
-    }, 400);
+    // Запускаем отправку. Если уже идёт запрос — выйдет сразу,
+    // а после завершения текущего сам отправит свежую версию.
+    flushHabitHistory(id);
   };
 
   // Если юзер закрывает вкладку или приложение когда есть несохранённые правки —
   // отправляем их немедленно, чтобы не потерять отметки.
   useEffect(() => {
     const flushPendingHabits = () => {
-      Object.entries(habitLatest.current).forEach(([id, habit]) => {
-        // sendBeacon не подходит т.к. supabase-js не использует его, но
-        // запрос успеет уйти если страница не закрылась мгновенно.
-        if (userId) saveHabitToDb(habit, userId);
+      if (!userId) return;
+      Object.entries(habitLatest.current).forEach(([id, history]) => {
+        // Запрос успеет уйти если страница не закрылась мгновенно.
+        saveHabitHistoryToDb(id, userId, history);
       });
     };
     window.addEventListener('beforeunload', flushPendingHabits);

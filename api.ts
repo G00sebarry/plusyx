@@ -123,6 +123,19 @@ export const saveHabitToDb = async (habit, userId) => {
   if (error) console.error("Save Habit Error:", error);
 };
 
+// Лёгкий апдейт: пишем ТОЛЬКО поле history. Используется при тапе по ячейке
+// чек-листа — payload крошечный, запрос быстрее, меньше конкуренции на строке.
+// Возвращает { error } чтобы вызывающий мог реагировать.
+export const saveHabitHistoryToDb = async (habitId, userId, history) => {
+  const { error } = await supabase
+    .from('habits')
+    .update({ history })
+    .eq('id', habitId)
+    .eq('user_id', userId);
+  if (error) console.error("Save Habit History Error:", error);
+  return { error };
+};
+
 export const saveHabitsOrderToDb = async (habits, userId) => {
   if (habits.length === 0) return;
   const updates = habits.map((h, index) => ({
