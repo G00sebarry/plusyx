@@ -95,10 +95,12 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   };
 
   // ── Обработчик тоггла привычки из календаря ──────────────
+  // Шлём команду 'cycle' — App.tsx вычислит следующее значение из актуального state
+  // (защита от race condition при быстрых последовательных тапах).
   const handleCycleHabit = useCallback(
-    (habitId: string, dateStr: string, current: boolean | 'mini' | 'freeze' | number | undefined) => {
+    (habitId: string, dateStr: string, _current?: boolean | 'mini' | 'freeze' | number | undefined) => {
       window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
-      onToggleHabit(habitId, dateStr, nextHabitValue(current));
+      onToggleHabit(habitId, dateStr, 'cycle' as any);
     },
     [onToggleHabit]
   );

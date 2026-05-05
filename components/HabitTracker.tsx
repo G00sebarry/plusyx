@@ -600,22 +600,12 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
   const handleToggle = (e: React.MouseEvent, habit: Habit, dateStr: string) => {
     e.stopPropagation();
     window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
-    
-    const current = habit.history[dateStr];
-    let newValue: boolean | 'mini' | 'freeze';
-    
-    if (current === true) {
-      newValue = 'mini';
-    } else if (current === 'mini') {
-      newValue = 'freeze';
-    } else if (current === 'freeze') {
-      newValue = false;
-    } else {
-      newValue = true;
-    }
-    
+
+    // ВАЖНО: не вычисляем newValue здесь — habit это пропс который при быстрых тапах
+    // может быть stale. Шлём команду 'cycle', App.tsx вычислит следующее значение
+    // из актуальной истории привычки внутри функционального setState.
     saveScrollPosition();
-    onToggleHabit(habit.id, dateStr, newValue);
+    onToggleHabit(habit.id, dateStr, 'cycle' as any);
   };
 
   const handleLongPress = (e: React.MouseEvent, habit: Habit, dateStr: string) => {

@@ -547,7 +547,7 @@ const handleAutoSaveHabit = async (updatedHabit: Habit) => {
   const habitSaveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const habitLatest = useRef<Record<string, Habit>>({});
 
-  const handleToggleHabit = async (id: string, date: string, value: boolean | 'mini' | 'freeze') => {
+  const handleToggleHabit = async (id: string, date: string, value: boolean | 'mini' | 'freeze' | 'cycle') => {
     if (!userId) return;
 
     // Сохраняем позицию скролла
@@ -555,14 +555,29 @@ const handleAutoSaveHabit = async (updatedHabit: Habit) => {
 
     // ВАЖНО: получаем актуальную привычку через функциональный setState — иначе при
     // быстрых последовательных тапах используется stale closure и предыдущие отметки затираются.
+    // При value='cycle' вычисляем следующее значение здесь же из актуальной истории.
     setHabits(prev => {
       const habit = prev.find(h => h.id === id);
       if (!habit) return prev;
       const newHistory = { ...habit.history };
-      if (value === false) {
+      let nextValue: boolean | 'mini' | 'freeze' | undefined;
+      if (value === 'cycle') {
+        // Цикл: undefined → true → 'mini' → 'freeze' → undefined
+        const current = newHistory[date];
+        if (current === true) nextValue = 'mini';
+        else if (current === 'mini') nextValue = 'freeze';
+        else if (current === 'freeze') nextValue = undefined;
+        else nextValue = true;
+      } else if (value === false) {
+        nextValue = undefined;
+      } else {
+        nextValue = value;
+      }
+
+      if (nextValue === undefined) {
         delete newHistory[date];
       } else {
-        newHistory[date] = value;
+        newHistory[date] = nextValue;
       }
       const updatedHabit = { ...habit, history: newHistory };
       // Запоминаем самую свежую версию, чтобы дебаунсер использовал её

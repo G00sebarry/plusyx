@@ -176,11 +176,11 @@ export const DayCard: React.FC<DayCardProps> = ({
   }, [date, mode]);
 
   // ── Тоггл цикла привычки ──────────────────────────────────
+  // Шлём команду 'cycle' — App.tsx вычислит следующее значение из актуального state.
   const handleHabitToggle = useCallback(
     (habit: Habit) => {
       window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
-      const current = habit.history[dStr];
-      onToggleHabit(habit.id, dStr, nextHabitValue(current));
+      onToggleHabit(habit.id, dStr, 'cycle' as any);
     },
     [dStr, onToggleHabit]
   );
