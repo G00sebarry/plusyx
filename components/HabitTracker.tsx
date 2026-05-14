@@ -64,6 +64,8 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     return saved ? new Set(JSON.parse(saved)) : new Set();
   });
   const [calendarMonth, setCalendarMonth] = useState<{[key: string]: {year: number, month: number}}>({});
+  const [chartHover, setChartHover] = useState<{ habitId: string; pointIndex: number } | null>(null);
+  const [growthInfoHabitId, setGrowthInfoHabitId] = useState<string | null>(null);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -428,6 +430,175 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     return { scheduledDays, completedFull, completedMini, frozen, missed };
   };
 
+  // =====================================================
+  // 📈 РОСТ (1% better every day — Atomic Habits / James Clear)
+  // =====================================================
+
+  /**
+   * Считает множитель роста привычки от первой отметки до сегодня.
+   * Логика:
+   *   Запланированный день: ✅ ×1.01 | 🔸 ×1.005 | ❄️ ×1.00 | пропуск ×0.99
+   *   Незапланированный день: ✅ ×1.01 (бонус!) | 🔸 ×1.005 | прочее ×1.00 (не штрафуем)
+   */
+  const calculateGrowth = (habit: Habit): { growth: number; daysSinceStart: number; hasStarted: boolean } => {
+    const historyKeys = Object.keys(habit.history).sort();
+    if (historyKeys.length === 0) {
+      return { growth: 1, daysSinceStart: 0, hasStarted: false };
+    }
+
+    const [sy, sm, sd] = historyKeys[0].split('-').map(Number);
+    const startDate = new Date(sy, sm - 1, sd);
+    startDate.setHours(0, 0, 0, 0);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    let growth = 1;
+    let dayCount = 0;
+    const cursor = new Date(startDate);
+
+    while (cursor <= today) {
+      dayCount++;
+      const ds = formatDate(cursor);
+      const val = habit.history[ds];
+      const scheduled = isDateScheduled(habit, cursor);
+
+      if (scheduled) {
+        if (val === true) growth *= 1.01;
+        else if (val === 'mini') growth *= 1.005;
+        else if (val === 'freeze') growth *= 1.00;
+        else growth *= 0.99;
+      } else {
+        if (val === true) growth *= 1.01;
+        else if (val === 'mini') growth *= 1.005;
+      }
+
+      cursor.setDate(cursor.getDate() + 1);
+    }
+
+    return { growth, daysSinceStart: dayCount, hasStarted: true };
+  };
+
+  /**
+   * Тренд роста за последние N дней (для цвета числа в шапке)
+   */
+  const getRecentGrowthTrend = (habit: Habit, days: number): number => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    let trend = 1;
+
+    for (let i = days - 1; i >= 0; i--) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - i);
+      const ds = formatDate(date);
+      const val = habit.history[ds];
+      const scheduled = isDateScheduled(habit, date);
+
+      if (scheduled) {
+        if (val === true) trend *= 1.01;
+        else if (val === 'mini') trend *= 1.005;
+        else if (val === 'freeze') trend *= 1.00;
+        else trend *= 0.99;
+      } else {
+        if (val === true) trend *= 1.01;
+        else if (val === 'mini') trend *= 1.005;
+      }
+    }
+
+    return trend;
+  };
+
+  /** CSS-класс цвета по тренду */
+  const getGrowthColor = (trend: number, hasCover: boolean): string => {
+    if (trend > 1.01) return hasCover ? 'text-green-300' : 'text-green-500';
+    if (trend < 0.99) return hasCover ? 'text-red-300' : 'text-red-500';
+    return hasCover ? 'text-yellow-300' : 'text-yellow-500';
+  };
+
+  /** Форматирование множителя: ×1.42, ×2.5, ×37 */
+  const formatGrowth = (growth: number): string => {
+    if (growth >= 10) return `×${growth.toFixed(0)}`;
+    if (growth >= 2) return `×${growth.toFixed(1)}`;
+    return `×${growth.toFixed(2)}`;
+  };
+
+  /** Форматирование процента: +42%, -22% */
+  const formatGrowthPercent = (growth: number): string => {
+    const percent = Math.round((growth - 1) * 100);
+    if (percent > 0) return `+${percent}%`;
+    return `${percent}%`;
+  };
+
+  /**
+   * Точки графика роста за период (week=7, month=30, year=365)
+   */
+  const getGrowthChartData = (
+    habit: Habit,
+    periodDays: number
+  ): Array<{ day: number; date: string; growth: number; value: 'done' | 'mini' | 'freeze' | 'missed' | 'bonus' | 'empty' }> => {
+    const historyKeys = Object.keys(habit.history).sort();
+    if (historyKeys.length === 0) return [];
+
+    const [sy, sm, sd] = historyKeys[0].split('-').map(Number);
+    const startDate = new Date(sy, sm - 1, sd);
+    startDate.setHours(0, 0, 0, 0);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const totalDays = Math.floor((today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    const windowDays = Math.min(periodDays, totalDays);
+
+    const windowStart = new Date(today);
+    windowStart.setDate(windowStart.getDate() - windowDays + 1);
+    if (windowStart < startDate) windowStart.setTime(startDate.getTime());
+
+    // Прогон до windowStart, чтобы получить накопленный growth
+    let growth = 1;
+    let dayCount = 0;
+    const cursor = new Date(startDate);
+    while (cursor < windowStart) {
+      dayCount++;
+      const ds = formatDate(cursor);
+      const val = habit.history[ds];
+      const scheduled = isDateScheduled(habit, cursor);
+      if (scheduled) {
+        if (val === true) growth *= 1.01;
+        else if (val === 'mini') growth *= 1.005;
+        else if (val !== 'freeze') growth *= 0.99;
+      } else {
+        if (val === true) growth *= 1.01;
+        else if (val === 'mini') growth *= 1.005;
+      }
+      cursor.setDate(cursor.getDate() + 1);
+    }
+
+    // Точки графика
+    const points: Array<{ day: number; date: string; growth: number; value: 'done' | 'mini' | 'freeze' | 'missed' | 'bonus' | 'empty' }> = [];
+    while (cursor <= today) {
+      dayCount++;
+      const ds = formatDate(cursor);
+      const val = habit.history[ds];
+      const scheduled = isDateScheduled(habit, cursor);
+      let pointType: 'done' | 'mini' | 'freeze' | 'missed' | 'bonus' | 'empty' = 'empty';
+
+      if (scheduled) {
+        if (val === true) { growth *= 1.01; pointType = 'done'; }
+        else if (val === 'mini') { growth *= 1.005; pointType = 'mini'; }
+        else if (val === 'freeze') { pointType = 'freeze'; }
+        else { growth *= 0.99; pointType = 'missed'; }
+      } else {
+        if (val === true) { growth *= 1.01; pointType = 'bonus'; }
+        else if (val === 'mini') { growth *= 1.005; pointType = 'bonus'; }
+      }
+
+      points.push({ day: dayCount, date: ds, growth, value: pointType });
+      cursor.setDate(cursor.getDate() + 1);
+    }
+
+    return points;
+  };
+
   // Склонение слова "день"
   const getDaysWord = (days: number) => {
     if (days % 10 === 1 && days % 100 !== 11) return 'день';
@@ -556,14 +727,6 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
       ],
       daysUntilReset
     };
-  };
-
-  // =====================================================
-  // ПРОГРЕСС ЗА МЕСЯЦ (для круга)
-  // =====================================================
-  const calculateProgress = (habit: Habit) => {
-    const stats = getCompletionRate(habit, 30);
-    return stats.percentage;
   };
 
   // =====================================================
@@ -844,116 +1007,144 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     );
   };
 
-  // Рендер круговой диаграммы
+  // 📈 Рендер графика РОСТА (трейдерский стиль)
   const renderCircularChart = (habit: Habit, hasCover: boolean) => {
     const habitId = habit.id;
     const period = chartPeriod[habitId] || 'month';
-    const days = period === 'week' ? 7 : period === 'month' ? 30 : 365;
-    const stats = getCompletionRate(habit, days);
+    const periodDays = period === 'week' ? 7 : period === 'month' ? 30 : 365;
+    const points = getGrowthChartData(habit, periodDays);
+
+    const growthData = calculateGrowth(habit);
     const currentStreak = getCurrentStreak(habit);
     const bestStreak = getBestStreak(habit);
 
-    const total = stats.completed + stats.frozen + stats.missed;
-    
-    // Count mini separately from completed
-    let miniCount = 0;
-    let fullCount = 0;
-    const todayCheck = new Date();
-    todayCheck.setHours(0, 0, 0, 0);
-    for (let i = 0; i < days; i++) {
-      const date = new Date(todayCheck);
-      date.setDate(date.getDate() - i);
-      if (!isDateRelevant(habit, date)) continue;
-      const key = formatDate(date);
-      const val = habit.history[key];
-      if (val === 'mini') miniCount++;
-      else if (isCompleted(val)) fullCount++;
-    }
-    
-    const completedPercent = total > 0 ? Math.round((stats.completed / total) * 100) : 0;
-    const frozenPercent = total > 0 ? Math.round((stats.frozen / total) * 100) : 0;
-    const missedPercent = total > 0 ? Math.round((stats.missed / total) * 100) : 0;
-    const miniPercent = total > 0 ? Math.round((miniCount / total) * 100) : 0;
-    const fullPercent = total > 0 ? Math.round((fullCount / total) * 100) : 0;
-
     const periodLabels = { week: 'Неделя', month: 'Месяц', year: 'Год' };
 
-    // Generate heatmap data
-    const heatmapData: { date: string; value: string | null; dayOfWeek: number }[] = [];
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const heatmapDays = period === 'week' ? 7 : period === 'month' ? 30 : 90; // year shows last 90 days
-    
-    for (let i = heatmapDays - 1; i >= 0; i--) {
-      const date = new Date(today);
-      date.setDate(date.getDate() - i);
-      const key = formatDate(date);
-      const val = habit.history[key];
-      const scheduled = isDateRelevant(habit, date);
-      heatmapData.push({
-        date: key,
-        value: scheduled ? (val ? String(val) : 'missed') : null,
-        dayOfWeek: date.getDay()
+    // Если данных мало — заглушка
+    if (points.length < 2) {
+      return (
+        <div className={`mt-2 p-6 rounded-2xl ${hasCover ? 'bg-black/60 backdrop-blur-sm' : 'bg-black/80'} border border-white/10`}>
+          <div className="flex gap-1 mb-4 bg-black/40 p-1 rounded-xl">
+            {(['week', 'month', 'year'] as const).map(p => (
+              <button
+                key={p}
+                onClick={(e) => { e.stopPropagation(); setHabitChartPeriod(habitId, p); }}
+                className={`flex-1 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all ${
+                  period === p
+                    ? 'bg-green-500 text-white shadow-lg shadow-green-500/30'
+                    : 'text-white/40 hover:text-white/70'
+                }`}
+              >
+                {periodLabels[p]}
+              </button>
+            ))}
+          </div>
+          <div className="text-center py-8">
+            <span className="text-4xl block mb-2">📈</span>
+            <p className="text-xs text-white/60">
+              Отметь хотя бы 2 дня, чтобы увидеть график роста
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    // Геометрия графика
+    const W = 320;
+    const H = 180;
+    const padL = 38;
+    const padR = 46;
+    const padT = 12;
+    const padB = 24;
+    const plotW = W - padL - padR;
+    const plotH = H - padT - padB;
+
+    // Шкала Y
+    const growths = points.map(p => p.growth);
+    let minG = Math.min(...growths, 1);
+    let maxG = Math.max(...growths, 1);
+    const range = maxG - minG;
+    minG = Math.max(0.001, minG - range * 0.1);
+    maxG = maxG + range * 0.1;
+    if (maxG - minG < 0.05) { minG = minG - 0.025; maxG = maxG + 0.025; }
+
+    const yScale = (g: number) => padT + plotH - ((g - minG) / (maxG - minG)) * plotH;
+    const xScale = (i: number) => padL + (i / Math.max(1, points.length - 1)) * plotW;
+
+    // Сегменты линии (зелёный = рост, красный = падение)
+    const segments: Array<{ x1: number; y1: number; x2: number; y2: number; color: string }> = [];
+    for (let i = 1; i < points.length; i++) {
+      const prev = points[i - 1];
+      const curr = points[i];
+      const goingUp = curr.growth >= prev.growth;
+      segments.push({
+        x1: xScale(i - 1),
+        y1: yScale(prev.growth),
+        x2: xScale(i),
+        y2: yScale(curr.growth),
+        color: goingUp ? '#22c55e' : '#ef4444'
       });
     }
 
-    // Generate streak history (last 30 or 14 days as bars)
-    const streakBarDays = period === 'week' ? 7 : period === 'year' ? 60 : 30;
-    const streakBars: { date: string; status: 'done' | 'mini' | 'freeze' | 'missed' | 'unscheduled'; label: string }[] = [];
-    for (let i = streakBarDays - 1; i >= 0; i--) {
-      const date = new Date(today);
-      date.setDate(date.getDate() - i);
-      const key = formatDate(date);
-      const val = habit.history[key];
-      const scheduled = isDateRelevant(habit, date);
-      const dayLabel = date.getDate().toString();
-      
-      if (!scheduled) {
-        streakBars.push({ date: key, status: 'unscheduled', label: dayLabel });
-      } else if (val === 'freeze') {
-        streakBars.push({ date: key, status: 'freeze', label: dayLabel });
-      } else if (val === 'mini') {
-        streakBars.push({ date: key, status: 'mini', label: dayLabel });
-      } else if (isCompleted(val)) {
-        streakBars.push({ date: key, status: 'done', label: dayLabel });
-      } else {
-        streakBars.push({ date: key, status: 'missed', label: dayLabel });
-      }
+    // Сетка по Y
+    const gridLines: Array<{ y: number; label: string; labelRight: string }> = [];
+    const gridSteps = 4;
+    for (let i = 0; i <= gridSteps; i++) {
+      const value = minG + (maxG - minG) * (i / gridSteps);
+      const y = yScale(value);
+      gridLines.push({
+        y,
+        label: value >= 10 ? `×${value.toFixed(0)}` : `×${value.toFixed(2)}`,
+        labelRight: `${Math.round((value - 1) * 100) >= 0 ? '+' : ''}${Math.round((value - 1) * 100)}%`
+      });
     }
 
-    const barColors = {
-      done: 'bg-green-500',
-      mini: 'bg-yellow-500',
-      freeze: 'bg-cyan-400',
-      missed: 'bg-red-500/40',
-      unscheduled: 'bg-gray-500/10'
-    };
+    // Заливка под линией
+    const pathPoints = points.map((p, i) => `${xScale(i)},${yScale(p.growth)}`).join(' L ');
+    const areaPath = `M ${xScale(0)},${yScale(minG)} L ${pathPoints} L ${xScale(points.length - 1)},${yScale(minG)} Z`;
 
-    const heatColors = (val: string | null) => {
-      if (!val || val === 'missed') return hasCover ? 'bg-white/5' : 'bg-gray-500/10';
-      if (val === 'freeze') return 'bg-cyan-400/70';
-      if (val === 'mini') return 'bg-yellow-500/70';
-      if (val === 'true' || val === '1' || Number(val) > 0) return 'bg-green-500';
-      return hasCover ? 'bg-white/5' : 'bg-gray-500/10';
-    };
+    // X-лейблы (начало, середина, конец)
+    const xLabels = [
+      { i: 0, label: points[0].date.slice(5).replace('-', '.') },
+      { i: Math.floor(points.length / 2), label: points[Math.floor(points.length / 2)].date.slice(5).replace('-', '.') },
+      { i: points.length - 1, label: points[points.length - 1].date.slice(5).replace('-', '.') }
+    ];
 
-    // Progress bar widths
-    const completedWidth = total > 0 ? (stats.completed / total) * 100 : 0;
-    const frozenWidth = total > 0 ? (stats.frozen / total) * 100 : 0;
-    const missedWidth = total > 0 ? (stats.missed / total) * 100 : 0;
+    // Маркеры
+    const markers = points.map((p, i) => ({
+      x: xScale(i),
+      y: yScale(p.growth),
+      type: p.value,
+      data: p,
+      index: i
+    }));
+
+    const hoveredPoint = chartHover && chartHover.habitId === habitId ? markers[chartHover.pointIndex] : null;
+
+    const handleChartInteract = (clientX: number, target: SVGSVGElement) => {
+      const rect = target.getBoundingClientRect();
+      const x = ((clientX - rect.left) / rect.width) * W;
+      let closestIdx = 0;
+      let minDist = Infinity;
+      markers.forEach((m, idx) => {
+        const d = Math.abs(m.x - x);
+        if (d < minDist) { minDist = d; closestIdx = idx; }
+      });
+      setChartHover({ habitId, pointIndex: closestIdx });
+    };
 
     return (
-      <div className={`mt-2 p-4 rounded-2xl ${hasCover ? 'bg-black/40 backdrop-blur-sm' : 'bg-black/10'} border border-white/10`}>
-        {/* Period switcher */}
-        <div className="flex gap-1 mb-4 bg-black/20 p-1 rounded-xl">
+      <div className={`mt-2 p-4 rounded-2xl ${hasCover ? 'bg-black/60 backdrop-blur-sm' : 'bg-black/80'} border border-white/10`}>
+        {/* Переключатель периода */}
+        <div className="flex gap-1 mb-4 bg-black/40 p-1 rounded-xl">
           {(['week', 'month', 'year'] as const).map(p => (
             <button
               key={p}
-              onClick={() => setHabitChartPeriod(habitId, p)}
+              onClick={(e) => { e.stopPropagation(); setHabitChartPeriod(habitId, p); setChartHover(null); }}
               className={`flex-1 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all ${
-                period === p 
-                  ? 'bg-green-500 text-white shadow-lg' 
-                  : `${hasCover ? 'text-white/40 hover:text-white/60' : 'tg-hint hover:bg-black/10'}`
+                period === p
+                  ? 'bg-green-500 text-white shadow-lg shadow-green-500/30'
+                  : 'text-white/40 hover:text-white/70'
               }`}
             >
               {periodLabels[p]}
@@ -961,107 +1152,192 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
           ))}
         </div>
 
-        {/* Stacked progress bar */}
-        <div className="mb-4">
-          <div className="flex items-center justify-between mb-1.5">
-            <span className={`text-[9px] font-black uppercase tracking-wider ${hasCover ? 'text-white/60' : 'tg-hint'}`}>Прогресс</span>
-            <span className={`text-[11px] font-black ${hasCover ? 'text-white' : 'tg-text'}`}>{completedPercent}%</span>
+        {/* Шапка графика — текущий рост */}
+        <div className="flex items-baseline justify-between mb-3 px-1">
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl font-black text-white tracking-tight">{formatGrowth(growthData.growth)}</span>
+            <span className={`text-xs font-bold ${growthData.growth >= 1 ? 'text-green-400' : 'text-red-400'}`}>
+              {formatGrowthPercent(growthData.growth)}
+            </span>
           </div>
-          <div className={`h-3 rounded-full overflow-hidden flex ${hasCover ? 'bg-white/10' : 'bg-gray-500/10'}`}>
-            {fullPercent > 0 && <div className="bg-green-500 h-full transition-all duration-700" style={{ width: `${fullPercent}%` }} />}
-            {miniPercent > 0 && <div className="bg-yellow-500 h-full transition-all duration-700" style={{ width: `${miniPercent}%` }} />}
-            {frozenPercent > 0 && <div className="bg-cyan-400 h-full transition-all duration-700" style={{ width: `${frozenPercent}%` }} />}
-            {missedPercent > 0 && <div className="bg-red-500/50 h-full transition-all duration-700" style={{ width: `${missedPercent}%` }} />}
+          <div className="flex items-center gap-1.5 text-[9px] text-white/40 font-mono">
+            <span>день</span>
+            <span className="text-white/80 font-bold">{growthData.daysSinceStart}</span>
           </div>
         </div>
 
-        {/* Streak timeline bars */}
-        <div className="mb-4">
-          <span className={`text-[9px] font-black uppercase tracking-wider ${hasCover ? 'text-white/60' : 'tg-hint'} block mb-2`}>
-            {period === 'year' ? 'Последние 60 дней' : period === 'week' ? 'Эта неделя' : 'Последние 30 дней'}
-          </span>
-          <div className="flex gap-[2px] items-end" style={{ height: '40px' }}>
-            {streakBars.map((bar, idx) => (
-              <div 
-                key={idx} 
-                className="flex-1 flex flex-col items-center justify-end h-full gap-[1px]"
-                title={`${bar.date}: ${bar.status}`}
+        {/* SVG-график */}
+        <svg
+          viewBox={`0 0 ${W} ${H}`}
+          className="w-full"
+          style={{ touchAction: 'none' }}
+          onMouseLeave={() => setChartHover(null)}
+          onClick={(e) => handleChartInteract(e.clientX, e.currentTarget)}
+          onTouchStart={(e) => { if (e.touches[0]) handleChartInteract(e.touches[0].clientX, e.currentTarget); }}
+          onTouchMove={(e) => { if (e.touches[0]) handleChartInteract(e.touches[0].clientX, e.currentTarget); }}
+        >
+          <defs>
+            <linearGradient id={`grad-${habitId}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#22c55e" stopOpacity="0.25" />
+              <stop offset="100%" stopColor="#22c55e" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+
+          {/* Сетка */}
+          {gridLines.map((line, i) => (
+            <g key={i}>
+              <line
+                x1={padL}
+                x2={W - padR}
+                y1={line.y}
+                y2={line.y}
+                stroke="rgba(255,255,255,0.06)"
+                strokeWidth="1"
+                strokeDasharray="2 3"
+              />
+              <text
+                x={padL - 4}
+                y={line.y + 3}
+                fill="rgba(255,255,255,0.4)"
+                fontSize="8"
+                fontFamily="monospace"
+                textAnchor="end"
               >
-                <div 
-                  className={`w-full rounded-sm ${barColors[bar.status]} transition-all duration-300`}
-                  style={{ 
-                    height: bar.status === 'done' ? '100%' : bar.status === 'mini' ? '60%' : bar.status === 'freeze' ? '40%' : bar.status === 'missed' ? '20%' : '4px',
-                    minHeight: '2px'
-                  }}
-                />
-              </div>
-            ))}
-          </div>
-          {/* Day labels (every 5th or at boundaries) */}
-          <div className="flex gap-[2px] mt-1">
-            {streakBars.map((bar, idx) => (
-              <div key={idx} className="flex-1 text-center">
-                {(idx === 0 || idx === streakBars.length - 1 || (streakBars.length <= 14) || (idx % 5 === 0)) ? (
-                  <span className={`text-[6px] ${hasCover ? 'text-white/30' : 'tg-hint opacity-30'}`}>{bar.label}</span>
-                ) : null}
-              </div>
-            ))}
-          </div>
-        </div>
+                {line.label}
+              </text>
+              <text
+                x={W - padR + 4}
+                y={line.y + 3}
+                fill="rgba(255,255,255,0.4)"
+                fontSize="8"
+                fontFamily="monospace"
+                textAnchor="start"
+              >
+                {line.labelRight}
+              </text>
+            </g>
+          ))}
 
-        {/* Legend + stats */}
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-2.5 h-2.5 rounded-sm bg-green-500" />
-              <span className={`text-[8px] font-bold ${hasCover ? 'text-white/60' : 'tg-hint'}`}>Выполнено</span>
-            </div>
-            <span className={`text-[9px] font-black ${hasCover ? 'text-white' : 'tg-text'}`}>
-              {fullCount} ({fullPercent}%)
-            </span>
-          </div>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-2.5 h-2.5 rounded-sm bg-yellow-500" />
-              <span className={`text-[8px] font-bold ${hasCover ? 'text-white/60' : 'tg-hint'}`}>Мини-версия</span>
-            </div>
-            <span className={`text-[9px] font-black ${hasCover ? 'text-white' : 'tg-text'}`}>
-              {miniCount} ({miniPercent}%)
-            </span>
-          </div>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-2.5 h-2.5 rounded-sm bg-cyan-400" />
-              <span className={`text-[8px] font-bold ${hasCover ? 'text-white/60' : 'tg-hint'}`}>Заморозка</span>
-            </div>
-            <span className={`text-[9px] font-black ${hasCover ? 'text-white' : 'tg-text'}`}>
-              {stats.frozen} ({frozenPercent}%)
-            </span>
-          </div>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-2.5 h-2.5 rounded-sm bg-red-500/50" />
-              <span className={`text-[8px] font-bold ${hasCover ? 'text-white/60' : 'tg-hint'}`}>Пропущено</span>
-            </div>
-            <span className={`text-[9px] font-black ${hasCover ? 'text-white' : 'tg-text'}`}>
-              {stats.missed} ({missedPercent}%)
-            </span>
-          </div>
-        </div>
+          {/* Линия ×1.00 */}
+          {minG < 1 && maxG > 1 && (
+            <line
+              x1={padL}
+              x2={W - padR}
+              y1={yScale(1)}
+              y2={yScale(1)}
+              stroke="rgba(255,255,255,0.25)"
+              strokeWidth="1"
+              strokeDasharray="3 2"
+            />
+          )}
 
-        {/* Streaks */}
-        <div className={`mt-4 pt-3 border-t ${hasCover ? 'border-white/10' : 'border-black/10'} grid grid-cols-2 gap-3`}>
+          {/* Заливка */}
+          <path d={areaPath} fill={`url(#grad-${habitId})`} />
+
+          {/* Сегменты */}
+          {segments.map((seg, i) => (
+            <line
+              key={i}
+              x1={seg.x1}
+              y1={seg.y1}
+              x2={seg.x2}
+              y2={seg.y2}
+              stroke={seg.color}
+              strokeWidth="1.8"
+              strokeLinecap="round"
+            />
+          ))}
+
+          {/* Маркеры */}
+          {markers.map((m, i) => {
+            if (m.type === 'empty') return null;
+            let fill = 'transparent';
+            let r = 1.5;
+            if (m.type === 'done' || m.type === 'bonus') { fill = '#22c55e'; r = 2.2; }
+            else if (m.type === 'mini') { fill = '#eab308'; r = 2; }
+            else if (m.type === 'freeze') { fill = '#22d3ee'; r = 2; }
+            else if (m.type === 'missed') { fill = '#ef4444'; r = 2.2; }
+            return <circle key={i} cx={m.x} cy={m.y} r={r} fill={fill} stroke="black" strokeWidth="0.5" />;
+          })}
+
+          {/* X-лейблы */}
+          {xLabels.map((xl, i) => (
+            <text
+              key={i}
+              x={xScale(xl.i)}
+              y={H - 6}
+              fill="rgba(255,255,255,0.35)"
+              fontSize="8"
+              fontFamily="monospace"
+              textAnchor={i === 0 ? 'start' : i === xLabels.length - 1 ? 'end' : 'middle'}
+            >
+              {xl.label}
+            </text>
+          ))}
+
+          {/* Crosshair */}
+          {hoveredPoint && (
+            <g>
+              <line
+                x1={hoveredPoint.x}
+                x2={hoveredPoint.x}
+                y1={padT}
+                y2={padT + plotH}
+                stroke="rgba(255,255,255,0.4)"
+                strokeWidth="1"
+                strokeDasharray="2 2"
+              />
+              <circle
+                cx={hoveredPoint.x}
+                cy={hoveredPoint.y}
+                r="4"
+                fill="white"
+                stroke="#22c55e"
+                strokeWidth="2"
+              />
+            </g>
+          )}
+        </svg>
+
+        {/* Тултип */}
+        {hoveredPoint ? (
+          <div className="mt-2 px-3 py-2 bg-white/5 rounded-lg border border-white/10 flex items-center justify-between text-[10px]">
+            <span className="text-white/60 font-mono">
+              {(() => {
+                const [, m, d] = hoveredPoint.data.date.split('-');
+                const monthNames = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+                return `${parseInt(d)} ${monthNames[parseInt(m) - 1]}`;
+              })()}
+            </span>
+            <span className="text-white font-black font-mono">
+              {formatGrowth(hoveredPoint.data.growth)}
+            </span>
+            <span className={`font-bold font-mono ${hoveredPoint.data.growth >= 1 ? 'text-green-400' : 'text-red-400'}`}>
+              {formatGrowthPercent(hoveredPoint.data.growth)}
+            </span>
+            <span className="text-white/40 font-mono">
+              день {hoveredPoint.data.day}
+            </span>
+          </div>
+        ) : (
+          <div className="mt-2 text-center">
+            <span className="text-[8px] text-white/30 uppercase tracking-wider">Коснись графика, чтобы увидеть детали</span>
+          </div>
+        )}
+
+        {/* Серии */}
+        <div className="mt-4 pt-3 border-t border-white/10 grid grid-cols-2 gap-3">
           <div className="text-center">
-            <div className={`text-lg font-black ${hasCover ? 'text-orange-300' : 'text-orange-500'} flex items-center justify-center gap-1`}>
+            <div className="text-lg font-black text-orange-300 flex items-center justify-center gap-1">
               🔥 {currentStreak}
             </div>
-            <div className={`text-[7px] font-bold uppercase tracking-wider ${hasCover ? 'text-white/40' : 'tg-hint'}`}>Текущая серия</div>
+            <div className="text-[7px] font-bold uppercase tracking-wider text-white/40">Текущая серия</div>
           </div>
           <div className="text-center">
-            <div className={`text-lg font-black ${hasCover ? 'text-yellow-300' : 'text-yellow-500'} flex items-center justify-center gap-1`}>
+            <div className="text-lg font-black text-yellow-300 flex items-center justify-center gap-1">
               ⭐ {bestStreak}
             </div>
-            <div className={`text-[7px] font-bold uppercase tracking-wider ${hasCover ? 'text-white/40' : 'tg-hint'}`}>Лучшая серия</div>
+            <div className="text-[7px] font-bold uppercase tracking-wider text-white/40">Лучшая серия</div>
           </div>
         </div>
       </div>
@@ -1296,17 +1572,16 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
           ) : (
             <div className="max-w-4xl mx-auto w-full space-y-4">
               {habits.map(habit => {
-                const progress = calculateProgress(habit);
                 const streak = getCurrentStreak(habit);
-                const radius = 16;
-                const circ = 2 * Math.PI * radius;
-                const offset = circ - (progress / 100) * circ;
                 const isTarget = dropTargetId === habit.id;
                 const hasCover = !!habit.fileData;
                 const isAtomic = !!habit.identity || !!habit.triggerEvent;
                 const isExpanded = expandedHabits.has(habit.id);
                 const currentStatsTab = statsTab[habit.id] || 'calendar';
                 const hasWarning = freezeWarnings.has(habit.id);
+                const growthData = calculateGrowth(habit);
+                const recentTrend = getRecentGrowthTrend(habit, 7);
+                const growthColorClass = getGrowthColor(recentTrend, hasCover);
 
                 return (
                   <div 
@@ -1342,23 +1617,44 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
                         </div>
                       </div>
                       
-                      {/* STREAK + PROGRESS */}
-                      <div className="flex items-center gap-2">
+                      {/* STREAK + GROWTH */}
+                      <div className="flex items-center gap-2.5">
                         {streak > 0 && (
                           <div className={`flex items-center gap-0.5 ${hasCover ? 'text-orange-300' : 'text-orange-500'}`}>
                             <span className="text-xs">🔥</span>
                             <span className="text-[10px] font-black">{streak}</span>
                           </div>
                         )}
-                        <div className="relative w-10 h-10">
-                          <svg className="w-full h-full -rotate-90" viewBox="0 0 40 40">
-                            <circle cx="20" cy="20" r={radius} fill="none" stroke="currentColor" strokeWidth="3" className={hasCover ? "text-white/10" : "text-gray-400/10"} />
-                            <circle cx="20" cy="20" r={radius} fill="none" stroke="currentColor" strokeWidth="3" strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round" className="text-green-500 transition-all duration-700" />
-                          </svg>
-                          <div className="absolute inset-0 flex items-center justify-center">
-                            <span className={`text-[9px] font-black ${hasCover ? 'text-white' : 'tg-text'}`}>{progress}%</span>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setGrowthInfoHabitId(habit.id); }}
+                          className="flex flex-col items-end gap-0 group"
+                          title="Что такое Рост?"
+                        >
+                          <div className="flex items-center gap-1">
+                            <span className="text-[9px] opacity-50">📈</span>
+                            <span className={`text-sm font-black tracking-tight ${growthData.hasStarted ? growthColorClass : (hasCover ? 'text-white/40' : 'tg-hint')}`}>
+                              {growthData.hasStarted ? formatGrowth(growthData.growth) : '×1.00'}
+                            </span>
+                            <span className={`text-[8px] opacity-40 group-hover:opacity-100 transition-opacity ${hasCover ? 'text-white' : 'tg-hint'}`}>?</span>
                           </div>
-                        </div>
+                          <div className="flex items-center gap-1.5">
+                            {growthData.hasStarted ? (
+                              <>
+                                <span className={`text-[7px] font-bold ${growthColorClass}`}>
+                                  {formatGrowthPercent(growthData.growth)}
+                                </span>
+                                <span className={`text-[7px] ${hasCover ? 'text-white/40' : 'tg-hint'}`}>·</span>
+                                <span className={`text-[7px] font-bold ${hasCover ? 'text-white/60' : 'tg-hint'}`}>
+                                  день {growthData.daysSinceStart}
+                                </span>
+                              </>
+                            ) : (
+                              <span className={`text-[7px] italic ${hasCover ? 'text-white/50' : 'tg-hint'}`}>
+                                Начни сегодня
+                              </span>
+                            )}
+                          </div>
+                        </button>
                       </div>
                     </div>
                     
@@ -1613,6 +1909,81 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
                 className="mt-2 py-3 px-8 bg-white/10 hover:bg-white/20 rounded-xl text-sm font-bold text-white transition-all"
               >
                 Закрыть
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Модалка «Что такое Рост?» */}
+      {growthInfoHabitId && (
+        <div
+          className="fixed inset-0 z-[600] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
+          onClick={() => setGrowthInfoHabitId(null)}
+        >
+          <div
+            className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-white/10 animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center gap-3">
+                <span className="text-4xl">📈</span>
+                <h3 className="text-2xl font-black text-white">Рост</h3>
+              </div>
+
+              <p className="text-sm text-gray-300 leading-relaxed">
+                Каждый день привычки делает тебя <span className="text-green-400 font-bold">лучше</span> или <span className="text-red-400 font-bold">хуже</span>. Это сложный процент — как в инвестициях.
+              </p>
+
+              <div className="bg-black/40 rounded-2xl p-4 space-y-2 border border-white/5">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-gray-300">✅ Выполнил день</span>
+                  <span className="text-green-400 font-mono font-bold">×1.01</span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-gray-300">🔸 Мини-версия</span>
+                  <span className="text-yellow-400 font-mono font-bold">×1.005</span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-gray-300">❄️ Заморозка</span>
+                  <span className="text-cyan-400 font-mono font-bold">×1.00</span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-gray-300">✗ Пропустил</span>
+                  <span className="text-red-400 font-mono font-bold">×0.99</span>
+                </div>
+              </div>
+
+              <p className="text-xs text-gray-400 leading-relaxed">
+                Кажется мелочью? Но это сложный процент:
+              </p>
+
+              <div className="bg-gradient-to-br from-green-500/10 to-emerald-500/10 rounded-2xl p-4 space-y-2 border border-green-500/20">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-400">День 1</span>
+                  <span className="text-sm text-white font-mono font-bold">×1.01</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-400">День 30</span>
+                  <span className="text-sm text-white font-mono font-bold">×1.35 <span className="text-green-400 text-xs ml-1">+35%</span></span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-400">Год</span>
+                  <span className="text-base text-green-400 font-mono font-black">×37.78 <span className="text-xs ml-1">+3678%</span></span>
+                </div>
+              </div>
+
+              <p className="text-[11px] text-gray-500 italic leading-relaxed text-center">
+                Каждый день — маленький шаг. За год они складываются в результат.
+                <br />
+                <span className="text-gray-400">— Джеймс Клир, «Атомные привычки»</span>
+              </p>
+
+              <button
+                onClick={() => setGrowthInfoHabitId(null)}
+                className="mt-2 py-3 px-8 bg-white/10 hover:bg-white/20 rounded-xl text-sm font-bold text-white transition-all"
+              >
+                Понятно
               </button>
             </div>
           </div>
