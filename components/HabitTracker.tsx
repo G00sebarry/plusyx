@@ -1933,7 +1933,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
               </div>
 
               <p className="text-sm text-gray-300 leading-relaxed">
-                Каждый день привычки делает тебя <span className="text-green-400 font-bold">лучше</span> или <span className="text-red-400 font-bold">хуже</span>. Это сложный процент — как в инвестициях.
+                Каждый день привычки делает тебя <span className="text-green-400 font-bold">лучше</span> или <span className="text-red-400 font-bold">хуже</span>.
               </p>
 
               <div className="bg-black/40 rounded-2xl p-4 space-y-2 border border-white/5">
@@ -1975,7 +1975,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
               </div>
 
               <p className="text-[11px] text-gray-500 italic leading-relaxed text-center">
-                Каждый день — маленький шаг. За год они складываются в результат.
+                Каждый день - маленький шаг. За год они складываются в результат.
                 <br />
                 <span className="text-gray-400">— Джеймс Клир, «Атомные привычки»</span>
               </p>
