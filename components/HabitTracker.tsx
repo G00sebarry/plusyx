@@ -1617,14 +1617,9 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
                         </div>
                       </div>
                       
-                      {/* STREAK + GROWTH */}
+                      {/* GROWTH */}
                       <div className="flex items-center gap-2.5">
-                        {streak > 0 && (
-                          <div className={`flex items-center gap-0.5 ${hasCover ? 'text-orange-300' : 'text-orange-500'}`}>
-                            <span className="text-xs">🔥</span>
-                            <span className="text-[10px] font-black">{streak}</span>
-                          </div>
-                        )}
+                        
                         <button
                           onClick={(e) => { e.stopPropagation(); setGrowthInfoHabitId(habit.id); }}
                           className="flex flex-col items-end gap-0 group"
@@ -1701,6 +1696,12 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
                       </button>
                       
                       <div className="flex items-center gap-2">
+                        {streak > 0 && (
+                          <div className={`flex items-center gap-1 px-2 py-1 rounded-lg ${hasCover ? 'bg-orange-500/20 text-orange-300' : 'bg-orange-500/10 text-orange-500'}`}>
+                            <span className="text-[10px]">🔥</span>
+                            <span className="text-[9px] font-black">{streak}</span>
+                          </div>
+                        )}
                         {habit.reminderEnabled && habit.reminderTime && (
                           <div 
                             className={`flex items-center gap-1 px-2 py-1 rounded-lg ${hasCover ? 'bg-blue-500/20 text-blue-300' : 'bg-blue-500/10 text-blue-500'}`}
