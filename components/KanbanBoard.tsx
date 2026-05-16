@@ -9,6 +9,7 @@ interface KanbanBoardProps {
   onMoveTask: (draggedId: string, targetColId: string, targetId?: string) => void;
   onEditTask: (task: Task) => void;
   onDeleteTask: (id: string) => void;
+  onArchiveTask: (id: string) => void;
   onQuickAdd: (status: TaskStatus, columnId: string) => void;
   onCopyTask: (originalTaskId: string, newTitle: string) => void;
   onDragEnd: (draggedId: string, targetColId: string, targetId?: string) => void;
@@ -145,7 +146,7 @@ const NAV_COLORS_COVER: Record<TaskStatus, string> = {
 };
 
 export const KanbanBoard: React.FC<KanbanBoardProps> = ({ 
-  tasks, columns, onUpdateColumns, onDeleteColumn, onMoveTask, onEditTask, onDeleteTask, onQuickAdd, onCopyTask, scrollToColumnId 
+  tasks, columns, onUpdateColumns, onDeleteColumn, onMoveTask, onEditTask, onDeleteTask, onArchiveTask, onQuickAdd, onCopyTask, scrollToColumnId 
 }) => {
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
@@ -155,14 +156,12 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   
   const [activeMenuColId, setActiveMenuColId] = useState<string | null>(null);
   
-  // 🔥 ЛОКАЛЬНОЕ СОСТОЯНИЕ ДЛЯ РЕДАКТИРОВАНИЯ НАЗВАНИЯ КОЛОНКИ
   const [editingColId, setEditingColId] = useState<string | null>(null);
   const [editingColTitle, setEditingColTitle] = useState('');
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const columnRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-  // Auto-scroll to column with search results
   useEffect(() => {
     if (scrollToColumnId && columnRefs.current[scrollToColumnId] && scrollContainerRef.current) {
       columnRefs.current[scrollToColumnId]?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
@@ -176,14 +175,12 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   const handleAddColumn = () => {
     if (!newColTitle.trim()) { setIsAddingColumn(false); return; }
     
-    // Создаем новую колонку
     const newCol: Column = {
       id: `col-${Math.random().toString(36).substr(2, 9)}`,
       title: newColTitle.trim(),
       type: 'todo' 
     };
     
-    // Обновляем список (это триггерит сохранение в App.tsx)
     onUpdateColumns([...columns, newCol]);
     
     setNewColTitle('');
@@ -196,7 +193,6 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
     setEditingColTitle(col.title);
   };
 
-  // 🔥 СОХРАНЯЕМ НАЗВАНИЕ ТОЛЬКО ПРИ ЗАВЕРШЕНИИ (BLUR или ENTER)
   const saveColumnTitle = () => {
     if (editingColId && editingColTitle.trim()) {
         const updatedColumns = columns.map(c => c.id === editingColId ? { ...c, title: editingColTitle.trim() } : c);
@@ -210,7 +206,6 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
     if (hasTasks) {
       if (!confirm("В этой колонке есть задачи. Всё равно удалить?")) return;
     }
-    // 🔥 ТЕПЕРЬ ВЫЗЫВАЕМ СПЕЦИАЛЬНУЮ ФУНКЦИЮ ДЛЯ УДАЛЕНИЯ
     onDeleteColumn(colId);
     setActiveMenuColId(null);
   };
@@ -513,12 +508,25 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                                         Создать копию
                                     </button>
                                     <div className="h-px bg-white/5 my-1" />
+                                    {/* 💤 В СПЯЧКУ */}
                                     <button 
                                       onClick={(e) => { 
-    e.stopPropagation(); 
-    setActiveTaskMenuId(null);  // 🔧 Закрываем меню!
-    onDeleteTask(task.id); 
-}}
+                                          e.stopPropagation();
+                                          setActiveTaskMenuId(null);
+                                          onArchiveTask(task.id);
+                                      }}
+                                      className="w-full text-left p-2.5 hover:bg-blue-500/10 rounded-lg text-[10px] font-black uppercase tracking-widest text-blue-400 flex items-center gap-2 cursor-pointer"
+                                    >
+                                        <span className="text-sm">💤</span>
+                                        В спячку
+                                    </button>
+                                    <div className="h-px bg-white/5 my-1" />
+                                    <button 
+                                      onClick={(e) => { 
+                                          e.stopPropagation(); 
+                                          setActiveTaskMenuId(null);
+                                          onDeleteTask(task.id); 
+                                      }}
                                         className="w-full text-left p-2.5 hover:bg-red-500/10 rounded-lg text-[10px] font-black uppercase tracking-widest text-red-500 flex items-center gap-2 cursor-pointer"
                                     >
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>

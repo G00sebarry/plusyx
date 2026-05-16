@@ -8,6 +8,7 @@ interface HabitTrackerProps {
   onToggleHabit: (id: string, date: string, value: boolean | 'mini' | 'freeze') => void;
   onEditHabit: (habit: Habit) => void;
   onDeleteHabit: (id: string) => void;
+  onArchiveHabit: (id: string) => void;
   onAddHabit: () => void;
   onReorderHabits: (newHabits: Habit[]) => void;
   onAddAntiHabit: () => void;
@@ -44,7 +45,7 @@ interface Achievement {
 
 export const HabitTracker: React.FC<HabitTrackerProps> = ({ 
   habits, antiHabits,
-  onToggleHabit, onEditHabit, onDeleteHabit, onAddHabit, onReorderHabits,
+  onToggleHabit, onEditHabit, onDeleteHabit, onArchiveHabit, onAddHabit, onReorderHabits,
   onAddAntiHabit, onEditAntiHabit, onDeleteAntiHabit, onRelapseAntiHabit, onReorderAntiHabits
 }) => {
   const [activeTab, setActiveTab] = useState<'build' | 'quit'>('build');
@@ -66,6 +67,10 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
   const [calendarMonth, setCalendarMonth] = useState<{[key: string]: {year: number, month: number}}>({});
   const [chartHover, setChartHover] = useState<{ habitId: string; pointIndex: number } | null>(null);
   const [growthInfoHabitId, setGrowthInfoHabitId] = useState<string | null>(null);
+  // 💤 Меню выбора при тапе на 🗑️: id привычки + позиция меню
+  const [deleteMenu, setDeleteMenu] = useState<{ habitId: string; x: number; y: number } | null>(null);
+  // 💤 Подтверждение отправки в спячку
+  const [archiveConfirmId, setArchiveConfirmId] = useState<string | null>(null);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -226,10 +231,15 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
   const getCurrentStreak = (habit: Habit): number => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+    // 💤 Серия не может быть длиннее текущего цикла (после пробуждения)
+    const effectiveStart = getEffectiveStartDate(habit);
     let streak = 0;
     const checkDate = new Date(today);
     
     for (let i = 0; i < 365; i++) {
+      // 💤 Если ушли левее начала цикла — стоп
+      if (effectiveStart && checkDate < effectiveStart) break;
+      
       if (!isDateRelevant(habit, checkDate)) {
         checkDate.setDate(checkDate.getDate() - 1);
         continue;
@@ -255,15 +265,19 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     return streak;
   };
 
-  // Лучшая серия за всё время
+  // Лучшая серия в ТЕКУЩЕМ цикле (после последнего пробуждения)
+  // Личный рекорд за всё время хранится в habit.allTimeBestStreak отдельно.
   const getBestStreak = (habit: Habit): number => {
-    const sortedDates = Object.keys(habit.history).sort();
+    // 💤 Считаем только ключи из текущего цикла
+    const sortedDates = getCurrentCycleHistoryKeys(habit).sort();
     let maxStreak = 0;
     let currentStreak = 0;
     let prevDate: Date | null = null;
 
     for (const dateStr of sortedDates) {
-      const date = new Date(dateStr);
+      const [y, m, d] = dateStr.split('-').map(Number);
+      const date = new Date(y, m - 1, d);
+      date.setHours(0, 0, 0, 0);
       
       if (!isDateRelevant(habit, date)) continue;
       
@@ -311,6 +325,11 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     return maxStreak;
   };
 
+  // 💤 Личный рекорд за всё время: max между сохранённым в БД и текущим циклом
+  const getAllTimeBestStreak = (habit: Habit): number => {
+    return Math.max(habit.allTimeBestStreak || 0, getBestStreak(habit));
+  };
+
   // Общее количество выполнений
   const getTotalCompletions = (habit: Habit): number => {
     let count = 0;
@@ -325,6 +344,8 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
   const getCompletionRate = (habit: Habit, days: number): { completed: number, frozen: number, missed: number, total: number, percentage: number } => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+    // 💤 Не считаем дни до пробуждения
+    const effectiveStart = getEffectiveStartDate(habit);
     let completed = 0;
     let frozen = 0;
     let missed = 0;
@@ -333,6 +354,9 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     for (let i = 0; i < days; i++) {
       const date = new Date(today);
       date.setDate(date.getDate() - i);
+      
+      // 💤 Дни до начала цикла не считаются
+      if (effectiveStart && date < effectiveStart) break;
       
       if (!isDateRelevant(habit, date)) continue;
       
@@ -435,20 +459,54 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
   // =====================================================
 
   /**
-   * Считает множитель роста привычки от первой отметки до сегодня.
+   * 💤 Возвращает эффективную дату начала отсчёта для метрик.
+   * Если у привычки есть reactivatedAt (пробудилась после спячки) — используем её.
+   * Иначе — дату первой отметки в истории.
+   * Возвращает null, если истории нет вообще.
+   */
+  const getEffectiveStartDate = (habit: Habit): Date | null => {
+    // Если есть reactivatedAt — это новая точка отсчёта
+    if (habit.reactivatedAt) {
+      const d = new Date(habit.reactivatedAt);
+      d.setHours(0, 0, 0, 0);
+      return d;
+    }
+    // Иначе берём самую раннюю отметку
+    const historyKeys = Object.keys(habit.history).sort();
+    if (historyKeys.length === 0) return null;
+    const [sy, sm, sd] = historyKeys[0].split('-').map(Number);
+    const d = new Date(sy, sm - 1, sd);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  };
+
+  /**
+   * 💤 Возвращает только те ключи истории, которые входят в текущий цикл
+   * (т.е. >= effectiveStartDate). Используется в getBestStreak и getTotalCompletions.
+   */
+  const getCurrentCycleHistoryKeys = (habit: Habit): string[] => {
+    const start = getEffectiveStartDate(habit);
+    if (!start) return [];
+    return Object.keys(habit.history).filter(ds => {
+      const [y, m, d] = ds.split('-').map(Number);
+      const date = new Date(y, m - 1, d);
+      date.setHours(0, 0, 0, 0);
+      return date >= start;
+    });
+  };
+
+  /**
+   * Считает множитель роста привычки от первой отметки (или пробуждения) до сегодня.
    * Логика:
    *   Запланированный день: ✅ ×1.01 | 🔸 ×1.005 | ❄️ ×1.00 | пропуск ×0.99
    *   Незапланированный день: ✅ ×1.01 (бонус!) | 🔸 ×1.005 | прочее ×1.00 (не штрафуем)
    */
   const calculateGrowth = (habit: Habit): { growth: number; daysSinceStart: number; hasStarted: boolean } => {
-    const historyKeys = Object.keys(habit.history).sort();
-    if (historyKeys.length === 0) {
+    // 💤 Точка отсчёта: reactivatedAt либо первая отметка
+    const startDate = getEffectiveStartDate(habit);
+    if (!startDate) {
       return { growth: 1, daysSinceStart: 0, hasStarted: false };
     }
-
-    const [sy, sm, sd] = historyKeys[0].split('-').map(Number);
-    const startDate = new Date(sy, sm - 1, sd);
-    startDate.setHours(0, 0, 0, 0);
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -536,12 +594,9 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     habit: Habit,
     periodDays: number
   ): Array<{ day: number; date: string; growth: number; value: 'done' | 'mini' | 'freeze' | 'missed' | 'bonus' | 'empty' }> => {
-    const historyKeys = Object.keys(habit.history).sort();
-    if (historyKeys.length === 0) return [];
-
-    const [sy, sm, sd] = historyKeys[0].split('-').map(Number);
-    const startDate = new Date(sy, sm - 1, sd);
-    startDate.setHours(0, 0, 0, 0);
+    // 💤 Точка отсчёта учитывает reactivatedAt
+    const startDate = getEffectiveStartDate(habit);
+    if (!startDate) return [];
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -1617,9 +1672,14 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
                         </div>
                       </div>
                       
-                      {/* GROWTH */}
+                      {/* STREAK + GROWTH */}
                       <div className="flex items-center gap-2.5">
-                        
+                        {streak > 0 && (
+                          <div className={`flex items-center gap-0.5 ${hasCover ? 'text-orange-300' : 'text-orange-500'}`}>
+                            <span className="text-xs">🔥</span>
+                            <span className="text-[10px] font-black">{streak}</span>
+                          </div>
+                        )}
                         <button
                           onClick={(e) => { e.stopPropagation(); setGrowthInfoHabitId(habit.id); }}
                           className="flex flex-col items-end gap-0 group"
@@ -1696,12 +1756,6 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
                       </button>
                       
                       <div className="flex items-center gap-2">
-                        {streak > 0 && (
-                          <div className={`flex items-center gap-1 px-2 py-1 rounded-lg ${hasCover ? 'bg-orange-500/20 text-orange-300' : 'bg-orange-500/10 text-orange-500'}`}>
-                            <span className="text-[10px]">🔥</span>
-                            <span className="text-[9px] font-black">{streak}</span>
-                          </div>
-                        )}
                         {habit.reminderEnabled && habit.reminderTime && (
                           <div 
                             className={`flex items-center gap-1 px-2 py-1 rounded-lg ${hasCover ? 'bg-blue-500/20 text-blue-300' : 'bg-blue-500/10 text-blue-500'}`}
@@ -1712,7 +1766,11 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
                           </div>
                         )}
                         <button 
-                          onClick={(e) => { e.stopPropagation(); onDeleteHabit(habit.id); }} 
+                          onClick={(e) => { 
+                            e.stopPropagation(); 
+                            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                            setDeleteMenu({ habitId: habit.id, x: rect.right - 180, y: rect.bottom + 8 });
+                          }} 
                           className={`w-7 h-7 flex items-center justify-center rounded-lg transition-all ${hasCover ? 'bg-white/10 text-white/40 hover:text-red-400 hover:bg-red-500/20' : 'bg-red-500/5 text-red-500/30 hover:text-red-500 hover:bg-red-500/10'}`}
                         >
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -1916,6 +1974,87 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
         </div>
       )}
 
+      {/* 💤 Меню «В спячку / Удалить» */}
+      {deleteMenu && (
+        <>
+          <div className="fixed inset-0 z-[490]" onClick={() => setDeleteMenu(null)} />
+          <div
+            className="fixed z-[500] w-44 bg-[#1c1c1e] rounded-2xl shadow-2xl border border-white/10 flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+            style={{ top: Math.min(deleteMenu.y, window.innerHeight - 130), left: Math.max(8, Math.min(deleteMenu.x, window.innerWidth - 184)) }}
+          >
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setArchiveConfirmId(deleteMenu.habitId);
+                setDeleteMenu(null);
+              }}
+              className="p-3 text-left hover:bg-white/5 flex items-center gap-2 text-[11px] font-bold text-white"
+            >
+              <span className="text-base">💤</span>
+              <span>В спячку</span>
+            </button>
+            <div className="h-[1px] bg-white/10 mx-2" />
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onDeleteHabit(deleteMenu.habitId);
+                setDeleteMenu(null);
+              }}
+              className="p-3 text-left hover:bg-red-500/10 flex items-center gap-2 text-[11px] font-bold text-red-500"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+              </svg>
+              <span>Удалить навсегда</span>
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* 💤 Подтверждение отправки в спячку */}
+      {archiveConfirmId && (
+        <div
+          className="fixed inset-0 z-[600] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
+          onClick={() => setArchiveConfirmId(null)}
+        >
+          <div
+            className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-white/10 animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex flex-col items-center text-center gap-4">
+              <div className="text-6xl">💤</div>
+              <h3 className="text-xl font-black text-white">Отправить в спячку?</h3>
+              <p className="text-sm text-gray-300 leading-relaxed">
+                Привычка пропадёт с главного экрана и не будет считаться. Уведомления отключатся.
+              </p>
+              <div className="w-full py-3 px-4 bg-yellow-500/10 rounded-xl border border-yellow-500/20">
+                <p className="text-xs text-yellow-200 leading-relaxed">
+                  ⚠️ При пробуждении <span className="font-bold">Рост и серия начнутся с нуля</span>.
+                  Личный рекорд сохранится.
+                </p>
+              </div>
+              <div className="w-full flex flex-col gap-2 mt-2">
+                <button
+                  onClick={() => {
+                    onArchiveHabit(archiveConfirmId);
+                    setArchiveConfirmId(null);
+                  }}
+                  className="w-full py-3 px-4 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded-xl transition-all"
+                >
+                  💤 В спячку
+                </button>
+                <button
+                  onClick={() => setArchiveConfirmId(null)}
+                  className="w-full py-3 px-4 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl transition-all"
+                >
+                  Отмена
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Модалка «Что такое Рост?» */}
       {growthInfoHabitId && (
         <div
@@ -1933,7 +2072,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
               </div>
 
               <p className="text-sm text-gray-300 leading-relaxed">
-                Каждый день привычки делает тебя <span className="text-green-400 font-bold">лучше</span> или <span className="text-red-400 font-bold">хуже</span>.
+                Каждый день привычки делает тебя <span className="text-green-400 font-bold">лучше</span> или <span className="text-red-400 font-bold">хуже</span>. Это сложный процент — как в инвестициях.
               </p>
 
               <div className="bg-black/40 rounded-2xl p-4 space-y-2 border border-white/5">
@@ -1975,7 +2114,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
               </div>
 
               <p className="text-[11px] text-gray-500 italic leading-relaxed text-center">
-                Каждый день - маленький шаг. За год они складываются в результат.
+                Каждый день — маленький шаг. За год они складываются в результат.
                 <br />
                 <span className="text-gray-400">— Джеймс Клир, «Атомные привычки»</span>
               </p>

@@ -16,7 +16,9 @@ import {
   getCurrentSession, signInWithGoogle, signOut, onAuthStateChange,
   fetchUserSettings, saveUserSettings,
   fetchDailyNotes, addDailyNote, updateDailyNote, deleteDailyNote,
-  DailyNote
+  DailyNote,
+  // 💤 СПЯЧКА
+  archiveHabit, archiveTask
 } from './api';
 
 const toLocalDateString = (date: Date) => {
@@ -43,7 +45,6 @@ const LoginScreen: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  // 📧 Email вход
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -71,7 +72,6 @@ const LoginScreen: React.FC = () => {
     }
   };
 
-  // 📧 Email регистрация
   const handleEmailRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -97,7 +97,6 @@ const LoginScreen: React.FC = () => {
           setError(error.message);
         }
       } else if (data.user && !data.session) {
-        // Email требует подтверждения
         setSuccessMessage('Проверьте почту для подтверждения!');
       }
     } catch (err) {
@@ -107,7 +106,6 @@ const LoginScreen: React.FC = () => {
     }
   };
 
-  // 🔵 Google вход
   const handleGoogleLogin = async () => {
     setIsLoading(true);
     setError(null);
@@ -117,8 +115,6 @@ const LoginScreen: React.FC = () => {
   return (
     <div className="h-screen w-screen tg-bg flex flex-col items-center justify-center p-6">
       <div className="w-full max-w-sm">
-        
-        {/* Логотип */}
         <div className="mb-8 flex flex-col items-center">
           <div className="relative w-20 h-20 flex items-center justify-center mb-4">
             <svg width="80" height="80" viewBox="0 0 100 100">
@@ -134,10 +130,7 @@ const LoginScreen: React.FC = () => {
           <p className="text-sm tg-hint mt-2 text-center">Трекер привычек и задач</p>
         </div>
 
-        {/* Форма */}
         <div className="tg-secondary-bg rounded-3xl p-6 border border-white/10 shadow-xl">
-          
-          {/* Переключатель Вход/Регистрация */}
           <div className="flex bg-black/20 p-1 rounded-xl mb-6">
             <button
               onClick={() => { setAuthMode('login'); setError(null); setSuccessMessage(null); }}
@@ -161,7 +154,6 @@ const LoginScreen: React.FC = () => {
             </button>
           </div>
 
-          {/* Email форма */}
           <form onSubmit={authMode === 'login' ? handleEmailLogin : handleEmailRegister}>
             <div className="flex flex-col gap-3 mb-4">
               <input
@@ -183,21 +175,18 @@ const LoginScreen: React.FC = () => {
               />
             </div>
 
-            {/* Ошибка */}
             {error && (
               <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-xl">
                 <p className="text-red-400 text-xs text-center font-medium">{error}</p>
               </div>
             )}
 
-            {/* Успех */}
             {successMessage && (
               <div className="mb-4 p-3 bg-green-500/10 border border-green-500/20 rounded-xl">
                 <p className="text-green-400 text-xs text-center font-medium">{successMessage}</p>
               </div>
             )}
 
-            {/* Кнопка */}
             <button
               type="submit"
               disabled={isLoading}
@@ -211,14 +200,12 @@ const LoginScreen: React.FC = () => {
             </button>
           </form>
 
-          {/* Разделитель */}
           <div className="flex items-center gap-3 my-6">
             <div className="flex-1 h-px bg-white/10" />
             <span className="text-gray-500 text-xs uppercase tracking-wider">или</span>
             <div className="flex-1 h-px bg-white/10" />
           </div>
 
-          {/* Google */}
           <button
             onClick={handleGoogleLogin}
             disabled={isLoading}
@@ -234,7 +221,6 @@ const LoginScreen: React.FC = () => {
           </button>
         </div>
 
-        {/* Подпись */}
         <p className="text-center text-gray-500 text-[10px] mt-6">
           Продолжая, вы соглашаетесь с условиями использования
         </p>
@@ -254,10 +240,6 @@ const App: React.FC = () => {
   const [userName, setUserName] = useState<string | null>(null);
 
   // --- UI ---
-  // sessionStorage живёт пока открыта вкладка:
-  //   • Закрыл вкладку → открыл сайт заново → главная (sessionStorage пустой → kanban)
-  //   • F5 / открыл по ссылке → та же страница (sessionStorage помнит view)
-  //   • Переход по табам внутри сайта → запоминается тут же
   const VIEW_SESSION_KEY = 'plusyx_session_view';
   const [view, setView] = useState<ViewType>(() => {
     if (typeof window === 'undefined') return 'kanban';
@@ -271,12 +253,10 @@ const App: React.FC = () => {
   });
   const [isLoading, setIsLoading] = useState(true);
 
-  // Сохраняем view в sessionStorage при каждом изменении
   useEffect(() => {
     try { sessionStorage.setItem(VIEW_SESSION_KEY, view); } catch { /* ignore */ }
   }, [view]);
 
-  // Чистим устаревший ключ из localStorage (если у кого-то остался)
   useEffect(() => { localStorage.removeItem('plusyx_current_view'); }, []);
 
   // --- ДАННЫЕ ---
@@ -303,19 +283,28 @@ const App: React.FC = () => {
   
   const [taskToDelete, setTaskToDelete] = useState<string | null>(null);
   const [habitToDelete, setHabitToDelete] = useState<string | null>(null);
+
+  // 💤 Тост-уведомление (для спячки и пробуждения)
+  const [toast, setToast] = useState<{ icon: string; message: string } | null>(null);
+  const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const showToast = (icon: string, message: string) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToast({ icon, message });
+    toastTimerRef.current = setTimeout(() => setToast(null), 3000);
+  };
   
   // --- SETTINGS ---
   const [theme, setTheme] = useState<'light' | 'dark'>(() => (localStorage.getItem('plusyx_theme') as 'light' | 'dark') || 'light');
- const [wallpaper, setWallpaper] = useState<string>('');
-const [wallpaperOpacity, setWallpaperOpacity] = useState<number>(30);
-const [wallpaperPosition, setWallpaperPosition] = useState<number>(50);
+  const [wallpaper, setWallpaper] = useState<string>('');
+  const [wallpaperOpacity, setWallpaperOpacity] = useState<number>(30);
+  const [wallpaperPosition, setWallpaperPosition] = useState<number>(50);
 
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const wallpaperInputRef = useRef<HTMLInputElement>(null);
   const initialSettingsApplied = useRef(false);
 
   // ═══════════════════════════════════════════════════════════
-  // 🔐 ПРОВЕРКА АВТОРИЗАЦИИ (УБРАЛИ TG)
+  // 🔐 ПРОВЕРКА АВТОРИЗАЦИИ
   // ═══════════════════════════════════════════════════════════
   useEffect(() => {
     const checkAuth = async () => {
@@ -364,7 +353,6 @@ const [wallpaperPosition, setWallpaperPosition] = useState<number>(50);
         setTasks(dbTasks);
         setHabits(dbHabits);
         setAntiHabits(dbAntiHabits);
-        // dbNotes приходит как Record<date, DailyNote[]> — сплющиваем
         setDailyNotes(Object.values(dbNotes).flat());
         
         if (dbSettings) {
@@ -505,23 +493,30 @@ const [wallpaperPosition, setWallpaperPosition] = useState<number>(50);
     await saveTaskToDb(newTask, userId);
   };
 
+  // 💤 АРХИВАЦИЯ ЗАДАЧИ
+  const handleArchiveTask = async (taskId: string) => {
+    if (!userId) return;
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+    // Убираем из активного списка
+    setTasks(prev => prev.filter(t => t.id !== taskId));
+    showToast('💤', 'Задача в спячке');
+    window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('medium');
+    await archiveTask(taskId, userId, task.columnId || '');
+  };
+
   // --- HABITS ---
   const handleAddHabit = async (habitData: Habit) => {
     if (!userId) return;
-    // Новая привычка с position: 0 — будет первой
     const newHabit = { ...habitData, id: Math.random().toString(36).substr(2, 9), position: 0 };
     
-    // Добавляем в начало списка
     const newHabits = [newHabit, ...habits];
-    
-    // Пересчитываем позиции всех привычек
     const updated = newHabits.map((h, idx) => ({ ...h, position: idx }));
     setHabits(updated);
     
     setIsHabitModalOpen(false);
     window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
     
-    // Сохраняем новую привычку и порядок
     await saveHabitToDb(newHabit, userId);
     await saveHabitsOrderToDb(updated, userId);
   };
@@ -534,23 +529,66 @@ const [wallpaperPosition, setWallpaperPosition] = useState<number>(50);
     await saveHabitToDb(updatedHabit, userId);
   };
 
-const handleAutoSaveHabit = async (updatedHabit: Habit) => {
+  const handleAutoSaveHabit = async (updatedHabit: Habit) => {
     if (!userId) return;
     setHabits(prev => prev.map(h => h.id === updatedHabit.id ? updatedHabit : h));
     await saveHabitToDb(updatedHabit, userId);
-    // НЕ закрываем модалку!
-};
-  // Single-flight queue для сохранения истории привычек:
-  // для каждой привычки в любой момент максимум 1 запрос в полёте.
-  // Свежая версия history хранится в habitLatest. Если во время полёта прилетели
-  // новые тапы — после ответа отправляем ещё раз с финальной версией.
-  // Это убирает race condition и не плодит pending-запросы.
+  };
+
+  // 💤 АРХИВАЦИЯ ПРИВЫЧКИ
+  // Перед спячкой пытаемся сохранить актуальный личный рекорд из текущего цикла,
+  // чтобы он не потерялся (на случай если в БД старое значение).
+  const handleArchiveHabit = async (habitId: string) => {
+    if (!userId) return;
+    const habit = habits.find(h => h.id === habitId);
+    if (!habit) return;
+
+    // Считаем "сырой" лучший стрик из текущего цикла прямо тут
+    // (повторяет логику getBestStreak из HabitTracker, упрощённую)
+    const computeBestStreakSimple = (h: Habit): number => {
+      const startISO = h.reactivatedAt;
+      const keys = Object.keys(h.history || {}).sort();
+      let maxStreak = 0;
+      let cur = 0;
+      let prev: Date | null = null;
+      for (const ds of keys) {
+        const [y, m, d] = ds.split('-').map(Number);
+        const date = new Date(y, m - 1, d);
+        if (startISO) {
+          const start = new Date(startISO);
+          start.setHours(0,0,0,0);
+          if (date < start) continue;
+        }
+        const v = h.history[ds];
+        if (v === 'freeze') { cur = 0; prev = null; continue; }
+        if (v === true || v === 'mini') {
+          if (prev) {
+            const next = new Date(prev); next.setDate(next.getDate() + 1);
+            if (next.getTime() === date.getTime()) cur++;
+            else cur = 1;
+          } else cur = 1;
+          maxStreak = Math.max(maxStreak, cur);
+          prev = date;
+        } else { cur = 0; prev = null; }
+      }
+      return maxStreak;
+    };
+
+    const cycleBest = computeBestStreakSimple(habit);
+    const newAllTimeBest = Math.max(habit.allTimeBestStreak || 0, cycleBest);
+
+    setHabits(prev => prev.filter(h => h.id !== habitId));
+    showToast('💤', 'Привычка в спячке');
+    window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('medium');
+    await archiveHabit(habitId, userId, newAllTimeBest);
+  };
+
   const habitInFlight = useRef<Record<string, boolean>>({});
   const habitLatest = useRef<Record<string, Habit['history']>>({});
 
   const flushHabitHistory = async (habitId: string) => {
     if (!userId) return;
-    if (habitInFlight.current[habitId]) return; // уже идёт запрос
+    if (habitInFlight.current[habitId]) return;
     const latest = habitLatest.current[habitId];
     if (!latest) return;
 
@@ -558,11 +596,8 @@ const handleAutoSaveHabit = async (updatedHabit: Habit) => {
     try {
       const result = await saveHabitHistoryToDb(habitId, userId, latest);
       if (result?.error) {
-        // На ошибке оставляем latest, попробуем снова в следующем тапе
         return;
       }
-      // Успех: если за время полёта пришла НОВАЯ версия (отличается от той что только что сохранили),
-      // — шлём ещё раз. Иначе latest можно почистить.
       const justSaved = latest;
       const current = habitLatest.current[habitId];
       if (current === justSaved) {
@@ -570,7 +605,6 @@ const handleAutoSaveHabit = async (updatedHabit: Habit) => {
       }
     } finally {
       habitInFlight.current[habitId] = false;
-      // Если за время полёта обновили latest — отправляем свежую версию рекурсивно
       if (habitLatest.current[habitId]) {
         flushHabitHistory(habitId);
       }
@@ -580,19 +614,14 @@ const handleAutoSaveHabit = async (updatedHabit: Habit) => {
   const handleToggleHabit = async (id: string, date: string, value: boolean | 'mini' | 'freeze' | 'cycle') => {
     if (!userId) return;
 
-    // Сохраняем позицию скролла
     const scrollTop = mainRef.current?.scrollTop ?? 0;
 
-    // ВАЖНО: получаем актуальную привычку через функциональный setState — иначе при
-    // быстрых последовательных тапах используется stale closure и предыдущие отметки затираются.
-    // При value='cycle' вычисляем следующее значение здесь же из актуальной истории.
     setHabits(prev => {
       const habit = prev.find(h => h.id === id);
       if (!habit) return prev;
       const newHistory = { ...habit.history };
       let nextValue: boolean | 'mini' | 'freeze' | undefined;
       if (value === 'cycle') {
-        // Цикл: undefined → true → 'mini' → 'freeze' → undefined
         const current = newHistory[date];
         if (current === true) nextValue = 'mini';
         else if (current === 'mini') nextValue = 'freeze';
@@ -610,30 +639,23 @@ const handleAutoSaveHabit = async (updatedHabit: Habit) => {
         newHistory[date] = nextValue;
       }
       const updatedHabit = { ...habit, history: newHistory };
-      // Запоминаем самую свежую версию истории для очереди отправки
       habitLatest.current[id] = newHistory;
       return prev.map(h => h.id === id ? updatedHabit : h);
     });
 
-    // Восстанавливаем скролл после ререндера
     requestAnimationFrame(() => {
       if (mainRef.current) mainRef.current.scrollTop = scrollTop;
     });
 
     window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
 
-    // Запускаем отправку. Если уже идёт запрос — выйдет сразу,
-    // а после завершения текущего сам отправит свежую версию.
     flushHabitHistory(id);
   };
 
-  // Если юзер закрывает вкладку или приложение когда есть несохранённые правки —
-  // отправляем их немедленно, чтобы не потерять отметки.
   useEffect(() => {
     const flushPendingHabits = () => {
       if (!userId) return;
       Object.entries(habitLatest.current).forEach(([id, history]) => {
-        // Запрос успеет уйти если страница не закрылась мгновенно.
         saveHabitHistoryToDb(id, userId, history);
       });
     };
@@ -645,7 +667,6 @@ const handleAutoSaveHabit = async (updatedHabit: Habit) => {
     };
   }, [userId]);
 
-  // --- DAILY NOTES (журнал заметок дня) ---
   const handleAddDailyNote = async (date: string, text: string) => {
     if (!userId) return;
     const note = await addDailyNote(userId, date, text);
@@ -673,20 +694,15 @@ const handleAutoSaveHabit = async (updatedHabit: Habit) => {
   // --- ANTI HABITS ---
   const handleAddAntiHabit = async (habit: AntiHabit) => {
     if (!userId) return;
-    // Новая анти-привычка с position: 0 — будет первой
     const newHabit = { ...habit, id: Math.random().toString(36).substr(2, 9), position: 0 };
     
-    // Добавляем в начало списка
     const newAntiHabits = [newHabit, ...antiHabits];
-    
-    // Пересчитываем позиции
     const updated = newAntiHabits.map((h, idx) => ({ ...h, position: idx }));
     setAntiHabits(updated);
     
     setIsAntiHabitModalOpen(false);
     window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
     
-    // Сохраняем
     await saveAntiHabitToDb(newHabit, userId);
     await saveAntiHabitsOrderToDb(updated, userId);
   };
@@ -725,27 +741,26 @@ const handleAutoSaveHabit = async (updatedHabit: Habit) => {
 
   // --- DELETE ---
   const handleDeleteConfirm = async () => {
-  if (taskToDelete) {
-     const id = taskToDelete; 
-     setTasks(prev => prev.filter(t => t.id !== id)); 
-     setTaskToDelete(null);
-     await deleteTaskFromDb(id);
-  } else if (habitToDelete) {
-     const isHabit = habits.find(h => h.id === habitToDelete);
-     const isAnti = antiHabits.find(h => h.id === habitToDelete);
-     
-     setHabits(prev => prev.filter(h => h.id !== habitToDelete));
-     setAntiHabits(prev => prev.filter(h => h.id !== habitToDelete));
-     setHabitToDelete(null);
-     
-     if (isHabit) await deleteHabitFromDb(habitToDelete);
-     if (isAnti) await deleteAntiHabitFromDb(habitToDelete);
-  }
-  
-  // 🔧 Принудительно сбрасываем возможные блокировки
-  document.body.style.overflow = '';
-  document.body.style.touchAction = '';
-};
+    if (taskToDelete) {
+       const id = taskToDelete; 
+       setTasks(prev => prev.filter(t => t.id !== id)); 
+       setTaskToDelete(null);
+       await deleteTaskFromDb(id);
+    } else if (habitToDelete) {
+       const isHabit = habits.find(h => h.id === habitToDelete);
+       const isAnti = antiHabits.find(h => h.id === habitToDelete);
+       
+       setHabits(prev => prev.filter(h => h.id !== habitToDelete));
+       setAntiHabits(prev => prev.filter(h => h.id !== habitToDelete));
+       setHabitToDelete(null);
+       
+       if (isHabit) await deleteHabitFromDb(habitToDelete);
+       if (isAnti) await deleteAntiHabitFromDb(habitToDelete);
+    }
+    
+    document.body.style.overflow = '';
+    document.body.style.touchAction = '';
+  };
 
   const handleWallpaperChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return;
@@ -849,6 +864,7 @@ const handleAutoSaveHabit = async (updatedHabit: Habit) => {
             onMoveTask={handleMoveTask} 
             onEditTask={setEditingTask} 
             onDeleteTask={setTaskToDelete} 
+            onArchiveTask={handleArchiveTask}
             onCopyTask={handleCopyTask} 
             onQuickAdd={(s, cId) => { setEditingTask({ id:'', title:'', description:'', date:toLocalDateString(new Date()), status:s, columnId: cId, checklists: [], comments: [], position: 0} as Task); setIsTaskModalOpen(true); }}
             onDragEnd={() => {}} 
@@ -856,28 +872,28 @@ const handleAutoSaveHabit = async (updatedHabit: Habit) => {
           />
         )}
       {view === 'calendar' && <CalendarView 
-  tasks={filteredTasks} 
-  habits={habits} 
-  columns={columns}
-  onEditTask={(t) => { setEditingTask(t); setIsTaskModalOpen(true); }} 
-  onQuickAdd={(taskData) => {
-  const col = columns.find(c => c.id === taskData.columnId) || columns[0];
-  setEditingTask({ 
-    id: '', title: taskData.title || '', description: '', 
-    date: taskData.date || toLocalDateString(new Date()), 
-    time: taskData.time || '',
-    status: col?.type || 'todo', 
-    columnId: taskData.columnId || col?.id || 'col-todo', 
-    checklists: [], comments: [], position: 0
-  } as Task);
-  setIsTaskModalOpen(true);
-}}
-  onToggleHabit={handleToggleHabit}
-  dailyNotes={dailyNotes}
-  onAddDailyNote={handleAddDailyNote}
-  onUpdateDailyNote={handleUpdateDailyNote}
-  onDeleteDailyNote={handleDeleteDailyNote}
-/>}
+        tasks={filteredTasks} 
+        habits={habits} 
+        columns={columns}
+        onEditTask={(t) => { setEditingTask(t); setIsTaskModalOpen(true); }} 
+        onQuickAdd={(taskData) => {
+          const col = columns.find(c => c.id === taskData.columnId) || columns[0];
+          setEditingTask({ 
+            id: '', title: taskData.title || '', description: '', 
+            date: taskData.date || toLocalDateString(new Date()), 
+            time: taskData.time || '',
+            status: col?.type || 'todo', 
+            columnId: taskData.columnId || col?.id || 'col-todo', 
+            checklists: [], comments: [], position: 0
+          } as Task);
+          setIsTaskModalOpen(true);
+        }}
+        onToggleHabit={handleToggleHabit}
+        dailyNotes={dailyNotes}
+        onAddDailyNote={handleAddDailyNote}
+        onUpdateDailyNote={handleUpdateDailyNote}
+        onDeleteDailyNote={handleDeleteDailyNote}
+      />}
         
         {view === 'tracker' && (
           <HabitTracker 
@@ -886,6 +902,7 @@ const handleAutoSaveHabit = async (updatedHabit: Habit) => {
              onToggleHabit={handleToggleHabit} 
              onEditHabit={(h) => { setEditingHabit(h); setIsHabitModalOpen(true); }} 
              onDeleteHabit={(id) => setHabitToDelete(id)} 
+             onArchiveHabit={handleArchiveHabit}
              onAddHabit={() => { setEditingHabit(undefined); setIsHabitModalOpen(true); }} 
              onReorderHabits={handleReorderHabits}
              
@@ -910,7 +927,7 @@ const handleAutoSaveHabit = async (updatedHabit: Habit) => {
         isOpen={isHabitModalOpen || (!!editingHabit && !!editingHabit.id)} 
         onClose={() => { setIsHabitModalOpen(false); setEditingHabit(undefined); }} 
         onSave={editingHabit?.id ? handleUpdateHabit : handleAddHabit}
-        onAutoSave={handleAutoSaveHabit}    // ← ДОБАВЬ ЭТУ СТРОКУ 
+        onAutoSave={handleAutoSaveHabit}
         initialHabit={editingHabit} 
         userId={userId || undefined} 
       />
@@ -966,6 +983,14 @@ const handleAutoSaveHabit = async (updatedHabit: Habit) => {
               Выйти из аккаунта
             </button>
           </div>
+        </div>
+      )}
+
+      {/* 💤 Тост-уведомление */}
+      {toast && (
+        <div className="fixed bottom-28 left-1/2 -translate-x-1/2 z-[400] px-5 py-3 bg-[#1c1c1e] rounded-2xl shadow-2xl border border-white/10 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <span className="text-2xl">{toast.icon}</span>
+          <span className="text-sm font-bold text-white">{toast.message}</span>
         </div>
       )}
     </div>
