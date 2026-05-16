@@ -55,6 +55,10 @@ export interface Task {
   checklists: Checklist[];
   comments?: TaskComment[];
   blocksOrder?: string[];
+
+  // 💤 СПЯЧКА
+  archivedAt?: string;        // ISO timestamp — когда отправлена в спячку
+  originalColumnId?: string;  // куда возвращать при пробуждении
 }
 
 // --- ПРИВЫЧКИ ---
@@ -98,6 +102,11 @@ export interface Habit {
   fileData?: string;
   coverPosition?: number;
   coverIntensity?: number;
+
+  // 💤 СПЯЧКА
+  archivedAt?: string;          // ISO timestamp — когда отправлена в спячку
+  reactivatedAt?: string;       // ISO timestamp — когда последний раз пробудилась (точка отсчёта для метрик)
+  allTimeBestStreak?: number;   // личный рекорд — никогда не сбрасывается при пробуждении
 }
 
 // --- АНТИ-ПРИВЫЧКИ ---

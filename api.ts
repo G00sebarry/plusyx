@@ -7,15 +7,30 @@ export const fetchTasks = async (userId) => {
     .from('tasks')
     .select('*')
     .eq('user_id', userId)
+    .is('archived_at', null) // 💤 только активные
     .order('position', { ascending: true }) 
     .order('created_at', { ascending: true });
 
   if (error) { console.error('Error fetching tasks:', error); return []; }
-  return data || [];
+  // Маппим snake_case → camelCase для новых полей
+  return (data || []).map(t => ({
+    ...t,
+    archivedAt: t.archived_at,
+    originalColumnId: t.original_column_id
+  }));
 };
 
 export const saveTaskToDb = async (task, userId) => {
   const cleanTask = JSON.parse(JSON.stringify(task)); 
+  // camelCase → snake_case для новых полей перед записью
+  if ('archivedAt' in cleanTask) {
+    cleanTask.archived_at = cleanTask.archivedAt;
+    delete cleanTask.archivedAt;
+  }
+  if ('originalColumnId' in cleanTask) {
+    cleanTask.original_column_id = cleanTask.originalColumnId;
+    delete cleanTask.originalColumnId;
+  }
   const { error } = await supabase.from('tasks').upsert({ ...cleanTask, user_id: userId });
   if (error) console.error('Error saving task:', error);
 };
@@ -71,6 +86,7 @@ export const fetchHabits = async (userId) => {
     .from('habits')
     .select('*')
     .eq('user_id', userId)
+    .is('archived_at', null) // 💤 только активные
     .order('position', { ascending: true }) 
     .order('created_at', { ascending: false });
     
@@ -79,8 +95,8 @@ export const fetchHabits = async (userId) => {
   return (data || []).map(h => ({
     id: h.id,
     title: h.title,
-    description: h.description,        // ← ДОБАВЛЕНО
-    notes: h.notes || [],              // ← ДОБАВЛЕНО
+    description: h.description,
+    notes: h.notes || [],
     color: h.color,
     frequency: h.frequency,
     history: h.history || {},
@@ -93,7 +109,11 @@ export const fetchHabits = async (userId) => {
     reminderTime: h.reminder_time,
     fileData: h.file_data,
     coverPosition: h.cover_position,
-    coverIntensity: h.cover_intensity
+    coverIntensity: h.cover_intensity,
+    // 💤 СПЯЧКА
+    archivedAt: h.archived_at,
+    reactivatedAt: h.reactivated_at,
+    allTimeBestStreak: h.all_time_best_streak || 0
   }));
 };
 
@@ -102,8 +122,8 @@ export const saveHabitToDb = async (habit, userId) => {
     id: habit.id,
     user_id: userId,
     title: habit.title,
-    description: habit.description,  // ← ДОБАВЛЕНО
-    notes: habit.notes,              // ← ДОБАВЛЕНО
+    description: habit.description,
+    notes: habit.notes,
     color: habit.color,
     frequency: habit.frequency,
     history: habit.history,
@@ -116,7 +136,11 @@ export const saveHabitToDb = async (habit, userId) => {
     reminder_time: habit.reminderTime,
     file_data: habit.fileData,
     cover_position: habit.coverPosition,
-    cover_intensity: habit.coverIntensity
+    cover_intensity: habit.coverIntensity,
+    // 💤 СПЯЧКА
+    archived_at: habit.archivedAt,
+    reactivated_at: habit.reactivatedAt,
+    all_time_best_streak: habit.allTimeBestStreak || 0
   };
 
   const { error } = await supabase.from('habits').upsert(dbHabit);
@@ -136,6 +160,18 @@ export const saveHabitHistoryToDb = async (habitId, userId, history) => {
   return { error };
 };
 
+// Лёгкий апдейт only-best-streak — пишется когда юзер бьёт личный рекорд.
+// Используется автоматически в обработчике handleToggleHabit
+export const saveHabitBestStreakToDb = async (habitId, userId, bestStreak) => {
+  const { error } = await supabase
+    .from('habits')
+    .update({ all_time_best_streak: bestStreak })
+    .eq('id', habitId)
+    .eq('user_id', userId);
+  if (error) console.error("Save Best Streak Error:", error);
+  return { error };
+};
+
 export const saveHabitsOrderToDb = async (habits, userId) => {
   if (habits.length === 0) return;
   const updates = habits.map((h, index) => ({
@@ -152,6 +188,86 @@ export const saveHabitsOrderToDb = async (habits, userId) => {
 
 export const deleteHabitFromDb = async (id) => {
   await supabase.from('habits').delete().eq('id', id);
+};
+
+// ═══════════════════════════════════════════════════════════
+// 💤 СПЯЧКА — ПРИВЫЧКИ
+// ═══════════════════════════════════════════════════════════
+
+// Получить только спящие привычки юзера
+export const fetchSleepingHabits = async (userId) => {
+  const { data, error } = await supabase
+    .from('habits')
+    .select('*')
+    .eq('user_id', userId)
+    .not('archived_at', 'is', null) // только спящие
+    .order('archived_at', { ascending: false }); // последние засыпавшие сверху
+
+  if (error) { console.error('Error fetching sleeping habits:', error); return []; }
+
+  return (data || []).map(h => ({
+    id: h.id,
+    title: h.title,
+    description: h.description,
+    notes: h.notes || [],
+    color: h.color,
+    frequency: h.frequency,
+    history: h.history || {},
+    emoji: h.emoji,
+    position: h.position || 0,
+    identity: h.identity,
+    triggerEvent: h.trigger_event,
+    miniAction: h.mini_action,
+    reminderEnabled: h.reminder_enabled,
+    reminderTime: h.reminder_time,
+    fileData: h.file_data,
+    coverPosition: h.cover_position,
+    coverIntensity: h.cover_intensity,
+    archivedAt: h.archived_at,
+    reactivatedAt: h.reactivated_at,
+    allTimeBestStreak: h.all_time_best_streak || 0
+  }));
+};
+
+// Отправить привычку в спячку.
+// bestStreak (опционально) — сохранить актуальный личный рекорд перед спячкой.
+export const archiveHabit = async (habitId, userId, bestStreak) => {
+  const payload = { archived_at: new Date().toISOString() };
+  if (typeof bestStreak === 'number' && bestStreak > 0) {
+    payload.all_time_best_streak = bestStreak;
+  }
+  const { error } = await supabase
+    .from('habits')
+    .update(payload)
+    .eq('id', habitId)
+    .eq('user_id', userId);
+  if (error) console.error("Archive Habit Error:", error);
+  return { error };
+};
+
+// Разбудить привычку — снимаем archived_at, ставим reactivated_at (точка отсчёта)
+export const awakeHabit = async (habitId, userId) => {
+  const { error } = await supabase
+    .from('habits')
+    .update({
+      archived_at: null,
+      reactivated_at: new Date().toISOString()
+    })
+    .eq('id', habitId)
+    .eq('user_id', userId);
+  if (error) console.error("Awake Habit Error:", error);
+  return { error };
+};
+
+// Получить количество спящих привычек (для бейджа в настройках)
+export const countSleepingHabits = async (userId) => {
+  const { count, error } = await supabase
+    .from('habits')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .not('archived_at', 'is', null);
+  if (error) { console.error('Error counting sleeping habits:', error); return 0; }
+  return count || 0;
 };
 
 // --- ⛔ АНТИ-ПРИВЫЧКИ ---
@@ -211,6 +327,94 @@ export const saveAntiHabitsOrderToDb = async (habits, userId) => {
 
 export const deleteAntiHabitFromDb = async (id) => {
   await supabase.from('antihabits').delete().eq('id', id);
+};
+
+// ═══════════════════════════════════════════════════════════
+// 💤 СПЯЧКА — ЗАДАЧИ
+// ═══════════════════════════════════════════════════════════
+
+// Получить только спящие задачи юзера
+export const fetchSleepingTasks = async (userId) => {
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('user_id', userId)
+    .not('archived_at', 'is', null)
+    .order('archived_at', { ascending: false });
+
+  if (error) { console.error('Error fetching sleeping tasks:', error); return []; }
+  return (data || []).map(t => ({
+    ...t,
+    archivedAt: t.archived_at,
+    originalColumnId: t.original_column_id
+  }));
+};
+
+// Отправить задачу в спячку — запоминаем columnId, чтобы потом вернуть туда же
+export const archiveTask = async (taskId, userId, columnId) => {
+  const { error } = await supabase
+    .from('tasks')
+    .update({
+      archived_at: new Date().toISOString(),
+      original_column_id: columnId
+    })
+    .eq('id', taskId)
+    .eq('user_id', userId);
+  if (error) console.error("Archive Task Error:", error);
+  return { error };
+};
+
+// Восстановить задачу из спячки.
+// fallbackColumnId — куда положить, если original_column_id уже не существует.
+export const restoreTask = async (taskId, userId, fallbackColumnId) => {
+  // Сначала смотрим original_column_id у задачи
+  const { data: taskRow, error: fetchErr } = await supabase
+    .from('tasks')
+    .select('original_column_id')
+    .eq('id', taskId)
+    .eq('user_id', userId)
+    .single();
+
+  if (fetchErr) {
+    console.error("Restore Task Fetch Error:", fetchErr);
+    return { error: fetchErr };
+  }
+
+  let targetColumnId = taskRow?.original_column_id || fallbackColumnId;
+
+  // Проверим что колонка существует
+  if (targetColumnId) {
+    const { data: colRow } = await supabase
+      .from('columns')
+      .select('id')
+      .eq('id', targetColumnId)
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (!colRow) targetColumnId = fallbackColumnId; // колонка удалена — fallback
+  }
+
+  const { error } = await supabase
+    .from('tasks')
+    .update({
+      archived_at: null,
+      original_column_id: null,
+      columnId: targetColumnId
+    })
+    .eq('id', taskId)
+    .eq('user_id', userId);
+  if (error) console.error("Restore Task Error:", error);
+  return { error, restoredColumnId: targetColumnId };
+};
+
+// Получить количество спящих задач (для бейджа)
+export const countSleepingTasks = async (userId) => {
+  const { count, error } = await supabase
+    .from('tasks')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .not('archived_at', 'is', null);
+  if (error) { console.error('Error counting sleeping tasks:', error); return 0; }
+  return count || 0;
 };
 
 // --- ☁️ ЗАГРУЗКА ФАЙЛОВ ---
