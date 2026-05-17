@@ -330,7 +330,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   };
 
   return (
-    <div ref={scrollContainerRef} className="flex overflow-x-auto h-full p-4 gap-5 snap-x snap-mandatory no-scrollbar justify-start md:justify-center">
+    <div ref={scrollContainerRef} className="flex overflow-x-auto h-full p-4 gap-5 snap-x snap-mandatory no-scrollbar">
       {columns.map((column, index) => {
         const isFirst = index === 0;
         const isLast = index === columns.length - 1;
@@ -433,7 +433,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
               const commentsCount = task.comments?.length || 0;
 
               return (
-                <div key={task.id} className="flex flex-col gap-2 w-full min-w-0"> 
+                <div key={task.id} className="flex flex-col gap-2 min-w-0"> 
                 <div 
                   onDragOver={e => { e.preventDefault(); e.stopPropagation(); setDropTargetId(task.id); }}
                   onDragLeave={() => setDropTargetId(null)}
