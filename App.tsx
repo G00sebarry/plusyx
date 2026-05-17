@@ -6,6 +6,7 @@ import { TaskModal } from './components/TaskModal';
 import { HabitTracker } from './components/HabitTracker';
 import { HabitModal } from './components/HabitModal';
 import { AntiHabitModal } from './components/AntiHabitModal';
+import { SleepingScreen } from './components/SleepingScreen';
 import { Task, ViewType, Habit, Column, AntiHabit } from './types';
 import { supabase } from './supabaseClient';
 
@@ -18,7 +19,8 @@ import {
   fetchDailyNotes, addDailyNote, updateDailyNote, deleteDailyNote,
   DailyNote,
   // 💤 СПЯЧКА
-  archiveHabit, archiveTask
+  archiveHabit, archiveTask,
+  countSleepingHabits, countSleepingTasks
 } from './api';
 
 const toLocalDateString = (date: Date) => {
@@ -292,6 +294,19 @@ const App: React.FC = () => {
     setToast({ icon, message });
     toastTimerRef.current = setTimeout(() => setToast(null), 3000);
   };
+
+  // 💤 Экран спящих + счётчик для бейджа
+  const [isSleepingOpen, setIsSleepingOpen] = useState(false);
+  const [sleepingCount, setSleepingCount] = useState(0);
+  
+  const refreshSleepingCount = async (uid?: string | null) => {
+    const id = uid || userId;
+    if (!id) return;
+    try {
+      const [h, t] = await Promise.all([countSleepingHabits(id), countSleepingTasks(id)]);
+      setSleepingCount(h + t);
+    } catch (e) { console.error('Failed to count sleeping:', e); }
+  };
   
   // --- SETTINGS ---
   const [theme, setTheme] = useState<'light' | 'dark'>(() => (localStorage.getItem('plusyx_theme') as 'light' | 'dark') || 'light');
@@ -365,6 +380,9 @@ const App: React.FC = () => {
         
         if (dbColumns && dbColumns.length > 0) setColumns(dbColumns);
         else await saveColumnsToDb(DEFAULT_COLUMNS, userId);
+
+        // 💤 Загружаем счётчик спящих в фоне (для бейджа)
+        refreshSleepingCount(userId);
 
       } catch (e) { console.error("Critical Init Error:", e); } 
       finally { setIsLoading(false); }
@@ -500,6 +518,7 @@ const App: React.FC = () => {
     if (!task) return;
     // Убираем из активного списка
     setTasks(prev => prev.filter(t => t.id !== taskId));
+    setSleepingCount(c => c + 1); // оптимистично обновляем бейдж
     showToast('💤', 'Задача в спячке');
     window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('medium');
     await archiveTask(taskId, userId, task.columnId || '');
@@ -578,6 +597,7 @@ const App: React.FC = () => {
     const newAllTimeBest = Math.max(habit.allTimeBestStreak || 0, cycleBest);
 
     setHabits(prev => prev.filter(h => h.id !== habitId));
+    setSleepingCount(c => c + 1); // оптимистично обновляем бейдж
     showToast('💤', 'Привычка в спячке');
     window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('medium');
     await archiveHabit(habitId, userId, newAllTimeBest);
@@ -760,6 +780,27 @@ const App: React.FC = () => {
     
     document.body.style.overflow = '';
     document.body.style.touchAction = '';
+  };
+
+  // 💤 КОЛБЭКИ ПРОБУЖДЕНИЯ (зовутся из SleepingScreen)
+  const handleHabitAwakened = (wokenHabit: Habit) => {
+    // Возвращаем привычку в активный список. Position = 0 (наверх).
+    setHabits(prev => {
+      const updated = [{ ...wokenHabit, position: 0 }, ...prev.map((h, i) => ({ ...h, position: i + 1 }))];
+      return updated;
+    });
+    showToast('🌅', `«${wokenHabit.title}» пробудилась`);
+    // Порядок в БД пересохраним (debounced — нагрузка минимальная)
+    if (userId) {
+      const updated = [{ ...wokenHabit, position: 0 }, ...habits.map((h, i) => ({ ...h, position: i + 1 }))];
+      saveHabitsOrderToDb(updated, userId);
+    }
+  };
+
+  const handleTaskRestored = (restoredTask: Task, columnTitle: string) => {
+    // Возвращаем задачу на канбан
+    setTasks(prev => [...prev, restoredTask]);
+    showToast('🌅', `Задача в «${columnTitle}»`);
   };
 
   const handleWallpaperChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -976,6 +1017,22 @@ const App: React.FC = () => {
                 )}
               </div>
             </div>
+
+            {/* 💤 Кнопка Спящие */}
+            <button
+              onClick={() => { setIsSleepingOpen(true); setIsSettingsOpen(false); }}
+              className="w-full py-3 px-4 tg-secondary-bg hover:bg-black/10 rounded-2xl font-bold uppercase text-[10px] tracking-widest border border-white/5 active:scale-95 transition-all flex items-center justify-between"
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-base">💤</span>
+                <span className="tg-text">Спящие</span>
+              </div>
+              {sleepingCount > 0 && (
+                <span className="px-2 py-0.5 rounded-full bg-blue-500 text-white text-[10px] font-black min-w-[20px] text-center">
+                  {sleepingCount}
+                </span>
+              )}
+            </button>
             
             <button onClick={() => setIsSettingsOpen(false)} className="w-full py-4 tg-button rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl active:scale-95 transition-all">Готово</button>
             
@@ -984,6 +1041,19 @@ const App: React.FC = () => {
             </button>
           </div>
         </div>
+      )}
+
+      {/* 💤 Экран спящих */}
+      {userId && (
+        <SleepingScreen
+          isOpen={isSleepingOpen}
+          onClose={() => setIsSleepingOpen(false)}
+          userId={userId}
+          columns={columns}
+          onHabitAwakened={handleHabitAwakened}
+          onTaskRestored={handleTaskRestored}
+          onCountChanged={() => refreshSleepingCount()}
+        />
       )}
 
       {/* 💤 Тост-уведомление */}
