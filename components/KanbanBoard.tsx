@@ -339,7 +339,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
         <div 
           key={column.id} 
           ref={el => { columnRefs.current[column.id] = el; }}
-          className="min-w-[85vw] md:min-w-[320px] flex flex-col snap-center h-full flex-shrink-0"
+          className="min-w-[85vw] md:min-w-[320px] flex flex-col snap-center h-full"
           onDragOver={e => e.preventDefault()}
           onDrop={e => {
             const draggedId = e.dataTransfer.getData('taskId') || draggedTaskId;
@@ -420,7 +420,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
             </div>
           </div>
           
-          <div className="flex flex-col gap-4 flex-1 pb-24 min-h-[500px]">
+          <div className="flex flex-col gap-4 flex-1 pb-24 min-h-[500px] min-w-0">
             {tasks.filter(t => t.columnId === column.id).map(task => {
               const activeCover = task.coverData || task.fileData;
               const hasCover = !!activeCover;
@@ -433,7 +433,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
               const commentsCount = task.comments?.length || 0;
 
               return (
-                <div key={task.id} className="flex flex-col gap-2 w-full"> 
+                <div key={task.id} className="flex flex-col gap-2 w-full min-w-0"> 
                 <div 
                   onDragOver={e => { e.preventDefault(); e.stopPropagation(); setDropTargetId(task.id); }}
                   onDragLeave={() => setDropTargetId(null)}
@@ -443,7 +443,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                     if (draggedId) onMoveTask(draggedId, column.id, task.id);
                     setDropTargetId(null);
                   }}
-                  className={`relative transition-all duration-200 ${dropTargetId === task.id ? 'scale-105' : ''} ${isMenuOpen ? 'z-[100]' : 'z-0'}`}
+                  className={`relative w-full min-w-0 transition-all duration-200 ${dropTargetId === task.id ? 'scale-105' : ''} ${isMenuOpen ? 'z-[100]' : 'z-0'}`}
                 >
                   <div 
                     draggable={isDraggable} 
@@ -470,7 +470,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                       </>
                     )}
 
-                    <div className="relative z-10 flex flex-col gap-3 h-full">
+                    <div className="relative z-10 flex flex-col gap-3 h-full min-w-0">
                         <div className="flex justify-between items-start gap-2">
                           <h3 className={`font-bold text-[15px] leading-tight flex-1 min-w-0 break-words tracking-tight ${hasCover ? 'text-white' : 'tg-text'}`}>{task.title}</h3>
                           
@@ -536,7 +536,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                             )}
                           </div>
                         </div>
-                        {task.description && <p className={`text-[11px] line-clamp-2 italic break-all min-w-0 ${hasCover ? 'text-white/60' : 'tg-hint opacity-70'}`}>{task.description}</p>}
+                        {task.description && <p className={`text-[11px] line-clamp-2 italic break-words min-w-0 ${hasCover ? 'text-white/60' : 'tg-hint opacity-70'}`}>{task.description}</p>}
                         
                         {renderChecklists(task)}
 
