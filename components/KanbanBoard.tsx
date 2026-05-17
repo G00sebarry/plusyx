@@ -420,7 +420,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
             </div>
           </div>
           
-          <div className="flex flex-col gap-4 flex-1 pb-24 min-h-[500px] min-w-0">
+          <div className="flex flex-col gap-4 flex-1 pb-24 min-h-[500px] min-w-0 w-full">
             {tasks.filter(t => t.columnId === column.id).map(task => {
               const activeCover = task.coverData || task.fileData;
               const hasCover = !!activeCover;
@@ -443,7 +443,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                     if (draggedId) onMoveTask(draggedId, column.id, task.id);
                     setDropTargetId(null);
                   }}
-                  className={`relative w-full min-w-0 transition-all duration-200 ${dropTargetId === task.id ? 'scale-105' : ''} ${isMenuOpen ? 'z-[100]' : 'z-0'}`}
+                  className={`relative min-w-0 transition-all duration-200 ${dropTargetId === task.id ? 'scale-105' : ''} ${isMenuOpen ? 'z-[100]' : 'z-0'}`}
                 >
                   <div 
                     draggable={isDraggable} 
