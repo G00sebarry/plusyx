@@ -472,7 +472,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
 
                     <div className="relative z-10 flex flex-col gap-3 h-full">
                         <div className="flex justify-between items-start gap-2">
-                          <h3 className={`font-bold text-[15px] leading-tight flex-1 tracking-tight ${hasCover ? 'text-white' : 'tg-text'}`}>{task.title}</h3>
+                          <h3 className={`font-bold text-[15px] leading-tight flex-1 min-w-0 break-words tracking-tight ${hasCover ? 'text-white' : 'tg-text'}`}>{task.title}</h3>
                           
                           <div className="relative">
                             <button 
@@ -536,7 +536,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                             )}
                           </div>
                         </div>
-                        {task.description && <p className={`text-[11px] line-clamp-2 italic ${hasCover ? 'text-white/60' : 'tg-hint opacity-70'}`}>{task.description}</p>}
+                        {task.description && <p className={`text-[11px] line-clamp-2 italic break-all min-w-0 ${hasCover ? 'text-white/60' : 'tg-hint opacity-70'}`}>{task.description}</p>}
                         
                         {renderChecklists(task)}
 
