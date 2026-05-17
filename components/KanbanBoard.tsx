@@ -339,7 +339,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
         <div 
           key={column.id} 
           ref={el => { columnRefs.current[column.id] = el; }}
-          className="min-w-[85vw] md:min-w-[320px] md:max-w-[320px] flex flex-col snap-center h-full flex-shrink-0"
+          className="min-w-[85vw] max-w-[85vw] md:min-w-[320px] md:max-w-[320px] flex flex-col snap-center h-full flex-shrink-0"
           onDragOver={e => e.preventDefault()}
           onDrop={e => {
             const draggedId = e.dataTransfer.getData('taskId') || draggedTaskId;
