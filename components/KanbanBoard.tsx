@@ -433,7 +433,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
               const commentsCount = task.comments?.length || 0;
 
               return (
-                <div key={task.id} className="flex flex-col gap-2"> 
+                <div key={task.id} className="flex flex-col gap-2 w-full"> 
                 <div 
                   onDragOver={e => { e.preventDefault(); e.stopPropagation(); setDropTargetId(task.id); }}
                   onDragLeave={() => setDropTargetId(null)}
