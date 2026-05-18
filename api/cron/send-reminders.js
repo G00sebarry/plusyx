@@ -80,7 +80,8 @@ export default async function handler(req, res) {
         .select('*')
         .eq('user_id', link.user_id)
         .eq('reminder_time', currentTime)
-        .eq('reminder_enabled', true);
+        .eq('reminder_enabled', true)
+        .is('archived_at', null);
 
       if (habits && habits.length > 0) {
         for (const habit of habits) {
@@ -133,10 +134,11 @@ export default async function handler(req, res) {
         .from('tasks')
         .select('*')
         .eq('user_id', link.user_id)
-        .eq('date', currentDate)  // ✅ ПРОВЕРЯЕМ ДАТУ
+        .eq('date', currentDate)
         .eq('time', currentTime)
         .eq('isTimer', true)
-        .neq('status', 'done');
+        .neq('status', 'done')
+        .is('archived_at', null);
 
       if (tasks && tasks.length > 0) {
         for (const task of tasks) {
