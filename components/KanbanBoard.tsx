@@ -22,6 +22,47 @@ const COLOR_MAP: Record<string, string> = {
   'green': 'bg-green-500', 'blue': 'bg-blue-500', 'purple': 'bg-purple-500', 'pink': 'bg-pink-500',
 };
 
+// --- 🔗 ХЕЛПЕРЫ ДЛЯ ССЫЛОК (превью на канбане) ---
+const getFaviconUrlForKanban = (url: string): string | null => {
+  try {
+    const u = new URL(/^https?:\/\//i.test(url) ? url : 'https://' + url);
+    return `https://www.google.com/s2/favicons?domain=${u.hostname}&sz=64`;
+  } catch {
+    return null;
+  }
+};
+
+const KanbanFavicon: React.FC<{ url: string; hasCover: boolean }> = ({ url, hasCover }) => {
+  const [errored, setErrored] = useState(false);
+  const faviconUrl = getFaviconUrlForKanban(url);
+
+  // Фон кружочка под фавикон, чтобы было видно поверх обложки
+  const wrapperClass = hasCover
+    ? 'w-5 h-5 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center overflow-hidden'
+    : 'w-5 h-5 rounded-full bg-black/20 border border-white/5 flex items-center justify-center overflow-hidden';
+
+  if (!faviconUrl || errored) {
+    return (
+      <div className={wrapperClass}>
+        <span className="text-[9px]">🔗</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className={wrapperClass}>
+      <img
+        src={faviconUrl}
+        width={12}
+        height={12}
+        alt=""
+        onError={() => setErrored(true)}
+        loading="lazy"
+      />
+    </div>
+  );
+};
+
 // --- ХЕЛПЕРЫ ДЛЯ ДАТЫ ---
 const toLocalDateString = (date: Date) => {
   const y = date.getFullYear();
@@ -339,7 +380,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
         <div 
           key={column.id} 
           ref={el => { columnRefs.current[column.id] = el; }}
-          className="min-w-[85vw] max-w-[85vw] md:min-w-[320px] md:max-w-[320px] flex flex-col snap-center h-full flex-shrink-0"
+          className="min-w-[85vw] md:min-w-[320px] flex flex-col snap-center h-full"
           onDragOver={e => e.preventDefault()}
           onDrop={e => {
             const draggedId = e.dataTransfer.getData('taskId') || draggedTaskId;
@@ -420,7 +461,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
             </div>
           </div>
           
-          <div className="flex flex-col gap-4 flex-1 pb-24 min-h-[500px] min-w-0 w-full">
+          <div className="flex flex-col gap-4 flex-1 pb-24 min-h-[500px] min-w-0">
             {tasks.filter(t => t.columnId === column.id).map(task => {
               const activeCover = task.coverData || task.fileData;
               const hasCover = !!activeCover;
@@ -433,7 +474,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
               const commentsCount = task.comments?.length || 0;
 
               return (
-                <div key={task.id} className="flex flex-col gap-2 min-w-0"> 
+                <div key={task.id} className="flex flex-col gap-2 w-full min-w-0"> 
                 <div 
                   onDragOver={e => { e.preventDefault(); e.stopPropagation(); setDropTargetId(task.id); }}
                   onDragLeave={() => setDropTargetId(null)}
@@ -443,7 +484,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                     if (draggedId) onMoveTask(draggedId, column.id, task.id);
                     setDropTargetId(null);
                   }}
-                  className={`relative min-w-0 transition-all duration-200 ${dropTargetId === task.id ? 'scale-105' : ''} ${isMenuOpen ? 'z-[100]' : 'z-0'}`}
+                  className={`relative w-full min-w-0 transition-all duration-200 ${dropTargetId === task.id ? 'scale-105' : ''} ${isMenuOpen ? 'z-[100]' : 'z-0'}`}
                 >
                   <div 
                     draggable={isDraggable} 
@@ -539,6 +580,20 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                         {task.description && <p className={`text-[11px] line-clamp-2 italic break-words min-w-0 ${hasCover ? 'text-white/60' : 'tg-hint opacity-70'}`}>{task.description}</p>}
                         
                         {renderChecklists(task)}
+
+                        {/* 🔗 Ряд фавиконов (макс 5, дальше +N) */}
+                        {task.links && task.links.length > 0 && (
+                          <div className="flex items-center gap-1.5 mt-1 relative z-10 flex-wrap">
+                            {task.links.slice(0, 5).map(link => (
+                              <KanbanFavicon key={link.id} url={link.url} hasCover={hasCover} />
+                            ))}
+                            {task.links.length > 5 && (
+                              <div className={`h-5 px-2 rounded-full flex items-center justify-center text-[9px] font-black ${hasCover ? 'bg-black/40 backdrop-blur-md border border-white/10 text-white/90' : 'bg-black/20 border border-white/5 text-gray-500'}`}>
+                                +{task.links.length - 5}
+                              </div>
+                            )}
+                          </div>
+                        )}
 
                         <div className="flex items-center justify-between mt-auto pt-2">
                             <div className="flex flex-col gap-1.5 flex-1">

@@ -35,6 +35,12 @@ export interface TaskFile {
   size?: number;
 }
 
+export interface TaskLink {
+  id: string;
+  url: string;       // полный URL, всегда с протоколом
+  label?: string;    // опциональное кастомное описание ссылки
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -55,6 +61,9 @@ export interface Task {
   checklists: Checklist[];
   comments?: TaskComment[];
   blocksOrder?: string[];
+
+  // 🔗 ССЫЛКИ
+  links?: TaskLink[];
 
   // 💤 СПЯЧКА
   archivedAt?: string;        // ISO timestamp — когда отправлена в спячку
