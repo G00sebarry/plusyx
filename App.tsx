@@ -370,13 +370,20 @@ const App: React.FC = () => {
         setAntiHabits(dbAntiHabits);
         setDailyNotes(Object.values(dbNotes).flat());
         
-        if (dbSettings) {
-          if (dbSettings.wallpaper) setWallpaper(dbSettings.wallpaper);
-          if (dbSettings.wallpaper_opacity !== null) setWallpaperOpacity(dbSettings.wallpaper_opacity);
-          if (dbSettings.wallpaper_position !== null) setWallpaperPosition(dbSettings.wallpaper_position);
-          if (dbSettings.theme) setTheme(dbSettings.theme as 'light' | 'dark');
-        }
-        setSettingsLoaded(true);
+        // Различаем три случая:
+// dbSettings === undefined — сетевая ошибка, НЕ включаем сохранение
+// dbSettings === null — записи нет (новый юзер), включаем сохранение чтобы создать
+// dbSettings === { ... } — есть данные, применяем и включаем сохранение
+if (dbSettings !== undefined) {
+  if (dbSettings) {
+    if (dbSettings.wallpaper) setWallpaper(dbSettings.wallpaper);
+    if (dbSettings.wallpaper_opacity !== null) setWallpaperOpacity(dbSettings.wallpaper_opacity);
+    if (dbSettings.wallpaper_position !== null) setWallpaperPosition(dbSettings.wallpaper_position);
+    if (dbSettings.theme) setTheme(dbSettings.theme as 'light' | 'dark');
+  }
+  setSettingsLoaded(true);
+}
+// Если undefined — settingsLoaded остаётся false, сохранение не сработает
         
         if (dbColumns && dbColumns.length > 0) setColumns(dbColumns);
         else await saveColumnsToDb(DEFAULT_COLUMNS, userId);

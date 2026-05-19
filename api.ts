@@ -496,8 +496,14 @@ export const fetchUserSettings = async (userId) => {
     .eq('user_id', userId)
     .single();
   
-  if (error && error.code !== 'PGRST116') {
+  if (error) {
+    // PGRST116 = "no rows found" — это нормально для нового юзера
+    if (error.code === 'PGRST116') {
+      return null;  // явно говорим "записи нет, но запрос прошёл"
+    }
+    // Любая другая ошибка — сетевая/серверная
     console.error('Error fetching settings:', error);
+    return undefined;  // явно говорим "запрос не удался"
   }
   return data;
 };
