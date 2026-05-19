@@ -25,6 +25,16 @@ const extractUrls = (text: string) => {
 
 type TaskBlockType = 'meta' | 'cover' | 'checklists' | 'files' | 'links' | 'comments';
 
+// Если в blocksOrder нет 'links' — вставляем перед 'comments'.
+// Используется только в рендере, state не меняем.
+const insertLinksBlock = (order: TaskBlockType[]): TaskBlockType[] => {
+  const commentsIdx = order.indexOf('comments');
+  if (commentsIdx >= 0) {
+    return [...order.slice(0, commentsIdx), 'links' as TaskBlockType, ...order.slice(commentsIdx)];
+  }
+  return [...order, 'links' as TaskBlockType];
+};
+
 const COLORS = ['slate', 'red', 'orange', 'green', 'blue', 'purple', 'pink'];
 const COLOR_MAP: Record<string, string> = {
   'slate': 'bg-slate-500', 'red': 'bg-red-500', 'orange': 'bg-orange-500', 
@@ -298,7 +308,8 @@ const handleManualSave = () => {
   const handleBlockDragOver = (e: React.DragEvent, targetIdx: number) => {
     e.preventDefault();
     if (draggedBlock === null || draggedBlock === targetIdx) return;
-    const newOrder = [...blocksOrder];
+    const currentOrder = blocksOrder.includes('links') ? blocksOrder : insertLinksBlock(blocksOrder);
+    const newOrder = [...currentOrder];
     const [moved] = newOrder.splice(draggedBlock, 1);
     newOrder.splice(targetIdx, 0, moved);
     setBlocksOrder(newOrder);
@@ -1075,7 +1086,7 @@ const moveChecklistItem = (listId: string, itemId: string, direction: 'up' | 'do
           </div>
         </div>
         <div className="flex flex-col gap-6">
-          {blocksOrder.map((block, idx) => (
+          {(blocksOrder.includes('links') ? blocksOrder : insertLinksBlock(blocksOrder)).map((block, idx) => (
             <div key={block} onDragOver={e => handleBlockDragOver(e, idx)} className={`relative transition-all duration-200 ${draggedBlock === idx ? 'opacity-30 scale-95' : 'opacity-100'}`}>
               <div 
                 draggable 
