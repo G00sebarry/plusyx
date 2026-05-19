@@ -584,12 +584,12 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                         {/* 🔗 Ряд фавиконов (макс 5, дальше +N) */}
                         {task.links && task.links.length > 0 && (
                           <div className="flex items-center gap-1.5 mt-1 relative z-10 flex-wrap">
-                            {task.links.slice(0, 5).map(link => (
+                            {task.links.slice(0, 10).map(link => (
                               <KanbanFavicon key={link.id} url={link.url} hasCover={hasCover} />
                             ))}
-                            {task.links.length > 5 && (
+                            {task.links.length > 10 && (
                               <div className={`h-5 px-2 rounded-full flex items-center justify-center text-[9px] font-black ${hasCover ? 'bg-black/40 backdrop-blur-md border border-white/10 text-white/90' : 'bg-black/20 border border-white/5 text-gray-500'}`}>
-                                +{task.links.length - 5}
+                                +{task.links.length - 10}
                               </div>
                             )}
                           </div>
