@@ -24,6 +24,38 @@ const extractUrls = (text: string) => {
 };
 
 type TaskBlockType = 'meta' | 'cover' | 'checklists' | 'files' | 'links' | 'comments';
+// Умное форматирование даты коммента
+// Поддерживает: ISO ("2026-05-21T22:23:00.000Z") и старый формат ("15:42")
+const formatCommentDate = (dateStr: string): string => {
+  if (!dateStr) return '';
+  
+  // Если это старый формат (просто время "HH:MM") — возвращаем как есть
+  if (/^\d{1,2}:\d{2}$/.test(dateStr)) return dateStr;
+  
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return dateStr; // невалидная дата — fallback
+  
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const commentDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  
+  const time = date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  
+  if (commentDay.getTime() === today.getTime()) return `Сегодня в ${time}`;
+  if (commentDay.getTime() === yesterday.getTime()) return `Вчера в ${time}`;
+  
+  // Старше — формат "12 мая в 10:15", с годом если другой год
+  const isThisYear = date.getFullYear() === now.getFullYear();
+  const dateFormatted = date.toLocaleDateString('ru-RU', {
+    day: 'numeric',
+    month: 'long',
+    ...(isThisYear ? {} : { year: 'numeric' })
+  });
+  
+  return `${dateFormatted} в ${time}`;
+};
 
 // Если в blocksOrder нет 'links' — вставляем перед 'comments'.
 // Используется только в рендере, state не меняем.
@@ -1016,11 +1048,11 @@ const moveChecklistItem = (listId: string, itemId: string, direction: 'up' | 'do
                      </div>
                      <div className="flex flex-col items-end gap-1">
                          <button onClick={() => deleteComment(c.id)} className="text-red-500/50 hover:text-red-500 p-1">×</button>
-                         <span className="text-[8px] tg-hint font-black opacity-40 whitespace-nowrap">{c.date}</span>
+                         <span className="text-[8px] tg-hint font-black opacity-40 whitespace-nowrap">{formatCommentDate(c.date)}</span>
                      </div>
                   </div>
                 ))}
-                <input type="text" value={newComment} onChange={e => setNewComment(e.target.value)} onKeyDown={e => e.key === 'Enter' && newComment.trim() && (setComments([...comments, { id: Math.random().toString(36).substr(2, 9), text: newComment, date: new Date().toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'}) }]), setNewComment(''))} placeholder="Ваш комментарий..." className="w-full tg-secondary-bg p-4 rounded-2xl text-xs tg-text outline-none" />
+                <input type="text" value={newComment} onChange={e => setNewComment(e.target.value)} onKeyDown={e => e.key === 'Enter' && newComment.trim() && (setComments([...comments, { id: Math.random().toString(36).substr(2, 9), text: newComment, date: new Date().toISOString() }]), setNewComment(''))} placeholder="Ваш комментарий..." className="w-full tg-secondary-bg p-4 rounded-2xl text-xs tg-text outline-none" />
              </div>
           </div>
         );
