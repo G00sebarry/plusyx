@@ -309,7 +309,7 @@ const App: React.FC = () => {
   };
   
   // --- SETTINGS ---
-  const [theme, setTheme] = useState<'light' | 'dark'>(() => (localStorage.getItem('plusyx_theme') as 'light' | 'dark') || 'light');
+  const [theme] = useState<'light' | 'dark'>('dark');
   const [wallpaper, setWallpaper] = useState<string>('');
   const [wallpaperOpacity, setWallpaperOpacity] = useState<number>(30);
   const [wallpaperPosition, setWallpaperPosition] = useState<number>(50);
@@ -379,7 +379,7 @@ if (dbSettings !== undefined) {
     if (dbSettings.wallpaper) setWallpaper(dbSettings.wallpaper);
     if (dbSettings.wallpaper_opacity !== null) setWallpaperOpacity(dbSettings.wallpaper_opacity);
     if (dbSettings.wallpaper_position !== null) setWallpaperPosition(dbSettings.wallpaper_position);
-    if (dbSettings.theme) setTheme(dbSettings.theme as 'light' | 'dark');
+    
   }
   setSettingsLoaded(true);
 }
@@ -1005,10 +1005,7 @@ if (dbSettings !== undefined) {
             <button onClick={() => window.location.reload()} className="w-full py-3 bg-blue-500/10 text-blue-500 rounded-2xl font-bold uppercase text-[10px] tracking-widest border border-blue-500/20 active:scale-95 transition-all flex items-center justify-center gap-2">🔄 Синхронизировать</button>
             
             <div className="flex flex-col gap-4 overflow-y-auto max-h-[40vh] no-scrollbar">
-              <div className="flex items-center justify-between p-4 tg-secondary-bg rounded-[24px] border border-white/5">
-                <div className="flex flex-col"><span className="font-bold text-[11px] tg-text uppercase tracking-tight">Тёмная тема</span></div>
-                <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} className={`w-10 h-5 rounded-full transition-all relative ${theme === 'dark' ? 'bg-green-500' : 'bg-gray-400'}`}><div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${theme === 'dark' ? 'right-0.5' : 'left-0.5'}`} /></button>
-              </div>
+              
               
               <div className="flex flex-col gap-3 p-4 tg-secondary-bg rounded-[24px] border border-white/5">
                 <div className="flex justify-between items-center mb-1"><span className="font-bold text-[11px] tg-text uppercase tracking-tight">Фон приложения</span>{wallpaper && (<button onClick={() => setWallpaper('')} className="text-[9px] font-black text-red-500 uppercase">Удалить</button>)}</div>

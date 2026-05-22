@@ -32,35 +32,16 @@
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            /* ───── СВЕТЛАЯ ТЕМА: системная палитра ───── */
-            /* Фоновые уровни (от далёкого к близкому) */
-            --tg-theme-bg-color: #FAFAF7;              /* canvas — основной фон страницы (тёплый off-white) */
-            --tg-theme-secondary-bg-color: #FFFFFF;    /* surface-1 — карточки, модалки (приподнятые) */
-            --surface-2: #F2F1ED;                      /* surface-2 — инпуты, чек-листы, секции внутри карточек */
-            --surface-3: #E8E7E2;                      /* surface-3 — разделители, hover-состояния */
-            
-            /* Текст по уровням важности */
-            --tg-theme-text-color: #1A1A1A;            /* primary — основной текст */
-            --text-secondary: #5C5C5C;                 /* secondary — даты, метки, счётчики */
-            --tg-theme-hint-color: #8E8E8E;            /* tertiary — подсказки, плейсхолдеры */
-            --text-quaternary: #B5B5B5;                /* quaternary — дизейблед */
-            
-            /* Бордеры по силе */
-            --border-subtle: rgba(0, 0, 0, 0.06);
-            --border-default: rgba(0, 0, 0, 0.10);
-            --border-strong: rgba(0, 0, 0, 0.15);
-            --tg-theme-border-color: rgba(0, 0, 0, 0.08);
-            
-            /* Тени — это критично для светлой темы (создают глубину) */
-            --tg-theme-card-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.06);
-            --shadow-modal: 0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.08);
-            --shadow-elevated: 0 4px 16px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.05);
-            
-            /* Системные элементы */
+            --tg-theme-bg-color: #f8f7f4;
+            --tg-theme-secondary-bg-color: #eeecea;
+            --tg-theme-text-color: #1a1a1a;
+            --tg-theme-hint-color: #8a8a8a;
             --tg-theme-link-color: #2481cc;
             --tg-theme-button-color: #2481cc;
             --tg-theme-button-text-color: #ffffff;
             --tg-theme-surface-overlay: rgba(0, 0, 0, 0.04);
+            --tg-theme-border-color: rgba(0, 0, 0, 0.08);
+            --tg-theme-card-shadow: 0 1px 3px rgba(0,0,0,0.06);
             
             /* Plusyx Colors */
             --plusyx-purple: #9d73d2;
@@ -82,20 +63,11 @@
         .dark {
             --tg-theme-bg-color: #121212;
             --tg-theme-secondary-bg-color: #1e1e1e;
-            --surface-2: #2a2a2a;
-            --surface-3: #353535;
             --tg-theme-text-color: #ffffff;
-            --text-secondary: #B5B5B5;
             --tg-theme-hint-color: #777777;
-            --text-quaternary: #555555;
-            --border-subtle: rgba(255, 255, 255, 0.04);
-            --border-default: rgba(255, 255, 255, 0.06);
-            --border-strong: rgba(255, 255, 255, 0.10);
             --tg-theme-surface-overlay: rgba(255, 255, 255, 0.05);
             --tg-theme-border-color: rgba(255, 255, 255, 0.06);
             --tg-theme-card-shadow: none;
-            --shadow-modal: 0 8px 32px rgba(0,0,0,0.5);
-            --shadow-elevated: none;
         }
 
         /* ===== LIGHT THEME OVERRIDES ===== */
@@ -119,11 +91,11 @@
         body:not(.dark) .text-white\/80:not(.cover-preserve):not(.cover-preserve *) { color: rgba(0,0,0,0.7) !important; }
         body:not(.dark) .hover\:text-white:hover:not(.cover-preserve):not(.cover-preserve *) { color: var(--tg-theme-text-color) !important; }
         
-        /* text-gray-X — используем системные уровни вместо хардкода */
-        body:not(.dark) .text-gray-400:not(.cover-preserve):not(.cover-preserve *) { color: var(--tg-theme-hint-color) !important; }
-        body:not(.dark) .text-gray-500:not(.cover-preserve):not(.cover-preserve *) { color: var(--text-secondary) !important; }
-        body:not(.dark) .text-gray-600:not(.cover-preserve):not(.cover-preserve *) { color: var(--text-secondary) !important; }
-        body:not(.dark) .text-gray-300:not(.cover-preserve):not(.cover-preserve *) { color: var(--text-quaternary) !important; }
+        /* text-gray-X */
+        body:not(.dark) .text-gray-400:not(.cover-preserve):not(.cover-preserve *) { color: #8a8a8a !important; }
+        body:not(.dark) .text-gray-500:not(.cover-preserve):not(.cover-preserve *) { color: #6b6b6b !important; }
+        body:not(.dark) .text-gray-600:not(.cover-preserve):not(.cover-preserve *) { color: #555555 !important; }
+        body:not(.dark) .text-gray-300:not(.cover-preserve):not(.cover-preserve *) { color: #999999 !important; }
         
         /* border-white/X → dark borders */
         body:not(.dark) .border-white\/5 { border-color: rgba(0,0,0,0.06) !important; }
@@ -134,11 +106,11 @@
         body:not(.dark) .border-gray-400\/20 { border-color: rgba(0,0,0,0.1) !important; }
         body:not(.dark) .border-gray-400\/30 { border-color: rgba(0,0,0,0.12) !important; }
         
-        /* bg-black/X — тёплый surface вместо чёрной прозрачной плёнки */
-        body:not(.dark) .bg-black\/5 { background-color: var(--surface-2) !important; }
-        body:not(.dark) .bg-black\/10 { background-color: var(--surface-2) !important; }
-        body:not(.dark) .bg-black\/20:not(.cover-preserve *) { background-color: var(--surface-3) !important; }
-        body:not(.dark) .bg-black\/30:not(.cover-preserve *) { background-color: var(--surface-3) !important; }
+        /* bg-black/X */
+        body:not(.dark) .bg-black\/5 { background-color: rgba(0,0,0,0.03) !important; }
+        body:not(.dark) .bg-black\/10 { background-color: rgba(0,0,0,0.05) !important; }
+        body:not(.dark) .bg-black\/20:not(.cover-preserve *) { background-color: rgba(0,0,0,0.06) !important; }
+        body:not(.dark) .bg-black\/30:not(.cover-preserve *) { background-color: rgba(0,0,0,0.08) !important; }
         body:not(.dark) .bg-black\/60 { background-color: rgba(0,0,0,0.4) !important; }
 
         /* Dark bg elements in modals/dropdowns → white */
@@ -175,63 +147,26 @@
         body:not(.dark) [class*="bg-green-500"] > svg,
         body:not(.dark) [class*="bg-\[var(--tg-theme-button-color)"] { color: #ffffff !important; }
         
-        /* Card shadows — критично для светлой темы */
-        body:not(.dark) .tg-secondary-bg { 
-            box-shadow: var(--tg-theme-card-shadow); 
-        }
+        /* Card shadows */
+        body:not(.dark) .tg-secondary-bg { box-shadow: var(--tg-theme-card-shadow); }
         
-        /* Модалки на светлой теме — заметно приподняты, с обводкой */
-        body:not(.dark) .bg-\[\#1c1c1e\],
-        body:not(.dark) .bg-\[\#2c2c2e\] { 
-            background-color: #ffffff !important; 
-            box-shadow: var(--shadow-modal) !important;
-            border: 1px solid var(--border-subtle) !important;
-        }
-        
-        /* Основная модалка задачи/привычки (.tg-bg внутри z-[200]) */
-        body:not(.dark) .fixed.z-\[200\] > .relative.tg-bg,
-        body:not(.dark) .fixed.z-\[200\] > .relative.w-full {
-            box-shadow: var(--shadow-modal) !important;
-            border: 1px solid var(--border-subtle) !important;
-        }
-        
-        /* Backdrop за модалкой — чуть темнее для отделения */
-        body:not(.dark) .bg-black\/60 { 
-            background-color: rgba(20, 20, 20, 0.35) !important; 
-            backdrop-filter: blur(8px);
-        }
-        
-        /* Wallpaper: усиленный white wash overlay для читаемости */
+        /* Wallpaper: white wash overlay in light theme for readability */
         body:not(.dark) .wallpaper-container::after {
             content: '';
             position: absolute;
             inset: 0;
-            background: rgba(250, 250, 247, 0.82);
+            background: rgba(248, 247, 244, 0.6);
             pointer-events: none;
             z-index: 1;
         }
 
         .font-logo { font-family: 'Space Grotesk', sans-serif; }
 
-        /* === БАЗОВЫЕ УТИЛИТЫ ТЕМЫ === */
         .tg-bg { background-color: var(--tg-theme-bg-color); }
         .tg-secondary-bg { background-color: var(--tg-theme-secondary-bg-color); }
         .tg-text { color: var(--tg-theme-text-color); }
         .tg-hint { color: var(--tg-theme-hint-color); }
         .tg-button { background-color: var(--tg-theme-button-color); color: var(--tg-theme-button-text-color); }
-        
-        /* === НОВЫЕ УТИЛИТЫ ДЛЯ СИСТЕМЫ ПОВЕРХНОСТЕЙ === */
-        /* Используй .surface-2 для инпутов, чек-листов внутри карточек */
-        /* Используй .surface-3 для разделителей и hover-состояний */
-        .surface-2 { background-color: var(--surface-2); }
-        .surface-3 { background-color: var(--surface-3); }
-        .text-secondary { color: var(--text-secondary); }
-        .text-quaternary { color: var(--text-quaternary); }
-        .border-subtle { border-color: var(--border-subtle); }
-        .border-default { border-color: var(--border-default); }
-        .shadow-card { box-shadow: var(--tg-theme-card-shadow); }
-        .shadow-elevated { box-shadow: var(--shadow-elevated); }
-        .shadow-modal { box-shadow: var(--shadow-modal); }
 
         @keyframes breathe-plus {
             0%, 100% { transform: scale(1); filter: brightness(1); }
