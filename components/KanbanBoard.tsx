@@ -371,7 +371,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   };
 
   return (
-    <div ref={scrollContainerRef} className="flex overflow-x-auto h-full p-4 gap-5 snap-x snap-mandatory no-scrollbar" style={{ WebkitOverflowScrolling: 'touch', overscrollBehaviorX: 'contain', scrollPaddingLeft: '16px' }}>
+    <div ref={scrollContainerRef} className="flex overflow-x-auto h-full p-4 gap-5 snap-x snap-proximity no-scrollbar" style={{ WebkitOverflowScrolling: 'touch', overscrollBehaviorX: 'contain', scrollPaddingLeft: '16px' }}>
       {columns.map((column, index) => {
         const isFirst = index === 0;
         const isLast = index === columns.length - 1;
@@ -462,7 +462,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
             </div>
           </div>
           
-          <div className="flex flex-col gap-4 flex-1 pb-24 min-w-0 overflow-y-auto no-scrollbar" style={{ WebkitOverflowScrolling: 'touch' }}>
+          <div className="flex flex-col gap-4 flex-1 pb-24 min-w-0 overflow-y-auto no-scrollbar" style={{ WebkitOverflowScrolling: 'touch', overscrollBehaviorY: 'contain' }}>
             {tasks.filter(t => t.columnId === column.id).map(task => {
               const activeCover = task.coverData || task.fileData;
               const hasCover = !!activeCover;
