@@ -371,7 +371,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   };
 
   return (
-    <div ref={scrollContainerRef} className="flex overflow-x-auto h-full p-4 gap-5 snap-x snap-mandatory no-scrollbar" style={{ WebkitOverflowScrolling: 'touch', overscrollBehaviorX: 'contain', scrollPaddingLeft: '16px' }}>
+    <div ref={scrollContainerRef} className="flex overflow-x-auto h-full p-4 gap-5 snap-x snap-mandatory no-scrollbar" style={{ WebkitOverflowScrolling: 'touch', overscrollBehaviorX: 'contain', scrollPaddingLeft: '16px', touchAction: 'pan-x' }}>
       {columns.map((column, index) => {
         const isFirst = index === 0;
         const isLast = index === columns.length - 1;
@@ -380,7 +380,8 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
         <div 
           key={column.id} 
           ref={el => { columnRefs.current[column.id] = el; }}
-          className="min-w-[85vw] max-w-[85vw] md:min-w-[320px] md:max-w-[320px] flex flex-col snap-start h-full flex-shrink-0"
+          className="min-w-[85vw] max-w-[85vw] md:min-w-[320px] md:max-w-[320px] flex flex-col snap-start h-full flex-shrink-0 overflow-hidden"
+          style={{ scrollSnapStop: 'always' }}
           onDragOver={e => e.preventDefault()}
           onDrop={e => {
             const draggedId = e.dataTransfer.getData('taskId') || draggedTaskId;
@@ -461,7 +462,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
             </div>
           </div>
           
-          <div className="flex flex-col gap-4 flex-1 pb-24 min-h-[500px] min-w-0">
+          <div className="flex flex-col gap-4 flex-1 pb-24 min-w-0 overflow-y-auto no-scrollbar" style={{ touchAction: 'pan-y', WebkitOverflowScrolling: 'touch' }}>
             {tasks.filter(t => t.columnId === column.id).map(task => {
               const activeCover = task.coverData || task.fileData;
               const hasCover = !!activeCover;
