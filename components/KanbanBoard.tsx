@@ -1,5 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Task, TaskStatus, Column } from '../types';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  DragOverlay,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface KanbanBoardProps {
   tasks: Task[];
@@ -189,6 +205,7 @@ const NAV_COLORS_COVER: Record<TaskStatus, string> = {
 export const KanbanBoard: React.FC<KanbanBoardProps> = ({ 
   tasks, columns, onUpdateColumns, onDeleteColumn, onMoveTask, onEditTask, onDeleteTask, onArchiveTask, onQuickAdd, onCopyTask, scrollToColumnId 
 }) => {
+  console.log('@dnd-kit loaded:', { DndContext: !!DndContext, useSortable: !!useSortable, CSS: !!CSS });
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   
