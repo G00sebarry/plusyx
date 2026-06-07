@@ -13,6 +13,7 @@ import {
   SortableContext,
   verticalListSortingStrategy,
   useSortable,
+  arrayMove,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
@@ -201,27 +202,13 @@ const NAV_COLORS_COVER: Record<TaskStatus, string> = {
   'done': 'text-green-300 bg-green-500/20'
 };
 
-// 🎯 Sortable-обёртка вокруг карточки — даёт перетаскивание через @dnd-kit
-const SortableCardWrapper: React.FC<{ id: string; disabled: boolean; children: React.ReactNode }> = ({ id, disabled, children }) => {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, disabled });
-
-  const style: React.CSSProperties = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.4 : 1,
-    touchAction: 'manipulation',
-  };
-
-  return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      {children}
-    </div>
-  );
-};
-
 export const KanbanBoard: React.FC<KanbanBoardProps> = ({ 
   tasks, columns, onUpdateColumns, onDeleteColumn, onMoveTask, onEditTask, onDeleteTask, onArchiveTask, onQuickAdd, onCopyTask, scrollToColumnId 
 }) => {
+  console.log('@dnd-kit loaded:', { DndContext: !!DndContext, useSortable: !!useSortable, CSS: !!CSS });
+  const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+  
   const [isAddingColumn, setIsAddingColumn] = useState(false);
   const [newColTitle, setNewColTitle] = useState('');
   
@@ -232,42 +219,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const columnRefs = useRef<Record<string, HTMLDivElement | null>>({});
-
-  // 🎯 @dnd-kit: long-press на тач (200мс), мгновенно на десктопе (8px)
-  const [activeDragTask, setActiveDragTask] = useState<Task | null>(null);
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: { distance: 8 },
-    }),
-    useSensor(TouchSensor, {
-      activationConstraint: { delay: 200, tolerance: 5 },
-    })
-  );
-
-  const handleDndStart = (event: any) => {
-    const task = tasks.find(t => t.id === event.active.id);
-    if (task) setActiveDragTask(task);
-    window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('medium');
-  };
-
-  const handleDndEnd = (event: any) => {
-    const { active, over } = event;
-    setActiveDragTask(null);
-    if (!over || active.id === over.id) return;
-
-    const activeTask = tasks.find(t => t.id === active.id);
-    const overTask = tasks.find(t => t.id === over.id);
-    if (!activeTask) return;
-
-    // Если бросили на карточку — сортировка внутри её колонки
-    if (overTask) {
-      onMoveTask(active.id, overTask.columnId!, over.id);
-    } else if (columns.some(c => c.id === over.id)) {
-      // Бросили на пустую колонку — переносим в конец этой колонки
-      onMoveTask(active.id, over.id as string);
-    }
-    window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
-  };
+  
 
   useEffect(() => {
     if (scrollToColumnId && columnRefs.current[scrollToColumnId] && scrollContainerRef.current) {
@@ -369,6 +321,26 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
       }
   };
 
+  const handleDragStart = (e: React.DragEvent, taskId: string) => {
+    setDraggedTaskId(taskId);
+    e.dataTransfer.setData('taskId', taskId);
+    e.dataTransfer.effectAllowed = 'move';
+    
+    const target = e.currentTarget as HTMLElement;
+    setTimeout(() => {
+        target.style.opacity = '0.4'; 
+        target.style.transform = 'scale(0.95)';
+    }, 0);
+  };
+
+  const handleDragEnd = (e: React.DragEvent) => {
+    setDraggedTaskId(null);
+    setDropTargetId(null);
+    const target = e.currentTarget as HTMLElement;
+    target.style.opacity = '1';
+    target.style.transform = 'scale(1)';
+  };
+
   const stopProp = (e: React.BaseSyntheticEvent) => {
       e.stopPropagation();
   };
@@ -417,7 +389,6 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   };
 
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDndStart} onDragEnd={handleDndEnd}>
     <div ref={scrollContainerRef} className="flex overflow-x-auto h-full p-4 gap-5 snap-x snap-proximity no-scrollbar" style={{ WebkitOverflowScrolling: 'touch', overscrollBehaviorX: 'contain', scrollPaddingLeft: '16px' }}>
       {columns.map((column, index) => {
         const isFirst = index === 0;
@@ -429,6 +400,11 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
           ref={el => { columnRefs.current[column.id] = el; }}
           className="min-w-[85vw] max-w-[85vw] md:min-w-[320px] md:max-w-[320px] flex flex-col snap-start h-full flex-shrink-0 overflow-hidden"
           style={{ scrollSnapStop: 'always' }}
+          onDragOver={e => e.preventDefault()}
+          onDrop={e => {
+            const draggedId = e.dataTransfer.getData('taskId') || draggedTaskId;
+            if (draggedId) onMoveTask(draggedId, column.id);
+          }}
         >
           <div className={`mb-4 h-[48px] px-5 border-l-4 ${TYPE_COLORS[column.type]} tg-secondary-bg rounded-r-2xl flex justify-between items-center shadow-sm shrink-0 relative z-[60]`}>
             {editingColId === column.id ? (
@@ -505,8 +481,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
           </div>
           
           <div className="flex flex-col gap-4 flex-1 pb-24 min-w-0 overflow-y-auto no-scrollbar" style={{ WebkitOverflowScrolling: 'touch', overscrollBehaviorY: 'contain' }}>
-            <SortableContext items={tasks.filter(t => t.columnId === column.id).sort((a,b) => (a.position ?? 0) - (b.position ?? 0)).map(t => t.id)} strategy={verticalListSortingStrategy}>
-            {tasks.filter(t => t.columnId === column.id).sort((a,b) => (a.position ?? 0) - (b.position ?? 0)).map(task => {
+            {tasks.filter(t => t.columnId === column.id).map(task => {
               const activeCover = task.coverData || task.fileData;
               const hasCover = !!activeCover;
               const prevCol = index > 0 ? columns[index - 1] : null;
@@ -518,12 +493,22 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
               const commentsCount = task.comments?.length || 0;
 
               return (
-                <SortableCardWrapper key={task.id} id={task.id} disabled={!isDraggable}>
-                <div className="flex flex-col gap-2 w-full min-w-0"> 
+                <div key={task.id} className="flex flex-col gap-2 w-full min-w-0"> 
                 <div 
-                  className={`relative w-full min-w-0 transition-all duration-200 ${isMenuOpen ? 'z-[100]' : 'z-0'}`}
+                  onDragOver={e => { e.preventDefault(); e.stopPropagation(); setDropTargetId(task.id); }}
+                  onDragLeave={() => setDropTargetId(null)}
+                  onDrop={e => {
+                    e.preventDefault(); e.stopPropagation();
+                    const draggedId = e.dataTransfer.getData('taskId') || draggedTaskId;
+                    if (draggedId) onMoveTask(draggedId, column.id, task.id);
+                    setDropTargetId(null);
+                  }}
+                  className={`relative w-full min-w-0 transition-all duration-200 ${dropTargetId === task.id ? 'scale-105' : ''} ${isMenuOpen ? 'z-[100]' : 'z-0'}`}
                 >
                   <div 
+                    draggable={isDraggable} 
+                    onDragStart={e => handleDragStart(e, task.id)}
+                    onDragEnd={handleDragEnd}
                     className={`
                        relative tg-secondary-bg p-5 rounded-[28px] shadow-sm border border-gray-100/10 flex flex-col gap-3 
                        transition-all overflow-hidden min-h-[140px]
@@ -556,7 +541,6 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                                     setActiveTaskMenuId(activeTaskMenuId === task.id ? null : task.id); 
                                 }}
                                 onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); }} 
-                                onPointerDown={(e) => e.stopPropagation()}
                                 className={`
                                     p-1 rounded-lg transition-all duration-200 cursor-pointer relative z-50
                                     ${hasCover 
@@ -721,10 +705,8 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                     </div>
                 )}
                 </div>
-                </SortableCardWrapper>
               );
             })}
-            </SortableContext>
             
             <button 
               onClick={() => onQuickAdd(column.type, column.id)} 
@@ -773,13 +755,5 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
 
       {(activeMenuColId || activeTaskMenuId) && <div className="fixed inset-0 z-[55]" onClick={() => { setActiveMenuColId(null); setActiveTaskMenuId(null); }} />}
     </div>
-    <DragOverlay>
-      {activeDragTask ? (
-        <div className="tg-secondary-bg p-5 rounded-[28px] shadow-2xl border border-white/10 opacity-95 rotate-2">
-          <h3 className="font-bold text-[15px] tg-text">{activeDragTask.title}</h3>
-        </div>
-      ) : null}
-    </DragOverlay>
-    </DndContext>
   );
 };
