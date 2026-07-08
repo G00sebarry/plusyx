@@ -1,6 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Task, TaskStatus, TaskComment, Checklist, TaskFile, TaskLink, Column } from '../types';
 import { uploadImage } from '../api'; // 🔥 ИМПОРТ ФУНКЦИИ ЗАГРУЗКИ
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface TaskModalProps {
   isOpen: boolean;
@@ -205,6 +220,29 @@ const AutoResizeTextarea: React.FC<{
   );
 };
 
+// 🎯 Sortable-обёртка пункта чек-листа: драг ТОЛЬКО за ручку (⠿)
+// children — render-функция, получает handleProps для навешивания на ручку
+const SortableChecklistItem: React.FC<{
+  id: string;
+  children: (handleProps: Record<string, any>, isDragging: boolean) => React.ReactNode;
+}> = ({ id, children }) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+    zIndex: isDragging ? 50 : undefined,
+    position: 'relative',
+  };
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      {children({ ...attributes, ...listeners }, isDragging)}
+    </div>
+  );
+};
+
 export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, initialTask, columns }) => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -250,10 +288,11 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
   const [coverSettingsOpen, setCoverSettingsOpen] = useState(false);
   
   // Drag-and-drop для элементов чек-листа
-  const [dragItem, setDragItem] = useState<{listId: string, itemId: string} | null>(null);
-  const [dragOverItem, setDragOverItem] = useState<string | null>(null);
-  const touchStartY = useRef<number>(0);
-  const touchCurrentEl = useRef<HTMLElement | null>(null);
+  // 🎯 @dnd-kit сенсоры для чек-листов: драг за ручку, работает на iOS/Android/десктоп
+  const checklistSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 3 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 100, tolerance: 5 } })
+  );
   const dragClone = useRef<HTMLElement | null>(null);
 
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
@@ -501,75 +540,18 @@ const handleManualSave = () => {
   };
 
   // Drag-and-drop: завершение перетаскивания
-  const handleItemDragDrop = (listId: string, targetItemId: string) => {
-    if (!dragItem || dragItem.listId !== listId || dragItem.itemId === targetItemId) {
-      setDragItem(null);
-      setDragOverItem(null);
-      return;
-    }
+  // 🎯 Завершение драга пункта чек-листа (@dnd-kit)
+  const handleChecklistDndEnd = (listId: string) => (event: any) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
     setChecklists(prev => prev.map(l => {
       if (l.id !== listId) return l;
-      const items = [...l.items];
-      const fromIdx = items.findIndex(i => i.id === dragItem.itemId);
-      const toIdx = items.findIndex(i => i.id === targetItemId);
-      if (fromIdx === -1 || toIdx === -1) return l;
-      const [moved] = items.splice(fromIdx, 1);
-      items.splice(toIdx, 0, moved);
-      return { ...l, items };
+      const oldIndex = l.items.findIndex(i => i.id === active.id);
+      const newIndex = l.items.findIndex(i => i.id === over.id);
+      if (oldIndex === -1 || newIndex === -1) return l;
+      return { ...l, items: arrayMove(l.items, oldIndex, newIndex) };
     }));
-    setDragItem(null);
-    setDragOverItem(null);
-  };
-
-  // Touch drag handlers
-  const handleTouchStart = (e: React.TouchEvent, listId: string, itemId: string) => {
-    const handle = (e.target as HTMLElement).closest('[data-drag-handle]');
-    if (!handle) return;
-    
-    touchStartY.current = e.touches[0].clientY;
-    touchCurrentEl.current = (e.target as HTMLElement).closest('[data-item-id]') as HTMLElement;
-    
-    // Задержка чтобы отличить тап от drag
-    const timer = setTimeout(() => {
-      setDragItem({ listId, itemId });
-      if (touchCurrentEl.current) {
-        touchCurrentEl.current.style.opacity = '0.4';
-      }
-    }, 150);
-    
-    const cleanup = () => {
-      clearTimeout(timer);
-      document.removeEventListener('touchend', cleanup);
-    };
-    document.addEventListener('touchend', cleanup, { once: true });
-  };
-
-  const handleTouchMove = (e: React.TouchEvent, listId: string) => {
-    if (!dragItem) return;
-    e.preventDefault();
-    
-    const touch = e.touches[0];
-    const elements = document.elementsFromPoint(touch.clientX, touch.clientY);
-    const itemEl = elements.find(el => el.hasAttribute('data-item-id'));
-    
-    if (itemEl) {
-      const targetId = itemEl.getAttribute('data-item-id');
-      if (targetId && targetId !== dragItem.itemId) {
-        setDragOverItem(targetId);
-      }
-    }
-  };
-
-  const handleTouchEnd = (listId: string) => {
-    if (dragItem && dragOverItem) {
-      handleItemDragDrop(listId, dragOverItem);
-    }
-    if (touchCurrentEl.current) {
-      touchCurrentEl.current.style.opacity = '1';
-    }
-    setDragItem(null);
-    setDragOverItem(null);
-    touchCurrentEl.current = null;
+    window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
   };
 
 // 🔥 ИСПРАВЛЕННАЯ ФУНКЦИЯ ПЕРЕМЕЩЕНИЯ
@@ -796,29 +778,20 @@ const moveChecklistItem = (listId: string, itemId: string, direction: 'up' | 'do
                         )}
                       </div>
                    </div>
-                   <div 
-                      className="flex flex-col gap-1.5"
-                      onTouchMove={(e) => handleTouchMove(e, list.id)}
-                      onTouchEnd={() => handleTouchEnd(list.id)}
-                   >
+                   <DndContext sensors={checklistSensors} collisionDetection={closestCenter} onDragEnd={handleChecklistDndEnd(list.id)}>
+                   <SortableContext items={visibleItems.map(i => i.id)} strategy={verticalListSortingStrategy}>
+                   <div className="flex flex-col gap-1.5">
                       {visibleItems.map((item, index) => (
+                        <SortableChecklistItem key={item.id} id={item.id}>
+                        {(handleProps, isDragging) => (
                         <div 
-                          key={item.id} 
-                          data-item-id={item.id}
-                          draggable
-                          onDragStart={(e) => { setDragItem({ listId: list.id, itemId: item.id }); e.dataTransfer.effectAllowed = 'move'; }}
-                          onDragOver={(e) => { e.preventDefault(); setDragOverItem(item.id); }}
-                          onDrop={() => handleItemDragDrop(list.id, item.id)}
-                          onDragEnd={() => { setDragItem(null); setDragOverItem(null); }}
-                          onTouchStart={(e) => handleTouchStart(e, list.id, item.id)}
-                          className={`flex items-start gap-2 p-3 tg-secondary-bg rounded-2xl group min-w-0 transition-all ${
-                            dragOverItem === item.id && dragItem?.listId === list.id ? 'ring-2 ring-blue-500/50 bg-blue-500/5' : ''
-                          } ${dragItem?.itemId === item.id ? 'opacity-40' : ''}`}
+                          className={`flex items-start gap-2 p-3 tg-secondary-bg rounded-2xl group min-w-0 transition-all ${isDragging ? 'ring-2 ring-blue-500/50 bg-blue-500/5' : ''}`}
                         >
-                           {/* Ручка перетаскивания */}
+                           {/* Ручка перетаскивания — драг только за неё */}
                            <div 
-                             data-drag-handle
-                             className="mt-1 shrink-0 cursor-grab active:cursor-grabbing touch-none select-none text-gray-500/40 hover:text-gray-500"
+                             {...handleProps}
+                             className="mt-1 shrink-0 cursor-grab active:cursor-grabbing select-none text-gray-500/40 hover:text-gray-500 p-1 -m-1"
+                             style={{ touchAction: 'none' }}
                            >
                              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
                                <circle cx="8" cy="4" r="2"/><circle cx="16" cy="4" r="2"/>
@@ -854,9 +827,13 @@ const moveChecklistItem = (listId: string, itemId: string, direction: 'up' | 'do
                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                            </button>
                         </div>
+                        )}
+                        </SortableChecklistItem>
                       ))}
                       <input type="text" placeholder="Добавить..." className="flex-1 tg-secondary-bg p-3 px-4 rounded-xl text-xs font-bold tg-text outline-none mt-1" onKeyDown={e => e.key === 'Enter' && e.currentTarget.value.trim() && (setChecklists(checklists.map(l => l.id === list.id ? { ...l, items: [...l.items, { id: Math.random().toString(36).substr(2, 9), text: e.currentTarget.value, completed: false }] } : l)), e.currentTarget.value = '')} />
                    </div>
+                   </SortableContext>
+                   </DndContext>
                 </div>
              );})}
              <button onClick={addNewChecklist} className="w-full py-3 border border-dashed border-gray-400/30 rounded-2xl text-[10px] font-black uppercase tg-hint">+ Новый чек-лист</button>
