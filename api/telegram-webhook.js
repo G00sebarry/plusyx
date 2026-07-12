@@ -53,6 +53,113 @@ function getMoscowDate() {
   return `${year}-${month}-${day}`;
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// 📥 QUICK CAPTURE — хелперы
+// ═══════════════════════════════════════════════════════════════════
+
+// Генератор id в стиле фронта (Math.random().toString(36).substr(2, 9))
+function genId() {
+  return Math.random().toString(36).substr(2, 9);
+}
+
+// Короткие подтверждения в тон-оф-войсе Plusyx
+const CAPTURE_REPLIES = [
+  '📥 Записал',
+  '📥 В инбоксе',
+  '📥 Принял, не потеряю',
+  '📥 Есть',
+  '📥 Зафиксировал',
+  '📥 Лежит, ждёт',
+];
+
+function getCaptureReply() {
+  return CAPTURE_REPLIES[Math.floor(Math.random() * CAPTURE_REPLIES.length)];
+}
+
+// Находит или создаёт инбокс-карточку юзера. Возвращает { id, checklists } или null.
+async function findOrCreateInbox(userId) {
+  // 1. Ищем существующий инбокс (не в спячке)
+  const { data: existing } = await supabase
+    .from('tasks')
+    .select('id, checklists')
+    .eq('user_id', userId)
+    .eq('is_inbox', true)
+    .is('archived_at', null)
+    .limit(1)
+    .maybeSingle();
+
+  if (existing) return existing;
+
+  // 2. Нет — ищем первую todo-колонку юзера (по position)
+  const { data: cols } = await supabase
+    .from('columns')
+    .select('id, type, position')
+    .eq('user_id', userId)
+    .eq('type', 'todo')
+    .order('position', { ascending: true })
+    .limit(1);
+
+  const column = cols?.[0];
+  if (!column) return null; // у юзера нет todo-колонки — не знаем куда класть
+
+  // 3. Создаём инбокс-карточку
+  const newTask = {
+    id: genId(),
+    title: '📥 Инбокс',
+    description: 'Свалка идей из Telegram. Разбирай и раскидывай.',
+    date: getMoscowDate(),
+    isTimer: false,
+    status: 'todo',
+    columnId: column.id,
+    color: 'default',
+    checklists: [
+      { id: genId(), title: 'Входящие', items: [], hideCompleted: false }
+    ],
+    comments: [],
+    files: [],
+    links: [],
+    position: 0,
+    coverPosition: 50,
+    coverIntensity: 60,
+    blocksOrder: ['meta', 'cover', 'checklists', 'files', 'links', 'comments'],
+    is_inbox: true,
+  };
+
+  const { data: created, error } = await supabase
+    .from('tasks')
+    .insert(newTask)
+    .select('id, checklists')
+    .single();
+
+  if (error) {
+    console.error('Inbox create error:', error);
+    return null;
+  }
+  return created;
+}
+
+// Добавляет пункт в первый чек-лист инбокса
+async function addToInbox(inbox, text) {
+  let checklists = Array.isArray(inbox.checklists) ? inbox.checklists : [];
+
+  // Если юзер удалил все чек-листы из инбокса — создаём заново
+  if (checklists.length === 0) {
+    checklists = [{ id: genId(), title: 'Входящие', items: [], hideCompleted: false }];
+  }
+
+  const newItem = { id: genId(), text: text.trim(), completed: false };
+  const updated = checklists.map((list, idx) =>
+    idx === 0 ? { ...list, items: [...(list.items || []), newItem] } : list
+  );
+
+  const { error } = await supabase
+    .from('tasks')
+    .update({ checklists: updated })
+    .eq('id', inbox.id);
+
+  return !error;
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(200).json({ message: 'Telegram webhook endpoint' });
@@ -147,7 +254,7 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
 
-    // ========== ОБРАБОТКА КОМАНДЫ /start ==========
+    // ========== ОБРАБОТКА ТЕКСТОВЫХ СООБЩЕНИЙ ==========
     if (update.message?.text) {
       const chatId = update.message.chat.id;
       const text = update.message.text;
@@ -199,13 +306,47 @@ export default async function handler(req, res) {
             .eq('token', token);
           
           await sendMessage(chatId, 
-            '✅ Telegram успешно подключён!\n\nТеперь вы будете получать напоминания о привычках и задачах.'
+            '✅ Telegram успешно подключён!\n\nТеперь вы будете получать напоминания о привычках и задачах.\n\n💡 Кстати: пришлите мне любой текст — и он упадёт пунктом в карточку «📥 Инбокс» на вашей доске.'
           );
         } else {
           await sendMessage(chatId, 
             '👋 Привет! Это бот Plusyx.\n\nДля подключения уведомлений перейдите в настройки привычки в приложении Plusyx и нажмите «Подключить Telegram».'
           );
         }
+        return res.status(200).json({ ok: true });
+      }
+
+      // ========== 📥 QUICK CAPTURE ==========
+      // Любой текст без "/" в начале → пункт в Инбокс
+      if (!text.startsWith('/')) {
+        // Находим юзера по chat_id
+        const { data: link } = await supabase
+          .from('telegram_links')
+          .select('user_id')
+          .eq('chat_id', chatId.toString())
+          .single();
+
+        if (!link) {
+          await sendMessage(chatId, '❌ Аккаунт не привязан.\n\nПодключите Telegram в настройках привычки в Plusyx — и я начну складывать ваши заметки в Инбокс.');
+          return res.status(200).json({ ok: true });
+        }
+
+        const inbox = await findOrCreateInbox(link.user_id);
+
+        if (!inbox) {
+          await sendMessage(chatId, '❌ Не нашёл, куда положить.\n\nСоздайте в Plusyx хотя бы одну колонку типа «Очередь» — и Инбокс появится сам.');
+          return res.status(200).json({ ok: true });
+        }
+
+        const ok = await addToInbox(inbox, text);
+
+        if (ok) {
+          await sendMessage(chatId, getCaptureReply());
+        } else {
+          await sendMessage(chatId, '❌ Что-то пошло не так, попробуйте ещё раз.');
+        }
+
+        return res.status(200).json({ ok: true });
       }
     }
 
