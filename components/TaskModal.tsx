@@ -243,6 +243,9 @@ const SortableChecklistItem: React.FC<{
   );
 };
 
+// 🎯 Та же обёртка подходит и для блоков модалки (Метки/Обложка/Чек-листы/...)
+const SortableBlockItem = SortableChecklistItem;
+
 export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, initialTask, columns }) => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -280,7 +283,6 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
   const [blocksOrder, setBlocksOrder] = useState<TaskBlockType[]>(
     initialTask?.blocksOrder as TaskBlockType[] || ['meta', 'cover', 'checklists', 'files', 'links', 'comments']
   );
-  const [draggedBlock, setDraggedBlock] = useState<number | null>(null);
   
   const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
@@ -375,16 +377,21 @@ const handleManualSave = () => {
 };
 
 
-  const handleBlockDragStart = (idx: number) => setDraggedBlock(idx);
-  const handleBlockDragOver = (e: React.DragEvent, targetIdx: number) => {
-    e.preventDefault();
-    if (draggedBlock === null || draggedBlock === targetIdx) return;
+  // 🎯 Сенсоры и завершение драга для БЛОКОВ модалки (@dnd-kit)
+  const blockSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 3 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 100, tolerance: 5 } })
+  );
+
+  const handleBlockDndEnd = (event: any) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
     const currentOrder = blocksOrder.includes('links') ? blocksOrder : insertLinksBlock(blocksOrder);
-    const newOrder = [...currentOrder];
-    const [moved] = newOrder.splice(draggedBlock, 1);
-    newOrder.splice(targetIdx, 0, moved);
-    setBlocksOrder(newOrder);
-    setDraggedBlock(targetIdx);
+    const oldIndex = currentOrder.indexOf(active.id as TaskBlockType);
+    const newIndex = currentOrder.indexOf(over.id as TaskBlockType);
+    if (oldIndex === -1 || newIndex === -1) return;
+    setBlocksOrder(arrayMove(currentOrder, oldIndex, newIndex));
+    window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
   };
 
   const handleCoverChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1094,13 +1101,16 @@ const moveChecklistItem = (listId: string, itemId: string, direction: 'up' | 'do
              )}
           </div>
         </div>
+        <DndContext sensors={blockSensors} collisionDetection={closestCenter} onDragEnd={handleBlockDndEnd}>
+        <SortableContext items={blocksOrder.includes('links') ? blocksOrder : insertLinksBlock(blocksOrder)} strategy={verticalListSortingStrategy}>
         <div className="flex flex-col gap-6">
-          {(blocksOrder.includes('links') ? blocksOrder : insertLinksBlock(blocksOrder)).map((block, idx) => (
-            <div key={block} onDragOver={e => handleBlockDragOver(e, idx)} className={`relative transition-all duration-200 ${draggedBlock === idx ? 'opacity-30 scale-95' : 'opacity-100'}`}>
+          {(blocksOrder.includes('links') ? blocksOrder : insertLinksBlock(blocksOrder)).map((block) => (
+            <SortableBlockItem key={block} id={block}>
+            {(handleProps, isDragging) => (
+            <div className={`relative transition-all duration-200 ${isDragging ? 'scale-95' : ''}`}>
               <div 
-                draggable 
-                onDragStart={() => handleBlockDragStart(idx)}
-                onDragEnd={() => setDraggedBlock(null)}
+                {...handleProps}
+                style={{ touchAction: 'none' }}
                 className="absolute -left-2 top-0 bottom-0 w-8 flex items-center justify-center opacity-30 active:opacity-100 cursor-grab active:cursor-grabbing z-20"
               >
                 <span className="text-lg select-none">⠿</span>
@@ -1109,8 +1119,12 @@ const moveChecklistItem = (listId: string, itemId: string, direction: 'up' | 'do
                  {renderBlock(block)}
               </div>
             </div>
+            )}
+            </SortableBlockItem>
           ))}
         </div>
+        </SortableContext>
+        </DndContext>
         
         {/* 🔥 КНОПКА "СОХРАНИТЬ" ТОЛЬКО ДЛЯ НОВЫХ ЗАДАЧ */}
         {!initialTask?.id ? (
