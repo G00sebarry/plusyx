@@ -93,7 +93,7 @@ async function findOrCreateInbox(userId) {
   // 2. Нет — ищем первую todo-колонку юзера (по position)
   const { data: cols } = await supabase
     .from('columns')
-    .select('id, type, position')
+    .select('id, type, position, workspace_id')
     .eq('user_id', userId)
     .eq('type', 'todo')
     .order('position', { ascending: true })
@@ -105,6 +105,7 @@ async function findOrCreateInbox(userId) {
   // 3. Создаём инбокс-карточку
   const newTask = {
     id: genId(),
+    user_id: userId, // ← ФИКС: раньше карточка создавалась без владельца
     title: '📥 Инбокс',
     description: 'Свалка идей из Telegram. Разбирай и раскидывай.',
     date: getMoscowDate(),
@@ -123,6 +124,7 @@ async function findOrCreateInbox(userId) {
     coverIntensity: 60,
     blocksOrder: ['meta', 'cover', 'checklists', 'files', 'links', 'comments'],
     is_inbox: true,
+    workspace_id: column.workspace_id ?? null, // ← наследуем воркспейс колонки
   };
 
   const { data: created, error } = await supabase
