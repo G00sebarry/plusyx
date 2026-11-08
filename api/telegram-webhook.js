@@ -1,361 +1,380 @@
-import { createClient } from '@supabase/supabase-js';
+import { authorizeSecret, requireMethod, serverDatabase, createTelegramTransport, escapeTelegramHtml, isPrivateSender } from '../server/telegram.js';
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
-);
+// Dependencies are injectable so regression tests never contact live services.
+export function createWebhookHandler({ env = process.env, db, fetchImpl = globalThis.fetch } = {}) {
+  let supabase = db;
+  const telegram = createTelegramTransport(env, fetchImpl);
 
-const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-
-async function sendMessage(chatId, text) {
-  await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
+  async function sendMessage(chatId, text) {
+    await telegram('sendMessage', {
       chat_id: chatId,
       text: text,
       parse_mode: 'HTML'
-    })
-  });
-}
+    });
+  }
 
-async function answerCallback(callbackId, text) {
-  await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/answerCallbackQuery`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
+  async function answerCallback(callbackId, text) {
+    await telegram('answerCallbackQuery', {
       callback_query_id: callbackId,
       text: text,
       show_alert: false
-    })
-  });
-}
+    });
+  }
 
-async function editMessage(chatId, messageId, newText) {
-  await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/editMessageText`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
+  async function editMessage(chatId, messageId, newText) {
+    await telegram('editMessageText', {
       chat_id: chatId,
       message_id: messageId,
       text: newText,
       parse_mode: 'HTML'
-    })
-  });
-}
-
-function getMoscowDate() {
-  const now = new Date();
-  const moscow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Moscow' }));
-  const year = moscow.getFullYear();
-  const month = (moscow.getMonth() + 1).toString().padStart(2, '0');
-  const day = moscow.getDate().toString().padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
-// ═══════════════════════════════════════════════════════════════════
-// 📥 QUICK CAPTURE — хелперы
-// ═══════════════════════════════════════════════════════════════════
-
-// Генератор id в стиле фронта (Math.random().toString(36).substr(2, 9))
-function genId() {
-  return Math.random().toString(36).substr(2, 9);
-}
-
-// Короткие подтверждения в тон-оф-войсе Plusyx
-const CAPTURE_REPLIES = [
-  '📥 Записал',
-  '📥 В инбоксе',
-  '📥 Принял, не потеряю',
-  '📥 Есть',
-  '📥 Зафиксировал',
-  '📥 Лежит, ждёт',
-];
-
-function getCaptureReply() {
-  return CAPTURE_REPLIES[Math.floor(Math.random() * CAPTURE_REPLIES.length)];
-}
-
-// Находит или создаёт инбокс-карточку юзера. Возвращает { id, checklists } или null.
-async function findOrCreateInbox(userId) {
-  // 1. Ищем существующий инбокс (не в спячке)
-  const { data: existing } = await supabase
-    .from('tasks')
-    .select('id, checklists')
-    .eq('user_id', userId)
-    .eq('is_inbox', true)
-    .is('archived_at', null)
-    .limit(1)
-    .maybeSingle();
-
-  if (existing) return existing;
-
-  // 2. Нет — ищем первую todo-колонку юзера (по position)
-  const { data: cols } = await supabase
-    .from('columns')
-    .select('id, type, position, workspace_id')
-    .eq('user_id', userId)
-    .eq('type', 'todo')
-    .order('position', { ascending: true })
-    .limit(1);
-
-  const column = cols?.[0];
-  if (!column) return null; // у юзера нет todo-колонки — не знаем куда класть
-
-  // 3. Создаём инбокс-карточку
-  const newTask = {
-    id: genId(),
-    user_id: userId, // ← ФИКС: раньше карточка создавалась без владельца
-    title: '📥 Инбокс',
-    description: 'Свалка идей из Telegram. Разбирай и раскидывай.',
-    date: getMoscowDate(),
-    isTimer: false,
-    status: 'todo',
-    columnId: column.id,
-    color: 'default',
-    checklists: [
-      { id: genId(), title: 'Входящие', items: [], hideCompleted: false }
-    ],
-    comments: [],
-    files: [],
-    links: [],
-    position: 0,
-    coverPosition: 50,
-    coverIntensity: 60,
-    blocksOrder: ['meta', 'cover', 'checklists', 'files', 'links', 'comments'],
-    is_inbox: true,
-    workspace_id: column.workspace_id ?? null, // ← наследуем воркспейс колонки
-  };
-
-  const { data: created, error } = await supabase
-    .from('tasks')
-    .insert(newTask)
-    .select('id, checklists')
-    .single();
-
-  if (error) {
-    console.error('Inbox create error:', error);
-    return null;
-  }
-  return created;
-}
-
-// Добавляет пункт в первый чек-лист инбокса
-async function addToInbox(inbox, text) {
-  let checklists = Array.isArray(inbox.checklists) ? inbox.checklists : [];
-
-  // Если юзер удалил все чек-листы из инбокса — создаём заново
-  if (checklists.length === 0) {
-    checklists = [{ id: genId(), title: 'Входящие', items: [], hideCompleted: false }];
+    });
   }
 
-  const newItem = { id: genId(), text: text.trim(), completed: false };
-  const updated = checklists.map((list, idx) =>
-    idx === 0 ? { ...list, items: [...(list.items || []), newItem] } : list
-  );
-
-  const { error } = await supabase
-    .from('tasks')
-    .update({ checklists: updated })
-    .eq('id', inbox.id);
-
-  return !error;
-}
-
-export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(200).json({ message: 'Telegram webhook endpoint' });
+  function getMoscowDate() {
+    const now = new Date();
+    const moscow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Moscow' }));
+    const year = moscow.getFullYear();
+    const month = (moscow.getMonth() + 1).toString().padStart(2, '0');
+    const day = moscow.getDate().toString().padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }
 
-  try {
-    const update = req.body;
+  // ═══════════════════════════════════════════════════════════════════
+  // 📥 QUICK CAPTURE — хелперы
+  // ═══════════════════════════════════════════════════════════════════
 
-    // ========== ОБРАБОТКА КНОПОК ==========
-    if (update.callback_query) {
-      const callback = update.callback_query;
-      const chatId = callback.message.chat.id;
-      const messageId = callback.message.message_id;
-      const data = callback.data;
-      
-      const [action, habitId] = data.split('_');
-      const today = getMoscowDate();
-      
-      // Получаем user_id по chat_id
-      const { data: link } = await supabase
-        .from('telegram_links')
-        .select('user_id')
-        .eq('chat_id', chatId.toString())
-        .single();
-      
-      if (!link) {
-        await answerCallback(callback.id, '❌ Аккаунт не привязан');
-        return res.status(200).json({ ok: true });
-      }
+  // Генератор id в стиле фронта (Math.random().toString(36).substr(2, 9))
+  function genId() {
+    return Math.random().toString(36).substr(2, 9);
+  }
 
-      // Получаем привычку с текущим history
-      const { data: habit } = await supabase
-        .from('habits')
-        .select('id, title, emoji, history')
-        .eq('id', habitId)
-        .single();
+  // Короткие подтверждения в тон-оф-войсе Plusyx
+  const CAPTURE_REPLIES = [
+    '📥 Записал',
+    '📥 В инбоксе',
+    '📥 Принял, не потеряю',
+    '📥 Есть',
+    '📥 Зафиксировал',
+    '📥 Лежит, ждёт',
+  ];
 
-      if (!habit) {
-        await answerCallback(callback.id, '❌ Привычка не найдена');
-        return res.status(200).json({ ok: true });
-      }
+  function getCaptureReply() {
+    return CAPTURE_REPLIES[Math.floor(Math.random() * CAPTURE_REPLIES.length)];
+  }
 
-      // Проверяем, не отмечено ли уже сегодня
-      const currentHistory = habit.history || {};
-      if (currentHistory[today]) {
-        await answerCallback(callback.id, '⚠️ Уже отмечено сегодня!');
-        return res.status(200).json({ ok: true });
-      }
+  // Находит или создаёт инбокс-карточку юзера. Возвращает { id, checklists } или null.
+  async function findOrCreateInbox(userId) {
+    // 1. Ищем существующий инбокс (не в спячке)
+    const { data: existing, error: existingError } = await supabase
+      .from('tasks')
+      .select('id, checklists')
+      .eq('user_id', userId)
+      .eq('is_inbox', true)
+      .is('archived_at', null)
+      .limit(1)
+      .maybeSingle();
 
-      // Определяем значение и ответ
-      let value, responseText, statusEmoji;
-      
-      if (action === 'done') {
-        value = true;
-        responseText = '✅ Отлично! Привычка выполнена!';
-        statusEmoji = '✅';
-      } else if (action === 'mini') {
-        value = 'mini';
-        responseText = '🔸 Мини-версия засчитана!';
-        statusEmoji = '🔸';
-      } else if (action === 'freeze') {
-        value = 'freeze';
-        responseText = '❄️ Заморозка активирована';
-        statusEmoji = '❄️';
-      } else {
-        await answerCallback(callback.id, '❌ Неизвестное действие');
-        return res.status(200).json({ ok: true });
-      }
+    if (existingError) throw new Error('Inbox lookup failed');
+    if (existing) return existing;
 
-      // Обновляем history
-      const newHistory = { ...currentHistory, [today]: value };
+    // 2. Нет — ищем первую todo-колонку юзера (по position)
+    const { data: cols, error: columnsError } = await supabase
+      .from('columns')
+      .select('id, type, position, workspace_id')
+      .eq('user_id', userId)
+      .eq('type', 'todo')
+      .order('position', { ascending: true })
+      .limit(1);
 
-      const { error } = await supabase
-        .from('habits')
-        .update({ history: newHistory })
-        .eq('id', habitId);
+    if (columnsError) throw new Error('Column lookup failed');
+    const column = cols?.[0];
+    if (!column) return null; // у юзера нет todo-колонки — не знаем куда класть
 
-      if (error) {
-        console.error('Update error:', error);
-        await answerCallback(callback.id, '❌ ' + error.message);
-        return res.status(200).json({ ok: true });
-      }
+    // 3. Создаём инбокс-карточку
+    const newTask = {
+      id: genId(),
+      user_id: userId, // ← ФИКС: раньше карточка создавалась без владельца
+      title: '📥 Инбокс',
+      description: 'Свалка идей из Telegram. Разбирай и раскидывай.',
+      date: getMoscowDate(),
+      isTimer: false,
+      status: 'todo',
+      columnId: column.id,
+      color: 'default',
+      checklists: [
+        { id: genId(), title: 'Входящие', items: [], hideCompleted: false }
+      ],
+      comments: [],
+      files: [],
+      links: [],
+      position: 0,
+      coverPosition: 50,
+      coverIntensity: 60,
+      blocksOrder: ['meta', 'cover', 'checklists', 'files', 'links', 'comments'],
+      is_inbox: true,
+      workspace_id: column.workspace_id ?? null, // ← наследуем воркспейс колонки
+    };
 
-      // Отвечаем на callback
-      await answerCallback(callback.id, responseText);
+    const { data: created, error } = await supabase
+      .from('tasks')
+      .insert(newTask)
+      .select('id, checklists')
+      .single();
 
-      // Обновляем сообщение (убираем кнопки)
-      const habitEmoji = habit.emoji || '🔔';
-      const newText = `${habitEmoji} <b>${habit.title}</b>\n\n${statusEmoji} <i>${responseText}</i>`;
-      await editMessage(chatId, messageId, newText);
+    if (error) {
+      console.error('Inbox create failed');
+      return null;
+    }
+    return created;
+  }
 
-      return res.status(200).json({ ok: true });
+  // Добавляет пункт в первый чек-лист инбокса
+  async function addToInbox(inbox, text, userId) {
+    let checklists = Array.isArray(inbox.checklists) ? inbox.checklists : [];
+
+    // Если юзер удалил все чек-листы из инбокса — создаём заново
+    if (checklists.length === 0) {
+      checklists = [{ id: genId(), title: 'Входящие', items: [], hideCompleted: false }];
     }
 
-    // ========== ОБРАБОТКА ТЕКСТОВЫХ СООБЩЕНИЙ ==========
-    if (update.message?.text) {
-      const chatId = update.message.chat.id;
-      const text = update.message.text;
+    const newItem = { id: genId(), text: text.trim(), completed: false };
+    const updated = checklists.map((list, idx) =>
+      idx === 0 ? { ...list, items: [...(list.items || []), newItem] } : list
+    );
 
-      if (text.startsWith('/start')) {
-        const parts = text.split(' ');
-        
-        if (parts.length > 1) {
-          const token = parts[1];
-          
-          // Ищем токен и проверяем срок действия
-          const { data: pending } = await supabase
-            .from('telegram_pending')
-            .select('user_id, expires_at')
-            .eq('token', token)
-            .single();
-          
-          if (!pending) {
-            await sendMessage(chatId, '❌ Ссылка недействительна или устарела.\n\nПопробуйте заново подключить Telegram в настройках привычки в Plusyx.');
-            return res.status(200).json({ ok: true });
-          }
+    const { data: saved, error } = await supabase
+      .from('tasks')
+      .update({ checklists: updated })
+      .eq('id', inbox.id)
+      .eq('user_id', userId)
+      .is('archived_at', null)
+      .select('id')
+      .maybeSingle();
 
-          // Проверяем срок действия
-          if (new Date(pending.expires_at) < new Date()) {
-            // Удаляем просроченный токен
-            await supabase
-              .from('telegram_pending')
-              .delete()
-              .eq('token', token);
-            
-            await sendMessage(chatId, '⏰ Ссылка истекла (действует 10 минут).\n\nНажмите «Подключить Telegram» заново в Plusyx.');
-            return res.status(200).json({ ok: true });
-          }
+    return !error && !!saved;
+  }
 
-          // Всё ок — привязываем
-          await supabase
-            .from('telegram_links')
-            .upsert({
-              user_id: pending.user_id,
-              chat_id: chatId.toString(),
-              username: update.message.from?.username || null,
-              created_at: new Date().toISOString()
-            }, { onConflict: 'user_id' });
-          
-          // Удаляем использованный токен
-          await supabase
-            .from('telegram_pending')
-            .delete()
-            .eq('token', token);
-          
-          await sendMessage(chatId, 
-            '✅ Telegram успешно подключён!\n\nТеперь вы будете получать напоминания о привычках и задачах.\n\n💡 Кстати: пришлите мне любой текст — и он упадёт пунктом в карточку «📥 Инбокс» на вашей доске.'
-          );
-        } else {
-          await sendMessage(chatId, 
-            '👋 Привет! Это бот Plusyx.\n\nДля подключения уведомлений перейдите в настройки привычки в приложении Plusyx и нажмите «Подключить Telegram».'
-          );
-        }
-        return res.status(200).json({ ok: true });
-      }
+  return async function handler(req, res) {
+    if (!requireMethod(req, res, 'POST')) return;
+    if (!authorizeSecret(req, res, env.TELEGRAM_WEBHOOK_SECRET, 'x-telegram-bot-api-secret-token')) return;
+    const update = req.body;
+    if (!update || typeof update !== 'object' || !Number.isSafeInteger(update.update_id) || update.update_id < 0) {
+      return res.status(400).json({ error: 'Invalid update' });
+    }
 
-      // ========== 📥 QUICK CAPTURE ==========
-      // Любой текст без "/" в начале → пункт в Инбокс
-      if (!text.startsWith('/')) {
-        // Находим юзера по chat_id
-        const { data: link } = await supabase
+    try {
+      supabase ??= serverDatabase(env);
+
+      // ========== ОБРАБОТКА КНОПОК ==========
+      if (update.callback_query) {
+        const callback = update.callback_query;
+        if (!isPrivateSender(callback.message, callback.from)) return res.status(200).json({ ok: true });
+        if (typeof callback.id !== 'string' || typeof callback.data !== 'string'
+          || !Number.isSafeInteger(callback.message.message_id)) return res.status(400).json({ error: 'Invalid callback' });
+        const chatId = callback.message.chat.id;
+        const messageId = callback.message.message_id;
+        const data = callback.data;
+
+        const match = /^(done|mini|freeze)_(.+)$/.exec(data);
+        if (!match || data.length > 64) return res.status(400).json({ error: 'Invalid callback' });
+        const [, action, habitId] = match;
+        const today = getMoscowDate();
+
+        // Получаем user_id по chat_id
+        const { data: link, error: linkError } = await supabase
           .from('telegram_links')
           .select('user_id')
           .eq('chat_id', chatId.toString())
-          .single();
+          .maybeSingle();
+        if (linkError) throw new Error('Telegram link lookup failed');
 
         if (!link) {
-          await sendMessage(chatId, '❌ Аккаунт не привязан.\n\nПодключите Telegram в настройках привычки в Plusyx — и я начну складывать ваши заметки в Инбокс.');
+          await answerCallback(callback.id, '❌ Аккаунт не привязан');
           return res.status(200).json({ ok: true });
         }
 
-        const inbox = await findOrCreateInbox(link.user_id);
+        // Получаем привычку с текущим history
+        const { data: habit, error: habitError } = await supabase
+          .from('habits')
+          .select('id, title, emoji, history')
+          .eq('id', habitId)
+          .eq('user_id', link.user_id)
+          .is('archived_at', null)
+          .maybeSingle();
+        if (habitError) throw new Error('Habit lookup failed');
 
-        if (!inbox) {
-          await sendMessage(chatId, '❌ Не нашёл, куда положить.\n\nСоздайте в Plusyx хотя бы одну колонку типа «Очередь» — и Инбокс появится сам.');
+        if (!habit) {
+          await answerCallback(callback.id, '❌ Привычка не найдена');
           return res.status(200).json({ ok: true });
         }
 
-        const ok = await addToInbox(inbox, text);
+        // Проверяем, не отмечено ли уже сегодня
+        const currentHistory = habit.history || {};
+        if (currentHistory[today]) {
+          await answerCallback(callback.id, '⚠️ Уже отмечено сегодня!');
+          return res.status(200).json({ ok: true });
+        }
 
-        if (ok) {
-          await sendMessage(chatId, getCaptureReply());
+        // Определяем значение и ответ
+        let value, responseText, statusEmoji;
+
+        if (action === 'done') {
+          value = true;
+          responseText = '✅ Отлично! Привычка выполнена!';
+          statusEmoji = '✅';
+        } else if (action === 'mini') {
+          value = 'mini';
+          responseText = '🔸 Мини-версия засчитана!';
+          statusEmoji = '🔸';
+        } else if (action === 'freeze') {
+          value = 'freeze';
+          responseText = '❄️ Заморозка активирована';
+          statusEmoji = '❄️';
         } else {
-          await sendMessage(chatId, '❌ Что-то пошло не так, попробуйте ещё раз.');
+          await answerCallback(callback.id, '❌ Неизвестное действие');
+          return res.status(200).json({ ok: true });
         }
+
+        // Обновляем history
+        const newHistory = { ...currentHistory, [today]: value };
+
+        const { data: saved, error } = await supabase
+          .from('habits')
+          .update({ history: newHistory })
+          .eq('id', habitId)
+          .eq('user_id', link.user_id)
+          .is('archived_at', null)
+          .select('id')
+          .maybeSingle();
+
+        if (error || !saved) {
+          console.error('Habit update failed');
+          await answerCallback(callback.id, '❌ Не удалось сохранить отметку. Попробуйте позже.');
+          return res.status(200).json({ ok: true });
+        }
+
+        // Отвечаем на callback
+        await answerCallback(callback.id, responseText);
+
+        // Обновляем сообщение (убираем кнопки)
+        const habitEmoji = escapeTelegramHtml(habit.emoji || '🔔');
+        const newText = `${habitEmoji} <b>${escapeTelegramHtml(habit.title)}</b>\n\n${statusEmoji} <i>${responseText}</i>`;
+        await editMessage(chatId, messageId, newText);
 
         return res.status(200).json({ ok: true });
       }
+
+      // ========== ОБРАБОТКА ТЕКСТОВЫХ СООБЩЕНИЙ ==========
+      if (typeof update.message?.text === 'string') {
+        if (!isPrivateSender(update.message, update.message.from)) return res.status(200).json({ ok: true });
+        const chatId = update.message.chat.id;
+        const text = update.message.text;
+
+        if (/^\/start(?:\s|$)/.test(text)) {
+          const parts = text.split(' ');
+
+          if (parts.length > 1) {
+            const token = parts[1];
+
+            // Ищем токен и проверяем срок действия
+            const { data: pending, error: pendingError } = await supabase
+              .from('telegram_pending')
+              .select('user_id, expires_at')
+              .eq('token', token)
+              .maybeSingle();
+            if (pendingError) throw new Error('Token lookup failed');
+
+            if (!pending) {
+              await sendMessage(chatId, '❌ Ссылка недействительна или устарела.\n\nПопробуйте заново подключить Telegram в настройках привычки в Plusyx.');
+              return res.status(200).json({ ok: true });
+            }
+
+            // Проверяем срок действия
+            const expiresAt = pending.expires_at ? Date.parse(pending.expires_at) : NaN;
+            if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+              // Удаляем просроченный токен
+              await supabase
+                .from('telegram_pending')
+                .delete()
+                .eq('token', token);
+
+              await sendMessage(chatId, '⏰ Ссылка истекла (действует 10 минут).\n\nНажмите «Подключить Telegram» заново в Plusyx.');
+              return res.status(200).json({ ok: true });
+            }
+
+            // Всё ок — привязываем
+            const { error: bindError } = await supabase
+              .from('telegram_links')
+              .upsert({
+                user_id: pending.user_id,
+                chat_id: chatId.toString(),
+                username: update.message.from?.username || null,
+                created_at: new Date().toISOString()
+              }, { onConflict: 'user_id' });
+            if (bindError) throw new Error('Telegram binding failed');
+
+            // Удаляем использованный токен
+            const { error: consumeError } = await supabase
+              .from('telegram_pending')
+              .delete()
+              .eq('token', token);
+            if (consumeError) throw new Error('Token consumption failed');
+
+            await sendMessage(chatId,
+              '✅ Telegram успешно подключён!\n\nТеперь вы будете получать напоминания о привычках и задачах.\n\n💡 Кстати: пришлите мне любой текст — и он упадёт пунктом в карточку «📥 Инбокс» на вашей доске.'
+            );
+          } else {
+            await sendMessage(chatId,
+              '👋 Привет! Это бот Plusyx.\n\nДля подключения уведомлений перейдите в настройки привычки в приложении Plusyx и нажмите «Подключить Telegram».'
+            );
+          }
+          return res.status(200).json({ ok: true });
+        }
+
+        // ========== 📥 QUICK CAPTURE ==========
+        // Любой текст без "/" в начале → пункт в Инбокс
+        if (!text.startsWith('/')) {
+          // Находим юзера по chat_id
+          const { data: link, error: linkError } = await supabase
+            .from('telegram_links')
+            .select('user_id')
+            .eq('chat_id', chatId.toString())
+            .maybeSingle();
+          if (linkError) throw new Error('Telegram link lookup failed');
+
+          if (!link) {
+            await sendMessage(chatId, '❌ Аккаунт не привязан.\n\nПодключите Telegram в настройках привычки в Plusyx — и я начну складывать ваши заметки в Инбокс.');
+            return res.status(200).json({ ok: true });
+          }
+
+          const inbox = await findOrCreateInbox(link.user_id);
+
+          if (!inbox) {
+            await sendMessage(chatId, '❌ Не нашёл, куда положить.\n\nСоздайте в Plusyx хотя бы одну колонку типа «Очередь» — и Инбокс появится сам.');
+            return res.status(200).json({ ok: true });
+          }
+
+          const ok = await addToInbox(inbox, text, link.user_id);
+
+          if (ok) {
+            await sendMessage(chatId, getCaptureReply());
+          } else {
+            await sendMessage(chatId, '❌ Что-то пошло не так, попробуйте ещё раз.');
+          }
+
+          return res.status(200).json({ ok: true });
+        }
+      }
+
+      return res.status(200).json({ ok: true });
+
+    } catch (error) {
+      // Retain the existing acknowledgement behavior until durable deduplication
+      // is introduced: blindly retrying a partially applied Inbox update duplicates it.
+      console.error('Webhook processing failed');
+      return res.status(200).json({ ok: true });
     }
-
-    return res.status(200).json({ ok: true });
-
-  } catch (error) {
-    console.error('Webhook error:', error);
-    return res.status(200).json({ ok: true });
-  }
+  };
 }
+
+export default createWebhookHandler();

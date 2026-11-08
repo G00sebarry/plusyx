@@ -174,11 +174,15 @@ export const HabitModal: React.FC<HabitModalProps> = ({
   const isInitialLoad = useRef(true);
 
   useEffect(() => {
+    let cancelled = false;
+    let checking = false;
     const checkTelegramLink = async () => {
-      if (!userId) return;
+      if (!userId || !isOpen || cancelled || checking) return;
+      checking = true;
       setIsCheckingLink(true);
       try {
         const link = await fetchTelegramLink(userId);
+        if (cancelled) return;
         if (link) {
           setTelegramLinked(true);
           setTelegramUsername(link.username);
@@ -187,21 +191,25 @@ export const HabitModal: React.FC<HabitModalProps> = ({
           setTelegramUsername(null);
         }
       } catch (e) {
-        console.error('Error checking telegram link:', e);
-        setTelegramLinked(false);
+        if (!cancelled) console.error('Error checking telegram link:', e);
+      } finally {
+        checking = false;
+        if (!cancelled) setIsCheckingLink(false);
       }
-      setIsCheckingLink(false);
     };
     if (isOpen) checkTelegramLink();
-    
+
     // Перепроверяем при возврате из Telegram (focus/visibility)
     const handleFocus = () => { if (isOpen) checkTelegramLink(); };
     window.addEventListener('focus', handleFocus);
-    document.addEventListener('visibilitychange', () => {
+    const handleVisibility = () => {
       if (document.visibilityState === 'visible' && isOpen) checkTelegramLink();
-    });
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
     return () => {
+      cancelled = true;
       window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, [isOpen, userId]);
 
@@ -295,7 +303,7 @@ export const HabitModal: React.FC<HabitModalProps> = ({
       setSaveStatus('saved');
     }, 1000);
     return () => { if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current); };
-  }, [title, description, color, emoji, selectedDays, customDates, fileData, coverPosition, coverIntensity, identity, triggerEvent, miniAction, notes, reminderEnabled, reminderTime, isAtomicMode]);
+  }, [isOpen, initialHabit?.id, title, description, color, emoji, selectedDays, customDates, fileData, coverPosition, coverIntensity, identity, triggerEvent, miniAction, notes, reminderEnabled, reminderTime, isAtomicMode]);
 
   const toggleDay = (dayIndex: number) => {
     if (selectedDays.includes(dayIndex)) {

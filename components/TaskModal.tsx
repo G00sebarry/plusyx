@@ -356,7 +356,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, i
         setSaveStatus('saved');
     }, 1000);
     return () => { if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current); };
-  }, [title, description, date, time, isTimer, status, columnId, color, coverData, coverPosition, coverIntensity, checklists, comments, files, links, blocksOrder]);
+  }, [isOpen, initialTask?.id, title, description, date, time, isTimer, status, columnId, color, coverData, coverPosition, coverIntensity, checklists, comments, files, links, blocksOrder]);
 
  // СТАЛО:
 const handleManualSave = () => {

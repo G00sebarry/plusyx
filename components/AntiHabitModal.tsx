@@ -95,6 +95,7 @@ export const AntiHabitModal: React.FC<AntiHabitModalProps> = ({ isOpen, onClose,
     const newHabit: AntiHabit = {
       ...(initialHabit || { id: '', history: [] }),
       id: initialHabit?.id || Math.random().toString(36).substr(2, 9),
+      position: initialHabit?.position ?? 0,
       title,
       emoji,
       color,

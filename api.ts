@@ -11,7 +11,7 @@ export const fetchTasks = async (userId) => {
     .order('position', { ascending: true }) 
     .order('created_at', { ascending: true });
 
-  if (error) { console.error('Error fetching tasks:', error); return []; }
+  if (error) throw error;
   // Маппим snake_case → camelCase для новых полей
   return (data || []).map(t => ({
     ...t,
@@ -63,7 +63,7 @@ export const fetchColumns = async (userId) => {
     .eq('user_id', userId)
     .order('position', { ascending: true });
 
-  if (error) { console.error('Error fetching columns:', error); return []; }
+  if (error) throw error;
   return data || [];
 };
 
@@ -90,7 +90,7 @@ export const fetchHabits = async (userId) => {
     .order('position', { ascending: true }) 
     .order('created_at', { ascending: false });
     
-  if (error) return [];
+  if (error) throw error;
 
   return (data || []).map(h => ({
     id: h.id,
@@ -151,13 +151,14 @@ export const saveHabitToDb = async (habit, userId) => {
 // чек-листа — payload крошечный, запрос быстрее, меньше конкуренции на строке.
 // Возвращает { error } чтобы вызывающий мог реагировать.
 export const saveHabitHistoryToDb = async (habitId, userId, history) => {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('habits')
     .update({ history })
     .eq('id', habitId)
-    .eq('user_id', userId);
+    .eq('user_id', userId)
+    .select('id');
   if (error) console.error("Save Habit History Error:", error);
-  return { error };
+  return { error: error || (data?.length === 1 ? null : new Error('History write not confirmed')) };
 };
 
 // Лёгкий апдейт only-best-streak — пишется когда юзер бьёт личный рекорд.
@@ -279,7 +280,7 @@ export const fetchAntiHabits = async (userId) => {
     .order('position', { ascending: true })
     .order('created_at', { ascending: false });
 
-  if (error) { console.error("Fetch AntiHabits Error:", error); return []; }
+  if (error) throw error;
   
   return (data || []).map(h => ({
     ...h,
@@ -476,6 +477,7 @@ export const signOut = async () => {
   const { error } = await supabase.auth.signOut();
   if (error) {
     console.error('Error signing out:', error);
+    throw error;
   }
 };
 
@@ -494,17 +496,9 @@ export const fetchUserSettings = async (userId) => {
     .from('user_settings')
     .select('*')
     .eq('user_id', userId)
-    .single();
+    .maybeSingle();
   
-  if (error) {
-    // PGRST116 = "no rows found" — это нормально для нового юзера
-    if (error.code === 'PGRST116') {
-      return null;  // явно говорим "записи нет, но запрос прошёл"
-    }
-    // Любая другая ошибка — сетевая/серверная
-    console.error('Error fetching settings:', error);
-    return undefined;  // явно говорим "запрос не удался"
-  }
+  if (error) throw error;
   return data;
 };
 
@@ -524,7 +518,7 @@ export const saveUserSettings = async (settings: {
       onConflict: 'user_id' 
     });
   
-  if (error) console.error('Error saving settings:', error);
+  if (error) throw error;
   return data;
 };
 // ═══════════════════════════════════════════════════════════
@@ -631,10 +625,7 @@ export const fetchDailyNotes = async (userId: string): Promise<Record<string, Da
     .eq('user_id', userId)
     .order('created_at', { ascending: true });
 
-  if (error) {
-    console.error('Error fetching daily notes:', error);
-    return {};
-  }
+  if (error) throw error;
 
   const map: Record<string, DailyNote[]> = {};
   (data || []).forEach((row: DailyNote) => {
@@ -690,4 +681,14 @@ export const deleteDailyNote = async (noteId: string) => {
     .eq('id', noteId);
 
   if (error) console.error('Error deleting daily note:', error);
+};
+
+export const ensureDefaultColumns = async (columns, userId) => {
+  const rows = columns.map((column, position) => ({
+    id: column.id, user_id: userId, title: column.title, type: column.type, position
+  }));
+  const { error } = await supabase.from('columns').upsert(rows, {
+    onConflict: 'id,user_id', ignoreDuplicates: true
+  });
+  if (error) throw error;
 };

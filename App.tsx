@@ -9,9 +9,11 @@ import { AntiHabitModal } from './components/AntiHabitModal';
 import { SleepingScreen } from './components/SleepingScreen';
 import { Task, ViewType, Habit, Column, AntiHabit } from './types';
 import { supabase } from './supabaseClient';
+import { createAccountSessionController, createAccountWriteQueue } from './utils/accountSession';
+import { loadAccountData } from './utils/loadAccountData';
 
-import { 
-  fetchTasks, fetchColumns, saveTaskToDb, deleteTaskFromDb, saveColumnsToDb, saveTasksOrderToDb, deleteColumnFromDb,
+import {
+  fetchTasks, fetchColumns, ensureDefaultColumns, saveTaskToDb, deleteTaskFromDb, saveColumnsToDb, saveTasksOrderToDb, deleteColumnFromDb,
   fetchHabits, saveHabitToDb, saveHabitHistoryToDb, deleteHabitFromDb, saveHabitsOrderToDb,
   fetchAntiHabits, saveAntiHabitToDb, deleteAntiHabitFromDb, saveAntiHabitsOrderToDb,
   getCurrentSession, signInWithGoogle, signOut, onAuthStateChange,
@@ -137,8 +139,8 @@ const LoginScreen: React.FC = () => {
             <button
               onClick={() => { setAuthMode('login'); setError(null); setSuccessMessage(null); }}
               className={`flex-1 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wide transition-all ${
-                authMode === 'login' 
-                  ? 'bg-white text-black shadow-md' 
+                authMode === 'login'
+                  ? 'bg-white text-black shadow-md'
                   : 'text-gray-400 hover:text-white'
               }`}
             >
@@ -147,8 +149,8 @@ const LoginScreen: React.FC = () => {
             <button
               onClick={() => { setAuthMode('register'); setError(null); setSuccessMessage(null); }}
               className={`flex-1 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wide transition-all ${
-                authMode === 'register' 
-                  ? 'bg-white text-black shadow-md' 
+                authMode === 'register'
+                  ? 'bg-white text-black shadow-md'
                   : 'text-gray-400 hover:text-white'
               }`}
             >
@@ -234,15 +236,39 @@ const LoginScreen: React.FC = () => {
 // ═══════════════════════════════════════════════════════════
 // 🚀 ГЛАВНОЕ ПРИЛОЖЕНИЕ
 // ═══════════════════════════════════════════════════════════
-const App: React.FC = () => {
-  // --- 🔐 АВТОРИЗАЦИЯ ---
-  const [isAuthLoading, setIsAuthLoading] = useState(true);
-  const [userId, setUserId] = useState<string | null>(null);
-  const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [userName, setUserName] = useState<string | null>(null);
+type AccountScope = { user: { id: string; email?: string; user_metadata?: { full_name?: string } }; active: boolean; key: number };
 
+const App: React.FC = () => {
+  const [scope, setScope] = useState<AccountScope | null>(null);
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    let disposed = false;
+    const controller = createAccountSessionController(setScope);
+    const revision = controller.revision;
+    const { data: { subscription } } = onAuthStateChange((_event: any, session: any) => {
+      controller.accept(session?.user ?? null);
+      if (!disposed) setReady(true);
+    });
+    getCurrentSession().then(session => {
+      if (!disposed && controller.revision === revision) controller.accept(session?.user ?? null);
+    }).catch(() => {}).finally(() => { if (!disposed) setReady(true); });
+    return () => {
+      disposed = true;
+      controller.dispose();
+      subscription.unsubscribe();
+    };
+  }, []);
+  if (!ready) return <div className="h-screen tg-bg" />;
+  if (!scope) return <LoginScreen />;
+  return <AccountApp key={scope.key} scope={scope} />;
+};
+
+const AccountApp: React.FC<{ scope: AccountScope }> = ({ scope }) => {
+  const userId = scope.user.id;
+  const userEmail = scope.user.email || null;
+  const userName = scope.user.user_metadata?.full_name || userEmail || 'User';
   // --- UI ---
-  const VIEW_SESSION_KEY = 'plusyx_session_view';
+  const VIEW_SESSION_KEY = `plusyx_session_view:${userId}`;
   const [view, setView] = useState<ViewType>(() => {
     if (typeof window === 'undefined') return 'kanban';
     try {
@@ -267,7 +293,7 @@ const App: React.FC = () => {
   const [habits, setHabits] = useState<Habit[]>([]);
   const [antiHabits, setAntiHabits] = useState<AntiHabit[]>([]);
   const [dailyNotes, setDailyNotes] = useState<DailyNote[]>([]);
-  
+
   // --- UI MODALS ---
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [isHabitModalOpen, setIsHabitModalOpen] = useState(false);
@@ -278,11 +304,11 @@ const App: React.FC = () => {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const mainRef = useRef<HTMLDivElement>(null);
-  
+
   const [editingTask, setEditingTask] = useState<Task | undefined>(undefined);
   const [editingHabit, setEditingHabit] = useState<Habit | undefined>(undefined);
   const [editingAntiHabit, setEditingAntiHabit] = useState<AntiHabit | undefined>(undefined);
-  
+
   const [taskToDelete, setTaskToDelete] = useState<string | null>(null);
   const [habitToDelete, setHabitToDelete] = useState<string | null>(null);
 
@@ -298,16 +324,18 @@ const App: React.FC = () => {
   // 💤 Экран спящих + счётчик для бейджа
   const [isSleepingOpen, setIsSleepingOpen] = useState(false);
   const [sleepingCount, setSleepingCount] = useState(0);
-  
+
   const refreshSleepingCount = async (uid?: string | null) => {
     const id = uid || userId;
-    if (!id) return;
+    if (!id || !scope.active) return;
     try {
       const [h, t] = await Promise.all([countSleepingHabits(id), countSleepingTasks(id)]);
+    if (!scope.active) return;
+      if (!scope.active) return;
       setSleepingCount(h + t);
     } catch (e) { console.error('Failed to count sleeping:', e); }
   };
-  
+
   // --- SETTINGS ---
   const [theme] = useState<'light' | 'dark'>('dark');
   const [wallpaper, setWallpaper] = useState<string>('');
@@ -316,134 +344,109 @@ const App: React.FC = () => {
 
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const wallpaperInputRef = useRef<HTMLInputElement>(null);
-  const initialSettingsApplied = useRef(false);
 
   // ═══════════════════════════════════════════════════════════
-  // 🔐 ПРОВЕРКА АВТОРИЗАЦИИ
+  // Загрузка данных только для текущего экземпляра аккаунта
   // ═══════════════════════════════════════════════════════════
+  const [loadError, setLoadError] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const settingsSnapshot = useRef('');
   useEffect(() => {
-    const checkAuth = async () => {
-      const session = await getCurrentSession();
-      if (session?.user) {
-        setUserId(session.user.id);
-        setUserEmail(session.user.email || null);
-        setUserName(session.user.user_metadata?.full_name || session.user.email || 'User');
-      }
-      setIsAuthLoading(false);
-    };
+    if (!scope.active) return;
+    let cancelled = false;
+    const active = () => !cancelled && scope.active;
+    setIsLoading(true);
+    setLoadError(false);
+    setSettingsLoaded(false);
+    loadAccountData(userId, {
+      fetchTasks, fetchColumns, fetchHabits, fetchAntiHabits,
+      fetchUserSettings, fetchDailyNotes, ensureDefaultColumns
+    }, DEFAULT_COLUMNS, active).then(data => {
+      if (!data || !active()) return;
+      setTasks(data.tasks);
+      setColumns(data.columns);
+      setHabits(data.habits);
+      setAntiHabits(data.antiHabits);
+      setDailyNotes(Object.values(data.notes).flat() as DailyNote[]);
+      const settings = {
+        user_id: userId,
+        wallpaper: data.settings?.wallpaper ?? '',
+        wallpaper_opacity: data.settings?.wallpaper_opacity ?? 30,
+        wallpaper_position: data.settings?.wallpaper_position ?? 50,
+        theme
+      };
+      settingsSnapshot.current = JSON.stringify(settings);
+      setWallpaper(settings.wallpaper);
+      setWallpaperOpacity(settings.wallpaper_opacity);
+      setWallpaperPosition(settings.wallpaper_position);
+      setSettingsLoaded(true);
+      refreshSleepingCount(userId);
+    }).catch(() => {
+      if (active()) setLoadError(true);
+    }).finally(() => { if (active()) setIsLoading(false); });
+    return () => { cancelled = true; };
+  }, [userId, loadAttempt]);
 
-    checkAuth();
-
-    const { data: { subscription } } = onAuthStateChange((event: any, session: any) => {
-      if (session?.user) {
-        setUserId(session.user.id);
-        setUserEmail(session.user.email || null);
-        setUserName(session.user.user_metadata?.full_name || session.user.email || 'User');
-      } else {
-        setUserId(null);
-        setUserEmail(null);
-        setUserName(null);
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  // --- 🔥 ЗАГРУЗКА ДАННЫХ ---
-  useEffect(() => {
-    if (!userId) return;
-
-    const initData = async () => {
-      setIsLoading(true);
-      try {
-        const [dbTasks, dbColumns, dbHabits, dbAntiHabits, dbSettings, dbNotes] = await Promise.all([
-           fetchTasks(userId), 
-           fetchColumns(userId), 
-           fetchHabits(userId), 
-           fetchAntiHabits(userId),
-           fetchUserSettings(userId),
-           fetchDailyNotes(userId)
-        ]);
-        
-        setTasks(dbTasks);
-        setHabits(dbHabits);
-        setAntiHabits(dbAntiHabits);
-        setDailyNotes(Object.values(dbNotes).flat());
-        
-        // Различаем три случая:
-// dbSettings === undefined — сетевая ошибка, НЕ включаем сохранение
-// dbSettings === null — записи нет (новый юзер), включаем сохранение чтобы создать
-// dbSettings === { ... } — есть данные, применяем и включаем сохранение
-if (dbSettings !== undefined) {
-  if (dbSettings) {
-    if (dbSettings.wallpaper) setWallpaper(dbSettings.wallpaper);
-    if (dbSettings.wallpaper_opacity !== null) setWallpaperOpacity(dbSettings.wallpaper_opacity);
-    if (dbSettings.wallpaper_position !== null) setWallpaperPosition(dbSettings.wallpaper_position);
-    
-  }
-  setSettingsLoaded(true);
-}
-// Если undefined — settingsLoaded остаётся false, сохранение не сработает
-        
-        if (dbColumns && dbColumns.length > 0) setColumns(dbColumns);
-        else await saveColumnsToDb(DEFAULT_COLUMNS, userId);
-
-        // 💤 Загружаем счётчик спящих в фоне (для бейджа)
-        refreshSleepingCount(userId);
-
-      } catch (e) { console.error("Critical Init Error:", e); } 
-      finally { setIsLoading(false); }
-    };
-    initData();
-  }, [userId]);
+  const [settingsSaveFailed, setSettingsSaveFailed] = useState(false);
+  const [settingsQueue] = useState(() => createAccountWriteQueue(
+    () => scope.active,
+    (_id: string, settings: any) => saveUserSettings(settings),
+    () => setSettingsSaveFailed(true)
+  ));
+  useEffect(() => () => settingsQueue.clear(), [settingsQueue]);
 
   // --- THEME ---
-  useEffect(() => { 
-    document.body.classList.toggle('dark', theme === 'dark'); 
+  useEffect(() => {
+    document.body.classList.toggle('dark', theme === 'dark');
   }, [theme]);
 
   // --- SETTINGS SAVE ---
   useEffect(() => {
-    localStorage.setItem('plusyx_wallpaper', wallpaper);
-    localStorage.setItem('plusyx_wallpaper_opacity', wallpaperOpacity.toString());
-    localStorage.setItem('plusyx_wallpaper_position', wallpaperPosition.toString());
-    localStorage.setItem('plusyx_theme', theme);
-    
+    if (!scope.active) return;
+    try {
+      localStorage.setItem(`plusyx_wallpaper:${userId}`, wallpaper);
+      localStorage.setItem(`plusyx_wallpaper_opacity:${userId}`, wallpaperOpacity.toString());
+      localStorage.setItem(`plusyx_wallpaper_position:${userId}`, wallpaperPosition.toString());
+      localStorage.setItem(`plusyx_theme:${userId}`, theme);
+    } catch { /* Storage may be unavailable or full. */ }
+
     if (userId && settingsLoaded) {
-      saveUserSettings({
-        user_id: userId,
-        wallpaper,
-        wallpaper_opacity: wallpaperOpacity,
-        wallpaper_position: wallpaperPosition,
-        theme
-      });
+      const settings = { user_id: userId, wallpaper, wallpaper_opacity: wallpaperOpacity,
+        wallpaper_position: wallpaperPosition, theme };
+      const snapshot = JSON.stringify(settings);
+      if (snapshot !== settingsSnapshot.current) {
+        settingsSnapshot.current = snapshot;
+        settingsQueue.enqueue('settings', settings);
+      }
     }
   }, [wallpaper, wallpaperOpacity, wallpaperPosition, theme, userId, settingsLoaded]);
 
   // --- SIGN OUT ---
   const handleSignOut = async () => {
-    await signOut();
-    setUserId(null);
-    setUserEmail(null);
-    setUserName(null);
-    setIsSettingsOpen(false);
+    if (!scope.active) return;
+    try { await signOut();
+    if (!scope.active) return; }
+    catch { if (scope.active) showToast('⚠️', 'Не удалось выйти. Попробуйте ещё раз.'); }
   };
 
   // --- ОБРАБОТЧИКИ ---
   const handleUpdateColumns = async (newColumns: Column[]) => {
-    if (!userId) return;
+    if (!scope.active) return;
     setColumns(newColumns);
     await saveColumnsToDb(newColumns, userId);
+    if (!scope.active) return;
   };
 
   const handleDeleteColumn = async (columnId: string) => {
+    if (!scope.active) return;
     setColumns(prev => prev.filter(c => c.id !== columnId));
     await deleteColumnFromDb(columnId);
+    if (!scope.active) return;
   };
 
   // --- TASKS ---
   const handleAddTask = async (taskData: Omit<Task, 'id'>) => {
-    if (!userId) return;
+    if (!scope.active) return;
     let cId = taskData.columnId;
     if (!cId) { const col = columns.find(c => c.type === taskData.status) || columns[0]; cId = col?.id || 'col-todo'; }
     
@@ -461,16 +464,18 @@ if (dbSettings !== undefined) {
     setIsTaskModalOpen(false); 
     window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
     await saveTaskToDb(newTask, userId);
+    if (!scope.active) return;
   };
 
   const handleUpdateTask = async (updatedTask: Task) => {
-    if (!userId) return;
+    if (!scope.active) return;
     setTasks(prev => prev.map(t => t.id === updatedTask.id ? updatedTask : t));
     await saveTaskToDb(updatedTask, userId);
+    if (!scope.active) return;
   };
 
   const handleMoveTask = async (id: string, targetColId: string, targetId?: string) => {
-    if (!userId) return;
+    if (!scope.active) return;
     const targetCol = columns.find(c => c.id === targetColId);
     if (!targetCol) return;
 
@@ -499,7 +504,7 @@ if (dbSettings !== undefined) {
   };
 
   const handleCopyTask = async (originalTaskId: string, newTitle: string) => {
-    if (!userId) return;
+    if (!scope.active) return;
     const originalTask = tasks.find(t => t.id === originalTaskId);
     if (!originalTask) return;
     const newChecklists = originalTask.checklists.map(list => ({...list, id: Math.random().toString(36).substr(2, 9), items: list.items.map(item => ({...item, id: Math.random().toString(36).substr(2, 9)}))}));
@@ -516,11 +521,12 @@ if (dbSettings !== undefined) {
 
     setTasks(prev => { const index = prev.findIndex(t => t.id === originalTaskId); if (index === -1) return [newTask, ...prev]; const newTasks = [...prev]; newTasks.splice(index + 1, 0, newTask); return newTasks; });
     await saveTaskToDb(newTask, userId);
+    if (!scope.active) return;
   };
 
   // 💤 АРХИВАЦИЯ ЗАДАЧИ
   const handleArchiveTask = async (taskId: string) => {
-    if (!userId) return;
+    if (!scope.active) return;
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
     // Убираем из активного списка
@@ -529,11 +535,12 @@ if (dbSettings !== undefined) {
     showToast('💤', 'Задача в спячке');
     window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('medium');
     await archiveTask(taskId, userId, task.columnId || '');
+    if (!scope.active) return;
   };
 
   // --- HABITS ---
   const handleAddHabit = async (habitData: Habit) => {
-    if (!userId) return;
+    if (!scope.active) return;
     const newHabit = { ...habitData, id: Math.random().toString(36).substr(2, 9), position: 0 };
     
     const newHabits = [newHabit, ...habits];
@@ -544,28 +551,32 @@ if (dbSettings !== undefined) {
     window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
     
     await saveHabitToDb(newHabit, userId);
+    if (!scope.active) return;
     await saveHabitsOrderToDb(updated, userId);
+    if (!scope.active) return;
   };
 
   const handleUpdateHabit = async (updatedHabit: Habit) => {
-    if (!userId) return;
+    if (!scope.active) return;
     setHabits(prev => prev.map(h => h.id === updatedHabit.id ? updatedHabit : h));
     setIsHabitModalOpen(false); 
     setEditingHabit(undefined);
     await saveHabitToDb(updatedHabit, userId);
+    if (!scope.active) return;
   };
 
   const handleAutoSaveHabit = async (updatedHabit: Habit) => {
-    if (!userId) return;
+    if (!scope.active) return;
     setHabits(prev => prev.map(h => h.id === updatedHabit.id ? updatedHabit : h));
     await saveHabitToDb(updatedHabit, userId);
+    if (!scope.active) return;
   };
 
   // 💤 АРХИВАЦИЯ ПРИВЫЧКИ
   // Перед спячкой пытаемся сохранить актуальный личный рекорд из текущего цикла,
   // чтобы он не потерялся (на случай если в БД старое значение).
   const handleArchiveHabit = async (habitId: string) => {
-    if (!userId) return;
+    if (!scope.active) return;
     const habit = habits.find(h => h.id === habitId);
     if (!habit) return;
 
@@ -608,44 +619,30 @@ if (dbSettings !== undefined) {
     showToast('💤', 'Привычка в спячке');
     window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('medium');
     await archiveHabit(habitId, userId, newAllTimeBest);
+    if (!scope.active) return;
   };
 
-  const habitInFlight = useRef<Record<string, boolean>>({});
-  const habitLatest = useRef<Record<string, Habit['history']>>({});
-
-  const flushHabitHistory = async (habitId: string) => {
-    if (!userId) return;
-    if (habitInFlight.current[habitId]) return;
-    const latest = habitLatest.current[habitId];
-    if (!latest) return;
-
-    habitInFlight.current[habitId] = true;
-    try {
-      const result = await saveHabitHistoryToDb(habitId, userId, latest);
-      if (result?.error) {
-        return;
-      }
-      const justSaved = latest;
-      const current = habitLatest.current[habitId];
-      if (current === justSaved) {
-        delete habitLatest.current[habitId];
-      }
-    } finally {
-      habitInFlight.current[habitId] = false;
-      if (habitLatest.current[habitId]) {
-        flushHabitHistory(habitId);
-      }
-    }
-  };
+  const [historySaveFailed, setHistorySaveFailed] = useState(false);
+  const [historyQueue] = useState(() => createAccountWriteQueue(
+    () => scope.active,
+    (id: string, history: Habit['history']) => saveHabitHistoryToDb(id, userId, history),
+    () => setHistorySaveFailed(true)
+  ));
+  useEffect(() => () => {
+    historyQueue.clear();
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    document.body.style.overflow = '';
+    document.body.style.touchAction = '';
+  }, [historyQueue]);
 
   const handleToggleHabit = async (id: string, date: string, value: boolean | 'mini' | 'freeze' | 'cycle') => {
-    if (!userId) return;
+    if (!scope.active) return;
 
     const scrollTop = mainRef.current?.scrollTop ?? 0;
 
-    setHabits(prev => {
-      const habit = prev.find(h => h.id === id);
-      if (!habit) return prev;
+    {
+      const habit = habits.find(h => h.id === id);
+      if (!habit) return;
       const newHistory = { ...habit.history };
       let nextValue: boolean | 'mini' | 'freeze' | undefined;
       if (value === 'cycle') {
@@ -666,9 +663,9 @@ if (dbSettings !== undefined) {
         newHistory[date] = nextValue;
       }
       const updatedHabit = { ...habit, history: newHistory };
-      habitLatest.current[id] = newHistory;
-      return prev.map(h => h.id === id ? updatedHabit : h);
-    });
+      setHabits(prev => prev.map(h => h.id === id ? updatedHabit : h));
+      historyQueue.enqueue(id, newHistory);
+    }
 
     requestAnimationFrame(() => {
       if (mainRef.current) mainRef.current.scrollTop = scrollTop;
@@ -676,16 +673,11 @@ if (dbSettings !== undefined) {
 
     window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
 
-    flushHabitHistory(id);
+
   };
 
   useEffect(() => {
-    const flushPendingHabits = () => {
-      if (!userId) return;
-      Object.entries(habitLatest.current).forEach(([id, history]) => {
-        saveHabitHistoryToDb(id, userId, history);
-      });
-    };
+    const flushPendingHabits = () => { if (scope.active) historyQueue.flushAll(); };
     window.addEventListener('beforeunload', flushPendingHabits);
     window.addEventListener('pagehide', flushPendingHabits);
     return () => {
@@ -695,32 +687,38 @@ if (dbSettings !== undefined) {
   }, [userId]);
 
   const handleAddDailyNote = async (date: string, text: string) => {
-    if (!userId) return;
+    if (!scope.active) return;
     const note = await addDailyNote(userId, date, text);
+    if (!scope.active) return;
     if (note) setDailyNotes(prev => [...prev, note]);
   };
 
   const handleUpdateDailyNote = async (noteId: string, text: string) => {
+    if (!scope.active) return;
     await updateDailyNote(noteId, text);
+    if (!scope.active) return;
     setDailyNotes(prev => prev.map(n => n.id === noteId ? { ...n, text } : n));
   };
 
   const handleDeleteDailyNote = async (noteId: string) => {
+    if (!scope.active) return;
     await deleteDailyNote(noteId);
+    if (!scope.active) return;
     setDailyNotes(prev => prev.filter(n => n.id !== noteId));
   };
 
   const handleReorderHabits = async (newHabits: Habit[]) => {
-    if (!userId) return;
+    if (!scope.active) return;
     setHabits(newHabits);
     const updated = newHabits.map((h, idx) => ({ ...h, position: idx }));
     setHabits(updated);
     await saveHabitsOrderToDb(updated, userId);
+    if (!scope.active) return;
   };
 
   // --- ANTI HABITS ---
   const handleAddAntiHabit = async (habit: AntiHabit) => {
-    if (!userId) return;
+    if (!scope.active) return;
     const newHabit = { ...habit, id: Math.random().toString(36).substr(2, 9), position: 0 };
     
     const newAntiHabits = [newHabit, ...antiHabits];
@@ -731,19 +729,22 @@ if (dbSettings !== undefined) {
     window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
     
     await saveAntiHabitToDb(newHabit, userId);
+    if (!scope.active) return;
     await saveAntiHabitsOrderToDb(updated, userId);
+    if (!scope.active) return;
   };
 
   const handleUpdateAntiHabit = async (habit: AntiHabit) => {
-    if (!userId) return;
+    if (!scope.active) return;
     setAntiHabits(prev => prev.map(h => h.id === habit.id ? habit : h));
     setIsAntiHabitModalOpen(false); 
     setEditingAntiHabit(undefined);
     await saveAntiHabitToDb(habit, userId);
+    if (!scope.active) return;
   };
 
   const handleRelapse = async (id: string) => {
-    if (!userId) return;
+    if (!scope.active) return;
     let updatedHabit: AntiHabit | undefined;
     setAntiHabits(prev => prev.map(h => {
         if (h.id === id) {
@@ -756,23 +757,27 @@ if (dbSettings !== undefined) {
     }));
     window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('warning');
     if (updatedHabit) await saveAntiHabitToDb(updatedHabit, userId);
+    if (!scope.active) return;
   };
 
   const handleReorderAntiHabits = async (newHabits: AntiHabit[]) => {
-    if (!userId) return;
+    if (!scope.active) return;
     setAntiHabits(newHabits);
     const updated = newHabits.map((h, idx) => ({ ...h, position: idx }));
     setAntiHabits(updated);
     await saveAntiHabitsOrderToDb(updated, userId);
+    if (!scope.active) return;
   };
 
   // --- DELETE ---
   const handleDeleteConfirm = async () => {
+    if (!scope.active) return;
     if (taskToDelete) {
        const id = taskToDelete; 
        setTasks(prev => prev.filter(t => t.id !== id)); 
        setTaskToDelete(null);
        await deleteTaskFromDb(id);
+    if (!scope.active) return;
     } else if (habitToDelete) {
        const isHabit = habits.find(h => h.id === habitToDelete);
        const isAnti = antiHabits.find(h => h.id === habitToDelete);
@@ -782,7 +787,9 @@ if (dbSettings !== undefined) {
        setHabitToDelete(null);
        
        if (isHabit) await deleteHabitFromDb(habitToDelete);
+    if (!scope.active) return;
        if (isAnti) await deleteAntiHabitFromDb(habitToDelete);
+    if (!scope.active) return;
     }
     
     document.body.style.overflow = '';
@@ -791,6 +798,7 @@ if (dbSettings !== undefined) {
 
   // 💤 КОЛБЭКИ ПРОБУЖДЕНИЯ (зовутся из SleepingScreen)
   const handleHabitAwakened = (wokenHabit: Habit) => {
+    if (!scope.active) return;
     // Возвращаем привычку в активный список. Position = 0 (наверх).
     setHabits(prev => {
       const updated = [{ ...wokenHabit, position: 0 }, ...prev.map((h, i) => ({ ...h, position: i + 1 }))];
@@ -798,38 +806,37 @@ if (dbSettings !== undefined) {
     });
     showToast('🌅', `«${wokenHabit.title}» пробудилась`);
     // Порядок в БД пересохраним (debounced — нагрузка минимальная)
-    if (userId) {
+    if (scope.active) {
       const updated = [{ ...wokenHabit, position: 0 }, ...habits.map((h, i) => ({ ...h, position: i + 1 }))];
       saveHabitsOrderToDb(updated, userId);
     }
   };
 
   const handleTaskRestored = (restoredTask: Task, columnTitle: string) => {
+    if (!scope.active) return;
     // Возвращаем задачу на канбан
     setTasks(prev => [...prev, restoredTask]);
     showToast('🌅', `Задача в «${columnTitle}»`);
   };
 
   const handleWallpaperChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!scope.active) return;
     const file = e.target.files?.[0]; if (!file) return;
     if (file.size > 3 * 1024 * 1024) { alert("Слишком большой файл!"); return; }
-    const reader = new FileReader(); reader.onload = (ev) => setWallpaper(ev.target?.result as string); reader.readAsDataURL(file);
+    const reader = new FileReader(); reader.onload = (ev) => { if (scope.active) setWallpaper(ev.target?.result as string); }; reader.readAsDataURL(file);
   };
 
   // ═══════════════════════════════════════════════════════════
   // 🎨 РЕНДЕР
   // ═══════════════════════════════════════════════════════════
 
-  if (isAuthLoading) {
-    return (
-      <div className="h-screen w-screen tg-bg flex items-center justify-center flex-col gap-4">
-        <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-      </div>
-    );
-  }
-
-  if (!userId) {
-    return <LoginScreen />;
+  if (loadError) {
+    return <div className="h-screen tg-bg tg-text flex flex-col items-center justify-center gap-4 p-6 text-center" role="alert">
+      <p>Не удалось загрузить профиль. Ваши данные не заменены пустыми значениями.</p>
+      <button className="rounded-xl bg-blue-600 text-white px-5 py-3" onClick={() => setLoadAttempt(value => value + 1)}>Повторить загрузку</button>
+      <button className="underline" onClick={handleSignOut}>Выйти из аккаунта</button>
+      {toast && <p>{toast.message}</p>}
+    </div>;
   }
 
   if (isLoading) {
@@ -852,6 +859,24 @@ if (dbSettings !== undefined) {
 
   return (
     <div className="flex flex-col h-screen overflow-hidden tg-bg select-none relative">
+      {settingsSaveFailed && <div role="alert" className="relative z-[160] bg-amber-900 text-white p-3 text-sm">
+        Настройки не сохранены. Не закрывайте страницу до повторного сохранения.
+        <button className="ml-3 underline" onClick={async () => {
+          if (!scope.active) return;
+          const saved = await settingsQueue.flushAll();
+    if (!scope.active) return;
+          if (scope.active) setSettingsSaveFailed(!saved);
+        }}>Повторить сохранение</button>
+      </div>}
+      {historySaveFailed && <div role="alert" className="relative z-[160] bg-amber-900 text-white p-3 text-sm">
+        Не все отметки сохранены. Не закрывайте страницу до повторного сохранения.
+        <button className="ml-3 underline" onClick={async () => {
+          if (!scope.active) return;
+          const saved = await historyQueue.flushAll();
+    if (!scope.active) return;
+          if (scope.active) setHistorySaveFailed(!saved);
+        }}>Повторить сохранение</button>
+      </div>}
       {wallpaper && <div className="fixed inset-0 z-0 pointer-events-none transition-all duration-300 ease-out wallpaper-container" style={{ backgroundImage: `url(${wallpaper})`, backgroundSize: 'cover', backgroundPosition: `50% ${wallpaperPosition}%`, opacity: wallpaperOpacity / 100 }} />}
       
       <header className="px-5 py-4 flex justify-between items-center border-b border-gray-200/10 tg-secondary-bg/80 backdrop-blur-md shadow-sm z-[150]">
