@@ -1,4 +1,5 @@
 import React from 'react';
+import { matrixPreviewEnabled } from './MatrixPreview';
 import { ViewType } from '../types';
 
 interface BottomNavProps {
@@ -19,7 +20,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeView, onViewChange }
   };
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 tg-secondary-bg border-t border-gray-400/10 px-4 py-2 pb-8 flex justify-around items-center z-50 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
+    <nav className={`${activeView === 'matrix' ? 'relative shrink-0' : 'fixed bottom-0 left-0 right-0'} tg-secondary-bg border-t border-gray-400/10 px-4 py-2 pb-8 flex justify-around items-center z-50 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]`}>
       <button 
         onClick={() => onViewChange('kanban')}
         className={`flex flex-col items-center gap-1 transition-all duration-300 flex-1 ${getActiveColorClass('kanban')}`}
@@ -43,6 +44,11 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeView, onViewChange }
         <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>
         <span className="text-[9px] font-black uppercase tracking-widest">Календарь</span>
       </button>
+      {matrixPreviewEnabled && <button onClick={() => onViewChange('matrix')}
+        className={`flex flex-col items-center gap-1 flex-1 ${getActiveColorClass('matrix')}`}>
+        <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 3v18m6-18v18M3 9h18M3 15h18"/></svg>
+        <span className="text-[9px] font-black uppercase tracking-widest">Матрица</span>
+      </button>}
     </nav>
   );
 };

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { MatrixPreview, matrixPreviewEnabled } from './components/MatrixPreview';
 import { KanbanBoard } from './components/KanbanBoard';
 import { CalendarView } from './components/calendar';
 import { BottomNav } from './components/BottomNav';
@@ -273,13 +274,22 @@ const AccountApp: React.FC<{ scope: AccountScope }> = ({ scope }) => {
     if (typeof window === 'undefined') return 'kanban';
     try {
       const saved = sessionStorage.getItem(VIEW_SESSION_KEY);
-      if (saved === 'kanban' || saved === 'tracker' || saved === 'calendar') {
+      if (saved === 'kanban' || saved === 'tracker' || saved === 'calendar' || (matrixPreviewEnabled && saved === 'matrix')) {
         return saved as ViewType;
       }
     } catch { /* ignore */ }
     return 'kanban';
   });
   const [isLoading, setIsLoading] = useState(true);
+  const [matrixHabitId, setMatrixHabitId] = useState<string | null>(null);
+  const visitingTracker = view === 'tracker' && matrixHabitId !== null;
+  const matrixLayout = view === 'matrix' || visitingTracker;
+  const [matrixOpened, setMatrixOpened] = useState(view === 'matrix');
+  const navigate = (next: ViewType) => {
+    if (next === 'matrix') setMatrixOpened(true);
+    setMatrixHabitId(null);
+    setView(next);
+  };
 
   useEffect(() => {
     try { sessionStorage.setItem(VIEW_SESSION_KEY, view); } catch { /* ignore */ }
@@ -858,7 +868,7 @@ const AccountApp: React.FC<{ scope: AccountScope }> = ({ scope }) => {
     : tasks;
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden tg-bg select-none relative">
+    <div className={`flex flex-col h-screen overflow-hidden tg-bg select-none relative ${matrixLayout ? 'matrix-shell' : ''}`}>
       {settingsSaveFailed && <div role="alert" className="relative z-[160] bg-amber-900 text-white p-3 text-sm">
         Настройки не сохранены. Не закрывайте страницу до повторного сохранения.
         <button className="ml-3 underline" onClick={async () => {
@@ -920,7 +930,7 @@ const AccountApp: React.FC<{ scope: AccountScope }> = ({ scope }) => {
         )}
       </header>
       {isCreateMenuOpen && <div className="fixed inset-0 z-[140]" onClick={() => setIsCreateMenuOpen(false)} />}
-      <main ref={mainRef} className="flex-1 overflow-y-auto pb-24 relative z-10">
+      <main ref={mainRef} className={`flex-1 overflow-y-auto relative z-10 ${matrixLayout ? 'min-h-0 flex flex-col' : 'pb-24'}`}>
         {searchQuery && (
           <div className="px-5 py-2 flex items-center gap-2 tg-secondary-bg/50 border-b border-gray-400/5">
             <span className="text-[10px] font-bold tg-hint">Найдено:</span>
@@ -944,6 +954,7 @@ const AccountApp: React.FC<{ scope: AccountScope }> = ({ scope }) => {
             scrollToColumnId={searchQuery && filteredTasks.length > 0 ? filteredTasks[0].columnId : null}
           />
         )}
+      {matrixOpened && matrixPreviewEnabled && <MatrixPreview backstage={view !== 'matrix'} userId={userId} tasks={tasks} habits={habits} onOpenTask={setEditingTask} onOpenHabit={habit => {setMatrixHabitId(habit.id); setView('tracker');}} />}
       {view === 'calendar' && <CalendarView 
         tasks={filteredTasks} 
         habits={habits} 
@@ -969,7 +980,9 @@ const AccountApp: React.FC<{ scope: AccountScope }> = ({ scope }) => {
       />}
         
         {view === 'tracker' && (
-          <HabitTracker 
+          <HabitTracker
+             matrixHabitId={matrixHabitId}
+             onReturnToMatrix={() => navigate('matrix')}
              habits={habits} 
              antiHabits={antiHabits} 
              onToggleHabit={handleToggleHabit} 
@@ -987,7 +1000,7 @@ const AccountApp: React.FC<{ scope: AccountScope }> = ({ scope }) => {
           />
         )}
       </main>
-      <BottomNav activeView={view} onViewChange={setView} />
+      <BottomNav activeView={view} onViewChange={navigate} />
       
       <TaskModal 
         isOpen={isTaskModalOpen || (!!editingTask && !!editingTask.id)} 

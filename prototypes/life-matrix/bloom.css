@@ -1,0 +1,49 @@
+.bloomCanvas{position:relative;isolation:isolate;min-height:390px}
+.bloom{position:absolute;z-index:5;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:repeat(3,minmax(0,1fr));gap:7px;padding:10px;border-radius:28px;border:1px solid color-mix(in srgb,var(--accent) 28%,transparent);background:#10191aee;box-shadow:0 22px 65px #0008,0 0 28px color-mix(in srgb,var(--accent) 9%,transparent);backdrop-filter:blur(16px)}
+.bloom .cell{border-radius:19px;padding:6px;box-shadow:inset 0 1px #ffffff0a;min-width:0}.bloom .cell span{font-size:12px}.bloom .cell small{font-size:9px;line-height:1.4}.bloom .cell.empty{background:#ffffff03}.bloomCenter{border-color:var(--accent)!important}
+.bloomEdit{position:absolute;top:calc(33.333% + 9px);right:calc(33.333% + 9px);z-index:3;font-size:11px;padding:3px 7px;background:#172222cc}
+#matrix.bloomActive>.directionTile,#matrix.bloomActive>.center{opacity:.48;filter:saturate(.7);transition:opacity .3s,filter .3s}#matrix>.directionTile,#matrix>.center{transition:opacity .3s,filter .3s}
+.bloom .cell.done{border-color:#8ec6aa55;box-shadow:inset 0 -3px #8ec6aa44}.bloom .cell.done:after{content:'✓';color:#b5d7c4;font-size:12px}
+.suggestion h2{overflow-wrap:anywhere}.randomAction{white-space:nowrap}
+@media(max-width:800px){.bloomCanvas{min-height:350px}.bloom{gap:5px;padding:8px;border-radius:23px}.bloom .cell{border-radius:15px}.bloom .cell span{font-size:11px}.bloom .cell small{font-size:8px}}
+@media(prefers-reduced-motion:reduce){#matrix>.directionTile,#matrix>.center{transition:none}}
+/* All large tiles retain their DOM identity while the composition changes. */
+#matrix>.directionTile{transform-origin:0 0;z-index:3;transition:transform 760ms cubic-bezier(.22,.7,.23,1),opacity 500ms ease,filter 500ms ease}
+#matrix>.center{position:relative;z-index:0;transition:transform 760ms cubic-bezier(.22,.7,.23,1),border-radius 760ms ease,opacity 500ms ease}
+#matrix.morphMap>.center{transform:scale(var(--backdrop-scale));border-radius:22px;opacity:.75;filter:none;pointer-events:none}
+#matrix>.center>span,#matrix>.center>small{transition:opacity 350ms ease}
+#matrix.morphMap>.center>span,#matrix.morphMap>.center>small{opacity:0}
+#matrix.morphMap>.center>span,#matrix.morphMap>.center>small{visibility:hidden}
+#matrix.morphMap>.directionTile .cell>span{font-size:calc(12px / var(--neighbor-scale,1));line-height:1.2}
+#matrix.morphMap>.directionTile{opacity:1;filter:none}
+#matrix.morphMap>.directionTile.morphSource{opacity:0;pointer-events:none}
+#matrix.morphMap>.directionTile .tileEdit{display:none}
+.bloom{background:#10191ac9;box-shadow:0 12px 35px #0004;backdrop-filter:blur(12px);border-radius:24px;padding:7px;gap:5px}
+.bloom .cell{border-radius:15px}.bloom .cell span{font-size:11px}
+.morphRestoring #matrix>.directionTile,.morphRestoring #matrix>.center{transition:none!important}
+.motionOff #matrix>.directionTile,.motionOff #matrix>.center{transition:none}
+@media(max-width:800px){.bloom{padding:4px;gap:3px;border-radius:17px}.bloom .cell{border-radius:10px}.bloom .cell span{font-size:9px}.bloom .cell small{display:none}.bloomEdit{font-size:9px;padding:2px 4px}}
+@media(max-width:800px){#matrix.morphMap>.directionTile .cell>span{font-size:calc(9px / var(--neighbor-scale,1))}}
+@media(prefers-reduced-motion:reduce){#matrix>.directionTile,#matrix>.center,#matrix>.center>span,#matrix>.center>small{transition:none!important}}
+/* Mosaic frame: geometry changes, text is never scaled with the shape. */
+#matrix>.directionTile{transition:transform 760ms cubic-bezier(.22,.7,.23,1),width 760ms cubic-bezier(.22,.7,.23,1),height 760ms cubic-bezier(.22,.7,.23,1),opacity 500ms ease,filter 500ms ease}
+#matrix.morphMap>.directionTile.mosaicPiece .cell{border-radius:18px;border-width:1px;padding:9px;background:#192325}
+#matrix.morphMap>.directionTile.mosaicPiece .cell>span{font-size:12px;line-height:1.35}
+#matrix.morphMap>.directionTile.mosaicCorner .cell{border:0;border-radius:0}
+#matrix.morphMap>.directionTile.mosaicCorner .cell>span{position:absolute;left:12px;right:12px;top:var(--label-y);transform:translateY(-50%);text-align:center}
+.mosaicOutline{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
+.mosaicOutline path{fill:none;stroke:#b0c8c34d;stroke-width:1.5;vector-effect:non-scaling-stroke}
+.mosaicDefs{position:absolute;pointer-events:none}
+#matrix.morphMap>.directionTile.mosaicPiece:focus-within{filter:brightness(1.25)}
+#matrix.morphMap>.center{border-radius:7px}
+@media(max-width:800px){#matrix.morphMap>.directionTile.mosaicPiece .cell{padding:5px;border-radius:12px}#matrix.morphMap>.directionTile.mosaicPiece .cell>span{font-size:10px}#matrix.morphMap>.directionTile.mosaicCorner .cell>span{left:9px;right:9px}}
+#matrix.morphMap>.directionTile.mosaicCorner .cell>span{left:var(--label-x);right:auto;top:var(--label-y);width:var(--label-width);transform:translate(-50%,-50%)}
+.bloom.enlarged{width:var(--full-side)!important;height:var(--full-side)!important;margin:var(--expand-offset) 0 0 var(--expand-offset)}
+.bloom.enlarged .cell span{font-size:clamp(12px,1.1vw,16px)}
+@media(prefers-reduced-motion:no-preference){
+ .bloomCanvas .bloom{transition:width .64s cubic-bezier(.4,0,.2,1),height .64s cubic-bezier(.4,0,.2,1),margin .64s cubic-bezier(.4,0,.2,1)}
+ .bloomCanvas #matrix{transition:opacity .48s ease}
+ .bloomCanvas #matrix>.directionTile{transition-property:translate;transition-duration:.55s}
+}
+.bloomCanvas #matrix.directionBehind{opacity:0;pointer-events:none}
+#matrix.directionBehind>.mosaicPiece{translate:var(--drift-x) var(--drift-y)}

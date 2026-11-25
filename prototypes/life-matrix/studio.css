@@ -1,0 +1,116 @@
+.functionalLayout{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:32px}
+.functionalLayout .canvas{min-width:0}
+.functionalLayout aside.studioPanel{width:var(--panel-size);height:var(--panel-size);max-width:100%;max-height:none;margin:var(--panel-offset) auto 0;display:flex;flex-direction:column;overflow:hidden;transform-origin:left center}
+.studioPanel .cover{position:relative;flex:0 0 var(--cover-height,25%);height:auto!important;min-height:0;transition:flex-basis .65s cubic-bezier(.22,1,.36,1)}
+.mapControls.iconControls button{width:36px;height:36px;padding:8px;display:grid;place-items:center;border-radius:12px;color:#b8c5cd}
+.iconControls svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
+@media(min-width:801px){.mapControls.iconControls{position:absolute;left:var(--controls-x);top:var(--controls-y);transform:translateX(-50%);margin:0;flex-wrap:nowrap;z-index:12}}
+@media(prefers-reduced-motion:reduce){.studioPanel .cover{transition:none}}
+.coverPick{position:absolute;inset:0;width:100%;height:100%;border:0;border-radius:0;background:transparent;color:transparent;text-shadow:none;transition:background .2s,color .2s}
+.coverPick:hover,.coverPick:focus-visible{background:#0003;color:white;text-shadow:0 1px 6px #000}
+.coverAdjust{position:absolute;right:12px;bottom:12px;z-index:2;background:#101214bb;padding:7px 11px;color:white}
+.studioPanel .cardBody{flex:1;min-height:0;overflow:auto;padding:18px;scrollbar-gutter:stable}
+.studioTitle{font-size:22px!important;font-weight:650;border-color:transparent!important;background:transparent!important;padding:5px 0!important;box-shadow:none!important}
+.studioTitle:focus,.studioDescription:focus{outline:1px solid #78baf070!important;outline-offset:3px}
+.studioDescription{font:inherit;font-size:13px!important;line-height:1.5;background:transparent!important;border-color:transparent!important;padding:6px 0!important;resize:vertical;min-height:52px;max-height:130px}
+.studioSaved{display:block;font-size:10px;color:#8daba3;margin:2px 0 12px}
+.tileEdit{display:none!important}
+.focusContent,.focusPicker,.focusHistory,.resultActions,.restorePicker{min-width:0;max-width:100%}
+.focusCarousel{display:flex;gap:10px;overflow-x:auto;overflow-y:hidden;padding:8px 2px 12px;scroll-snap-type:x proximity;scroll-behavior:smooth;overscroll-behavior-x:contain;scrollbar-width:thin;scrollbar-color:#ffffff25 transparent;-webkit-overflow-scrolling:touch}
+.focusCube{flex:0 0 104px;width:104px;height:104px;min-width:0;position:relative;border-radius:17px;padding:12px!important;display:flex;flex-direction:column;justify-content:flex-end;text-align:left;scroll-snap-align:start;border:1px solid #ffffff14;background:#24272a;box-shadow:none}
+.focusCube .cubeTitle{font-size:12px;line-height:1.3;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;overflow-wrap:normal;word-break:normal;color:#f2f4f6;text-shadow:0 1px 6px #000}
+.focusCube .cubeArea{font-size:9px;margin-top:5px;color:#c0c7cf;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;text-shadow:0 1px 4px #000}
+.focusCube.chosen{box-shadow:inset 0 0 0 1px #dbe8f066}.focusCube:hover{border-color:#dbe8f055}.focusCube:focus-visible{outline:2px solid #a5c8dd;outline-offset:-3px}
+.clearFocus{font-size:10px;background:none;border:0;padding:5px 0;color:#9cabb6}
+@media(min-width:801px){
+ .focusCarousel{gap:4px}
+ .focusCube{flex:0 0 calc((100% - 28px)/8);width:calc((100% - 28px)/8);height:auto;aspect-ratio:1;box-sizing:border-box;border-radius:9px;padding:4px!important}
+ .focusCube .cubeTitle{display:block;max-width:100%;font-size:9px;white-space:nowrap;text-overflow:ellipsis}
+ .focusCube .cubeArea{display:none}
+}
+@media(max-width:800px){.focusCube{flex-basis:92px;width:92px;height:92px;padding:10px!important}}
+@media(prefers-reduced-motion:reduce){.focusCarousel{scroll-behavior:auto}}
+.focusContent{margin-top:22px;display:grid;gap:12px}.focusHeading h3{font-size:11px;font-weight:500;color:#9faab4;margin:0;letter-spacing:.04em}
+.focusLink,.resultLink{padding:0;border:0;background:none;text-align:left;overflow-wrap:break-word}.focusLink{font-size:19px;line-height:1.35;color:#e3eaf1}.focusContext,.focusProgress{font-size:11px;color:#8fa6b8}.focusNext{margin:0;font-size:13px;color:#b5c3ce}
+.focusPicker,.focusHistory{padding:12px 0;border:0;border-top:1px solid #ffffff0b;border-radius:0}.focusPicker select{margin-top:12px}.focusHistory{margin-top:14px}.resultRow{display:grid;gap:5px;padding:12px 0}.resultRow small{font-size:10px;color:#94a19c}.resultActions{margin-top:22px;display:grid;gap:8px}.resultActions button{justify-self:start;font-size:11px;color:#a8c5b8}.resultActions small{font-size:10px;color:#89978f;line-height:1.5}
+.studioPanel .panelContent{max-height:none;min-height:0;overflow:visible;padding:0}
+.studioCoverControls{padding:12px;margin:8px 0 16px;border:1px solid #ffffff12;border-radius:14px;display:grid;gap:8px}
+.studioCoverControls[hidden]{display:none}.studioCoverControls label{font-size:11px;gap:2px}.studioCoverControls input[type=range]{padding:0;accent-color:#83b7de;min-height:20px}
+.motionOff #matrix>.directionTile,.motionOff #matrix>.center{transition:none!important}
+@media(prefers-reduced-motion:reduce){#matrix>.directionTile,#matrix>.center{transition:none!important}}
+@media(max-width:800px){.functionalLayout{grid-template-columns:minmax(0,1fr);gap:16px}.functionalLayout aside.studioPanel{min-width:0;margin:0 auto;height:max(var(--panel-size),430px)}.coverPick{color:#ffffffba;font-size:11px;text-shadow:0 1px 5px #000}.studioTitle{font-size:20px!important}}
+.inPlusyx>header,.inPlusyx #tabs,.inPlusyx main>footer{display:none}
+.miniTaskCount{display:none;font:normal 8px/1.1 system-ui;color:#c4c9d0}
+.overview .miniTaskCount{display:block}
+@media(max-width:800px){.bloom .miniTaskCount{display:block}}
+.studioPanel .panelContent .boardLinks h3{display:block;margin:12px 0 5px;font-size:12px;font-weight:600}
+.boardTaskInfo{flex:1;min-width:0;display:grid;gap:3px;overflow-wrap:anywhere}
+.linkedThumbnail{width:32px;height:32px;flex:none;object-fit:cover;border-radius:7px}
+.boardLinks .row .linkedEntry{display:flex;align-items:center;gap:8px;flex:1;min-width:0;text-align:left;color:inherit;padding:6px 0;background:transparent;border:0}
+.boardLinks button.linkedEntry:is(:hover,:focus-visible) strong{text-decoration:underline;text-underline-offset:3px}
+.boardTaskInfo strong{font-size:13px;font-weight:500}.boardTaskInfo small,.boardLinks summary{font-size:11px;color:#abb2bb}
+.boardLinks summary{padding:9px 0;cursor:pointer}.boardLinks select{max-width:100%}
+.studioPanel .panelContent :is(.addItems,.inlineNotes,.addChoices,.miniForm){border:0;background:transparent;box-shadow:none;border-radius:0;padding-inline:0}
+.studioPanel .panelContent :is(.addItems,.inlineNotes){padding-block:8px}
+.studioPanel .panelContent :is(.addItems,.inlineNotes) summary{color:#adb4bc;font-size:12px;cursor:pointer}
+.studioPanel .addChoices button,.studioPanel .miniForm button{background:transparent;border:0;box-shadow:none;color:#aeb5be;padding:5px}
+.studioPanel .addChoices button[aria-pressed=true]{color:#f3f4f6;background:transparent;text-decoration:underline;text-underline-offset:4px}
+.studioPanel .miniForm :is(input,textarea){background:transparent;border:0;border-bottom:1px solid #ffffff26;border-radius:0;padding:7px 2px}
+.studioPanel .inlineNotes .miniForm{align-items:center}
+.studioPanel .inlineNotes .miniForm button{width:32px;height:32px;flex:none;font-size:18px}
+.studioPanel .inlineNotes textarea{min-height:32px;min-width:0;field-sizing:content;resize:vertical;overflow-wrap:anywhere;max-height:45dvh}
+.studioPanel .inlineNotes .miniForm button{background:#147c66;color:white;border-radius:9px;font-weight:650}
+.studioPanel .inlineNotes .miniForm button:disabled{opacity:.45}
+.matrixNote{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:6px;padding:8px 0;border-bottom:1px solid #ffffff0c}
+.matrixNote .noteText{min-width:0;white-space:pre-wrap;overflow-wrap:anywhere}
+.noteActions{display:flex}.noteActions button{display:grid;place-items:center;background:none;border:0;padding:6px;color:#b9c3c8}
+@media(hover:hover) and (pointer:fine){.matrixNote:not(:hover):not(:focus-within):not(.editing) .noteActions{opacity:0}}
+.studioPanel .matrixHint{display:inline-block;margin:0;padding:0;border:0;background:none;color:#a1a6ae}
+.studioPanel .matrixHint summary{display:inline-flex;align-items:center;justify-content:center;min-width:28px;min-height:28px;list-style:none;cursor:pointer}
+.matrixHint summary::-webkit-details-marker{display:none}
+.studioPanel .matrixHint>span{font-size:11px;line-height:1.4;color:#b6bdc6}
+.studioPanel .resultActions{display:flex;align-items:center;flex-wrap:wrap;gap:5px}
+.resultActions .restorePicker{flex-basis:100%}
+.studioPanel .studioSaved[data-phase=saved]{color:#75bd9c}
+.studioPanel .studioSaved[data-phase=error]{color:#ffaba5}
+.studioSaved svg{pointer-events:none;width:15px;height:15px;filter:drop-shadow(0 1px 1px #000b)}
+.studioPanel .cover>.studioSaved{position:absolute;right:12px;top:5px;z-index:3}
+.studioPanel .cover :is(.studioSaved summary,.coverAdjust){width:30px;height:28px;box-sizing:border-box;padding:0;border-radius:9px}
+.studioPanel .cover .coverAdjust{bottom:5px}
+.cover .studioSaved summary{background:transparent;border:0}
+.cover .studioSaved[data-phase=saved] summary{color:#74e5a4}
+.cover .studioSaved[data-phase=pending] summary{color:#ffab54}
+.cover .studioSaved[data-phase=error] summary{color:#ff9292}
+@media(hover:none),(pointer:coarse){
+  .studioPanel .coverPick{color:#eee;text-shadow:0 1px 5px #000}
+  .studioPanel .coverImage~.coverPick{color:transparent;background:transparent;text-shadow:none}
+}
+.cover .studioSaved>span{position:absolute;top:0;right:35px;width:max-content;max-width:min(220px,50vw);padding:5px 8px;border-radius:7px;background:#17191bf2;color:white}
+.saveSpin{transform-box:fill-box;transform-origin:center;animation:saveRotate .85s linear infinite}
+@keyframes saveRotate{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.saveSpin{animation:none}}
+@container (max-height:64px){.studioPanel .cover>.studioSaved{right:48px;top:auto;bottom:5px}}
+.unifiedList .stepsHeading{margin:8px 0 2px;font-size:12px;font-weight:600;color:inherit}
+.studioPanel .row textarea.stepText{flex:1;min-width:0;min-height:1.6em;field-sizing:content;resize:none;padding:0 2px;border:0;border-radius:0;background:transparent;color:inherit;font:inherit;line-height:1.6;overflow-wrap:anywhere}
+.studioPanel .row textarea.stepText:focus{outline:none;box-shadow:0 1px #739bb8}
+.studioPanel .cover{container-type:size}
+:root:has(body.inPlusyx),body.inPlusyx{background:transparent}
+.inPlusyx #app>.toolbar{display:none}
+@media(max-width:800px){
+  .inPlusyx .functionalLayout aside.studioPanel{height:auto}
+  .inPlusyx .studioPanel .cover{min-height:var(--cover-height,90px)}
+  .inPlusyx .studioPanel .cardBody{flex:auto;overflow:visible;scrollbar-gutter:auto}
+  .inPlusyx .mapControls.iconControls button{width:44px;height:44px}
+}
+@media(min-width:801px){
+  .inPlusyx .functionalLayout{column-gap:clamp(64px,8vw,144px)}
+  .inPlusyx main{padding-block:0}
+  .inPlusyx .functionalLayout .canvas{padding:0}
+  .inPlusyx .functionalLayout #matrix,
+  .inPlusyx .functionalLayout #matrix.overview{
+    --matrix-side:min(100cqw,calc(100dvh - 112px));
+    width:var(--matrix-side);
+    height:var(--matrix-side);
+    margin-block-start:calc((100dvh - var(--matrix-side)) / 2);
+  }
+}

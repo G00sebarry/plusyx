@@ -1,0 +1,38 @@
+.mapFlightLayer{position:fixed;inset:0;pointer-events:none;z-index:20;overflow:hidden}
+.mapFlight{position:absolute;pointer-events:none;overflow:hidden;border-radius:18px;will-change:transform,opacity}
+.mapFlight>.directionTile,.mapFlight>.cell,.mapFlight>.group{width:100%!important;height:100%!important;transform:none!important;clip-path:none!important;opacity:1!important}
+.liquidMatrix .mapFlight .cell>span{position:static!important;transform:none!important;width:auto!important;font-size:12px;text-align:center}
+.mapFlightLayer.overview .mapFlight .cell>span{font-size:9px}
+.mapFlight .tileEdit{display:none}.mapFlight .living{animation:none}
+/* Slow overlapping liquid volumes; all paint is confined to the inter-panel gap. */
+.energyBridge{position:absolute;pointer-events:none;z-index:0;overflow:hidden;isolation:isolate;background:none;border:0;box-shadow:none;mask-image:radial-gradient(ellipse closest-side at center,#000 12%,#000b 46%,#0004 76%,transparent 100%);mask-composite:add}
+.lavaField{position:absolute;inset:0;opacity:.28}
+.lavaBlob{position:absolute;left:0;top:14%;width:80%;height:28%;border-radius:50%;background:radial-gradient(ellipse,var(--energy-a) 0%,transparent 72%);animation:lavaAcross 16s linear infinite;will-change:transform,opacity}
+.lavaBlob:nth-child(2){top:50%;background:radial-gradient(ellipse,var(--energy-b),transparent 72%);animation-duration:19s;animation-delay:-9s;animation-direction:reverse}
+.lavaBlob:nth-child(3){top:28%;height:34%;background:radial-gradient(ellipse,#a48ed0,transparent 72%);animation-duration:23s;animation-delay:-15s}
+.lavaBlob:nth-child(4){top:58%;height:24%;animation-duration:21s;animation-delay:-4s;animation-direction:reverse}
+@keyframes lavaAcross{0%{transform:translateX(-90%) scale(.8,1.05);opacity:0}25%{transform:translateX(-30%) scale(1.2,.85);opacity:.8}50%{transform:translateX(30%) scale(1.5,.95);opacity:1}75%{transform:translateX(90%) scale(1.1,1.1);opacity:.7}100%{transform:translateX(150%) scale(.8,1);opacity:0}}
+.energyBridge.vertical .lavaBlob{left:14%;top:0;width:28%;height:80%;animation-name:lavaBetweenRows}
+.energyBridge.vertical .lavaBlob:nth-child(2){left:50%}.energyBridge.vertical .lavaBlob:nth-child(3){left:28%;width:34%}.energyBridge.vertical .lavaBlob:nth-child(4){left:58%;width:24%}
+@keyframes lavaBetweenRows{0%{transform:translateY(-90%) scale(1.05,.8);opacity:0}25%{transform:translateY(-30%) scale(.85,1.2);opacity:.8}50%{transform:translateY(30%) scale(.95,1.5);opacity:1}75%{transform:translateY(90%) scale(1.1,1.1);opacity:.7}100%{transform:translateY(150%) scale(1,.8);opacity:0}}
+@media(prefers-reduced-motion:reduce){.lavaBlob{animation:none;opacity:.35}}
+/* Words stay intact; long unbroken labels are clipped rather than split into letters. */
+#matrix .cell>span,.bloom .cell>span,.mapFlight .cell>span{overflow-wrap:normal!important;word-break:normal!important;hyphens:none;white-space:normal;text-overflow:ellipsis;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;max-width:100%;line-height:1.3}
+#matrix.overview>.group,.mapFlight>.group{background:transparent!important;border:0!important;box-shadow:none!important;padding:0}
+/* No enclosing frame between the mosaic, atmosphere and editor. */
+.functionalLayout aside.studioPanel{border-color:transparent;box-shadow:none}
+#matrix.morphMap>.center{border-color:transparent!important;outline:none!important;box-shadow:none!important;animation:none}
+.liquidMatrix .bloom{border-color:transparent}
+/* Draw selection inside the tile: neighboring cells cannot clip its outside edge. */
+.bloom .cell,#matrix .cell{border-color:transparent!important;box-shadow:inset 0 0 0 1px #dbe8f012!important;outline:none!important}
+.bloom .cell:hover,#matrix .cell:hover{box-shadow:inset 0 0 0 1px #dbe8f029!important}
+.bloom .cell.selected,.bloom .bloomCenter,#matrix .cell.selected{box-shadow:inset 0 0 0 1px #dbe8f057,inset 0 0 5px #dbe8f00b!important}
+.bloom .cell:focus-visible,#matrix .cell:focus-visible{outline:1px solid #dbe8f080!important;outline-offset:-3px!important}
+#matrix .living{animation:none}
+/* Shaped outer tiles use their real SVG contour, not a rectangular second border. */
+.liquidMatrix #matrix>.directionTile>.cell{box-shadow:none!important;outline:none!important}
+.liquidOutline path{stroke:#dbe8f026;stroke-width:1.5}
+.directionTile:hover .liquidOutline path{stroke:#dbe8f040}
+.directionTile:has(.cell.selected) .liquidOutline path,.directionTile:focus-within .liquidOutline path{stroke:#dbe8f070;stroke-width:2}
+#matrix.morphMap>.directionTile.mosaicPiece:focus-within{filter:none}
+#matrix.morphMap>.center{box-shadow:none!important}

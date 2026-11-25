@@ -3,6 +3,8 @@ import { Habit, AntiHabit } from '../types';
 import { AntiHabitCard } from './AntiHabitCard';
 
 interface HabitTrackerProps {
+  matrixHabitId?: string | null;
+  onReturnToMatrix?: () => void;
   habits: Habit[];
   antiHabits: AntiHabit[];
   onToggleHabit: (id: string, date: string, value: boolean | 'mini' | 'freeze') => void;
@@ -44,7 +46,7 @@ interface Achievement {
 }
 
 export const HabitTracker: React.FC<HabitTrackerProps> = ({ 
-  habits, antiHabits,
+  habits, antiHabits, matrixHabitId, onReturnToMatrix,
   onToggleHabit, onEditHabit, onDeleteHabit, onArchiveHabit, onAddHabit, onReorderHabits,
   onAddAntiHabit, onEditAntiHabit, onDeleteAntiHabit, onRelapseAntiHabit, onReorderAntiHabits
 }) => {
@@ -109,6 +111,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
 
   // Авто-скролл к сегодняшнему дню на мобилке (только при смене таба, не при каждом обновлении)
   const initialScrollDone = useRef(false);
+  const arrivalRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     initialScrollDone.current = false;
   }, [activeTab]);
@@ -116,6 +119,16 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
   useEffect(() => {
     if (initialScrollDone.current) return;
     const timer = setTimeout(() => {
+      if (matrixHabitId && activeTab === 'build') {
+        const card = arrivalRef.current;
+        if (!card) return;
+        const today = card.querySelector<HTMLButtonElement>('[data-today="true"]');
+        const target = today ?? card;
+        target.focus({preventScroll:true});
+        target.scrollIntoView({inline:'center',block:'center',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});
+        initialScrollDone.current = true;
+        return;
+      }
       const todaySlots = document.querySelectorAll('[data-today="true"]');
       todaySlots.forEach(el => {
         el.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
@@ -123,7 +136,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
       initialScrollDone.current = true;
     }, 300);
     return () => clearTimeout(timer);
-  }, [habits, activeTab]);
+  }, [habits, activeTab, matrixHabitId]);
 
   const formatDate = (date: Date) => {
     const y = date.getFullYear();
@@ -1605,6 +1618,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
       
       {/* Табы */}
       <div className="px-5 py-2 sticky top-0 z-30 backdrop-blur-md bg-gradient-to-b from-[var(--tg-theme-bg-color)] to-transparent">
+        {matrixHabitId && <button type="button" className="px-2 py-1.5 mb-1 text-sm tg-text" onClick={onReturnToMatrix}>← В Матрицу</button>}
         <div className="bg-black/10 p-1.5 rounded-[20px] flex relative border border-white/5 shadow-inner">
           <div className={`absolute top-1.5 bottom-1.5 w-[calc(50%-6px)] rounded-[16px] shadow-md transition-all duration-300 ease-out ${activeTab === 'build' ? 'left-1.5 bg-[#4cc3a1]' : 'left-[calc(50%+3px)] bg-red-500'}`} />
           <button onClick={() => setActiveTab('build')} className={`flex-1 relative z-10 py-2.5 text-[10px] font-black uppercase tracking-[0.2em] transition-colors ${activeTab === 'build' ? 'text-white' : 'text-gray-400'}`}>Создать</button>
@@ -1641,12 +1655,14 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
                 return (
                   <div 
                     key={habit.id} 
+                    ref={matrixHabitId===habit.id ? arrivalRef : undefined}
+                    tabIndex={matrixHabitId===habit.id ? -1 : undefined}
                     draggable
                     onDragStart={(e) => handleDragStart(e, habit.id)}
                     onDragOver={(e) => handleDragOver(e, habit.id)}
                     onDrop={(e) => handleDrop(e, habit.id)}
                     onDragEnd={() => { setDraggedHabitId(null); setDropTargetId(null); }}
-                    className={`relative overflow-hidden rounded-[28px] shadow-sm p-4 flex flex-col gap-3 transition-all min-h-[120px] cursor-grab active:cursor-grabbing ${isTarget ? 'scale-[1.02] ring-2 ring-blue-500' : ''} ${draggedHabitId === habit.id ? 'opacity-40' : ''} ${!hasCover ? 'tg-secondary-bg border border-gray-400/5' : ''} ${hasCover ? 'cover-preserve' : ''}`}
+                    className={`relative overflow-hidden rounded-[28px] shadow-sm p-4 flex flex-col gap-3 transition-all min-h-[120px] cursor-grab active:cursor-grabbing ${matrixHabitId===habit.id?'matrix-arrival':''} ${isTarget ? 'scale-[1.02] ring-2 ring-blue-500' : ''} ${draggedHabitId === habit.id ? 'opacity-40' : ''} ${!hasCover ? 'tg-secondary-bg border border-gray-400/5' : ''} ${hasCover ? 'cover-preserve' : ''}`}
                     style={hasCover ? { backgroundImage: `url(${habit.fileData})`, backgroundSize: 'cover', backgroundPosition: `50% ${habit.coverPosition ?? 50}%` } : {}}
                     onClick={() => onEditHabit(habit)}
                   >
@@ -2131,4 +2147,4 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
       )}
     </div>
   );
-};  
+};

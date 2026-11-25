@@ -134,7 +134,7 @@ export interface AntiHabit {
   coverIntensity?: number;
 }
 
-export type ViewType = 'kanban' | 'calendar' | 'tracker';
+export type ViewType = 'kanban' | 'calendar' | 'tracker' | 'matrix';
 
 declare global {
   interface Window {
